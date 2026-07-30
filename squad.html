@@ -55,7 +55,11 @@
     text-transform: uppercase; letter-spacing: 0.04em; padding: 10px 12px;
     border-bottom: 1px solid var(--border); white-space: nowrap;
     position: sticky; top: 0; background: var(--panel-2);
+    cursor: pointer; user-select: none;
   }
+  .squad-table thead th:hover { color: var(--text); }
+  .squad-table thead th.sorted { color: var(--gold); }
+  .sort-arrow { margin-left: 4px; font-size: 9px; }
   .squad-table tbody td {
     padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle;
     white-space: nowrap;
@@ -135,6 +139,36 @@
   }
   .fm-date-badge .day-num { font-size: 13px; font-weight: 800; white-space: nowrap; }
   .fm-date-badge .season-line { font-size: 11px; color: rgba(255,255,255,0.7); }
+
+  /* Titre de la topbar transforme en champ de recherche globale
+     (clubs + joueurs) avec suggestions en dessous */
+  .page-title-wrap { position: relative; }
+  .page-title-input {
+    background: transparent; border: none; outline: none; color: #fff;
+    font-size: 18px; font-weight: 800; letter-spacing: 0.02em; padding: 2px 0;
+    width: 230px; max-width: 40vw; font-family: inherit;
+  }
+  .page-title-input::placeholder {
+    color: rgba(255,255,255,0.92); font-weight: 800; opacity: 1;
+  }
+  .fm-search-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 0; min-width: 300px; max-width: 380px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 200; max-height: 380px; overflow-y: auto;
+  }
+  .fm-search-dropdown.hidden { display: none !important; }
+  .search-group-label {
+    padding: 8px 12px 4px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-dim);
+  }
+  .search-result-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px;
+    color: var(--text); cursor: pointer;
+  }
+  .search-result-item:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
+  .search-result-icon { flex-shrink: 0; font-size: 13px; }
+  .search-result-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .search-empty { padding: 14px 12px; font-size: 12px; color: var(--text-dim); text-align: center; }
 
   .fm-body { flex: 1; display: flex; align-items: stretch; min-height: 0; }
 
@@ -443,25 +477,101 @@ function formatRealDate(date) {
   }).format(date).toUpperCase();
 }
 
-// ===================== RENDU : VUE GENERIQUE (inchangee) =====================
+// ===================== TRI DES COLONNES (partage generique / mon club) =====================
+// Chaque colonne triable declare un accesseur qui renvoie soit une string
+// (tri alphabetique) soit un number (tri numerique). defaultDir est le sens
+// applique au premier clic (1 = croissant, -1 = decroissant) ; un second
+// clic sur la meme colonne inverse le sens.
 
-function renderGenericView(club, players) {
-  document.getElementById("myClubView").classList.add("hidden");
-  document.getElementById("genericView").classList.remove("hidden");
+function sortPlayers(players, columns, state) {
+  const col = columns.find(c => c.key === state.key);
+  if (!col) return players;
+  return [...players].sort((a, b) => {
+    const va = col.accessor(a);
+    const vb = col.accessor(b);
+    if (typeof va === "string" || typeof vb === "string") {
+      return String(va).localeCompare(String(vb), "fr", { sensitivity: "base" }) * state.dir;
+    }
+    return ((va ?? 0) - (vb ?? 0)) * state.dir;
+  });
+}
 
-  document.getElementById("clubName").textContent = club.nom;
-  document.getElementById("clubMeta").textContent = `${(players || []).length} joueurs`;
+function initSortableHeaders(theadEl, columns, state, onSortChange) {
+  if (!theadEl) return;
+  const ths = theadEl.querySelectorAll("th");
+  ths.forEach((th, i) => {
+    const col = columns[i];
+    if (!col) return;
+    th.dataset.baseLabel = th.textContent.trim();
+    th.addEventListener("click", () => {
+      if (state.key === col.key) {
+        state.dir *= -1;
+      } else {
+        state.key = col.key;
+        state.dir = col.defaultDir || 1;
+      }
+      updateSortIndicators(theadEl, columns, state);
+      onSortChange();
+    });
+  });
+  updateSortIndicators(theadEl, columns, state);
+}
 
+function updateSortIndicators(theadEl, columns, state) {
+  const ths = theadEl.querySelectorAll("th");
+  ths.forEach((th, i) => {
+    const col = columns[i];
+    if (!col) return;
+    const label = th.dataset.baseLabel || th.textContent.trim();
+    if (col.key === state.key) {
+      th.classList.add("sorted");
+      th.innerHTML = `${label} <span class="sort-arrow">${state.dir === 1 ? "▲" : "▼"}</span>`;
+    } else {
+      th.classList.remove("sorted");
+      th.innerHTML = label;
+    }
+  });
+}
+
+const GENERIC_COLUMNS = [
+  { key: "statut_special", accessor: p => p.statut_special || "" },
+  { key: "nationalite", accessor: p => p.nationalite || "" },
+  { key: "age", accessor: p => p.age ?? -1 },
+  { key: "nom", accessor: p => p.nom || "" },
+  { key: "poste_brut", accessor: p => p.poste_brut || "" },
+  { key: "salaire_actuel", accessor: p => p.salaire_actuel ?? -1, defaultDir: -1 },
+  { key: "contrat_expire", accessor: p => p.contrat_expire ? new Date(p.contrat_expire).getTime() : -Infinity },
+  { key: "valeur_marchande_actuelle", accessor: p => p.valeur_marchande_actuelle ?? -1, defaultDir: -1 },
+  { key: "reputation_mondiale", accessor: p => p.reputation_mondiale ?? -1, defaultDir: -1 },
+];
+
+const MYCLUB_COLUMNS = [
+  { key: "statut_special", accessor: p => p.statut_special || "" },
+  { key: "nationalite", accessor: p => p.nationalite || "" },
+  { key: "age", accessor: p => p.age ?? -1 },
+  { key: "nom", accessor: p => p.nom || "" },
+  { key: "poste_brut", accessor: p => p.poste_brut || "" },
+  { key: "niveau_actuel", accessor: p => p.niveau_actuel ?? -1, defaultDir: -1 },
+  { key: "potentiel", accessor: p => p.potentiel ?? -1, defaultDir: -1 },
+  { key: "matchs_joues_saison", accessor: p => p.matchs_joues_saison ?? 0, defaultDir: -1 },
+  { key: "buts_saison", accessor: p => p.buts_saison ?? 0, defaultDir: -1 },
+  { key: "passes_decisives_saison", accessor: p => p.passes_decisives_saison ?? 0, defaultDir: -1 },
+  { key: "note_moyenne_saison", accessor: p => p.note_moyenne_saison ?? -1, defaultDir: -1 },
+  { key: "salaire_actuel", accessor: p => p.salaire_actuel ?? -1, defaultDir: -1 },
+  { key: "contrat_expire", accessor: p => p.contrat_expire ? new Date(p.contrat_expire).getTime() : -Infinity },
+  { key: "valeur_marchande_actuelle", accessor: p => p.valeur_marchande_actuelle ?? -1, defaultDir: -1 },
+];
+
+// ===================== RENDU : VUE GENERIQUE (tri ajoute, reste sinon inchangee) =====================
+
+let genericPlayers = [];
+const genericSortState = { key: "reputation_mondiale", dir: -1 };
+
+function renderGenericBody() {
   const body = document.getElementById("squadBody");
-  const emptyEl = document.getElementById("squadEmpty");
+  const sorted = sortPlayers(genericPlayers, GENERIC_COLUMNS, genericSortState);
 
-  if (!players || players.length === 0) {
-    document.querySelector("#genericView .table-wrap").style.display = "none";
-    emptyEl.classList.remove("hidden");
-    return;
-  }
-
-  body.innerHTML = players.map(p => `
+  body.innerHTML = sorted.map(p => `
     <tr class="player-row" data-player-id="${p.id}" style="cursor:pointer">
       <td>${p.statut_special ? `<span class="status-chip">${escapeHtml(p.statut_special)}</span>` : ""}</td>
       <td><span class="nat-chip" title="${escapeHtml(p.nationalite || '')}">${flagImg(p.nationalite)}</span></td>
@@ -481,6 +591,29 @@ function renderGenericView(club, players) {
       window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}&player=${encodeURIComponent(pid)}`;
     });
   });
+}
+
+function renderGenericView(club, players) {
+  document.getElementById("myClubView").classList.add("hidden");
+  document.getElementById("genericView").classList.remove("hidden");
+
+  document.getElementById("clubName").textContent = club.nom;
+  document.getElementById("clubMeta").textContent = `${(players || []).length} joueurs`;
+
+  genericPlayers = players || [];
+  const tableWrap = document.querySelector("#genericView .table-wrap");
+  const emptyEl = document.getElementById("squadEmpty");
+
+  if (genericPlayers.length === 0) {
+    tableWrap.style.display = "none";
+    emptyEl.classList.remove("hidden");
+    return;
+  }
+  tableWrap.style.display = "";
+  emptyEl.classList.add("hidden");
+
+  initSortableHeaders(document.querySelector("#genericView .squad-table thead"), GENERIC_COLUMNS, genericSortState, renderGenericBody);
+  renderGenericBody();
 }
 
 // ===================== RENDU : VUE "MON CLUB" =====================
@@ -529,8 +662,9 @@ function renderFmHeader(club, pseudo) {
   el.innerHTML = `
     <div class="title-block">
       <a href="dashboard.html?game=${encodeURIComponent(gameId)}" class="back-link">← Accueil</a>
-      <div>
-        <div class="page-title">EFFECTIF</div>
+      <div class="page-title-wrap" id="fmSearchWrap">
+        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="EFFECTIF" autocomplete="off">
+        <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
         <div class="manager-line">${managerLine}</div>
       </div>
     </div>
@@ -541,25 +675,129 @@ function renderFmHeader(club, pseudo) {
       </div>
     </div>
   `;
+
+  initHeaderSearch();
 }
 
-function renderMyClubView(club, players, pseudo) {
-  document.getElementById("genericView").classList.add("hidden");
-  document.getElementById("myClubView").classList.remove("hidden");
+// ===================== RECHERCHE GLOBALE (titre de la topbar) =====================
+// Le titre de la topbar ("EFFECTIF"...) est un champ de recherche : on tape
+// un nom de club ou de joueur, une liste de suggestions s'affiche en dessous
+// et redirige vers la bonne page au clic.
+let searchDebounceTimer = null;
+let headerSearchDocListenerAttached = false;
 
-  renderFmHeader(club, pseudo);
-  renderFmSidebar();
+function initHeaderSearch() {
+  const input = document.getElementById("fmSearchInput");
+  const dropdown = document.getElementById("fmSearchDropdown");
+  if (!input || !dropdown) return;
 
-  const body = document.getElementById("myClubBody");
-  const emptyEl = document.getElementById("myClubEmpty");
+  input.addEventListener("input", () => {
+    clearTimeout(searchDebounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) {
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      return;
+    }
+    searchDebounceTimer = setTimeout(() => runGlobalSearch(q, dropdown), 250);
+  });
 
-  if (!players || players.length === 0) {
-    document.querySelector(".fm-squad-card .table-scroll").style.display = "none";
-    emptyEl.classList.remove("hidden");
+  input.addEventListener("focus", () => {
+    if (input.value.trim().length >= 2 && dropdown.innerHTML) dropdown.classList.remove("hidden");
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      input.blur();
+    }
+  });
+
+  if (!headerSearchDocListenerAttached) {
+    document.addEventListener("click", (e) => {
+      const wrap = document.getElementById("fmSearchWrap");
+      const dd = document.getElementById("fmSearchDropdown");
+      if (wrap && dd && !wrap.contains(e.target)) dd.classList.add("hidden");
+    });
+    headerSearchDocListenerAttached = true;
+  }
+}
+
+async function runGlobalSearch(q, dropdown) {
+  const [{ data: clubs }, { data: players }] = await Promise.all([
+    supabaseClient
+      .from("game_clubs")
+      .select("id, nom")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(6),
+    supabaseClient
+      .from("game_players")
+      .select("id, nom, poste_brut, game_club_id, club:game_clubs(nom)")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(8),
+  ]);
+
+  const hasClubs = clubs && clubs.length > 0;
+  const hasPlayers = players && players.length > 0;
+
+  if (!hasClubs && !hasPlayers) {
+    dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${escapeHtml(q)}"</div>`;
+    dropdown.classList.remove("hidden");
     return;
   }
 
-  body.innerHTML = players.map(p => {
+  let html = "";
+  if (hasClubs) {
+    html += `<div class="search-group-label">Clubs</div>`;
+    html += clubs.map(c => `
+      <div class="search-result-item" data-type="club" data-id="${c.id}">
+        <span class="search-result-icon">🛡️</span>
+        <span>${escapeHtml(c.nom)}</span>
+      </div>
+    `).join("");
+  }
+  if (hasPlayers) {
+    html += `<div class="search-group-label">Joueurs</div>`;
+    html += players.map(p => `
+      <div class="search-result-item" data-type="player" data-id="${p.id}" data-club="${p.game_club_id ?? ""}">
+        <span class="search-result-icon">🧍</span>
+        <span>
+          <div>${escapeHtml(p.nom)}</div>
+          <div class="search-result-sub">${escapeHtml(p.poste_brut || "-")}${p.club?.nom ? " · " + escapeHtml(p.club.nom) : ""}</div>
+        </span>
+      </div>
+    `).join("");
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove("hidden");
+
+  dropdown.querySelectorAll(".search-result-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const type = item.getAttribute("data-type");
+      const id = item.getAttribute("data-id");
+      if (type === "club") {
+        window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
+      } else {
+        const clubId = item.getAttribute("data-club");
+        window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}&player=${encodeURIComponent(id)}`;
+      }
+    });
+  });
+}
+
+let myClubPlayers = [];
+const myClubSortState = { key: "niveau_actuel", dir: -1 };
+
+function renderMyClubBody() {
+  const body = document.getElementById("myClubBody");
+  const sorted = sortPlayers(myClubPlayers, MYCLUB_COLUMNS, myClubSortState);
+
+  body.innerHTML = sorted.map(p => {
     const note = p.note_moyenne_saison === null || p.note_moyenne_saison === undefined
       ? "-"
       : Number(p.note_moyenne_saison).toFixed(1);
@@ -589,6 +827,29 @@ function renderMyClubView(club, players, pseudo) {
       window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}&player=${encodeURIComponent(pid)}`;
     });
   });
+}
+
+function renderMyClubView(club, players, pseudo) {
+  document.getElementById("genericView").classList.add("hidden");
+  document.getElementById("myClubView").classList.remove("hidden");
+
+  renderFmHeader(club, pseudo);
+  renderFmSidebar();
+
+  myClubPlayers = players || [];
+  const scrollWrap = document.querySelector(".fm-squad-card .table-scroll");
+  const emptyEl = document.getElementById("myClubEmpty");
+
+  if (myClubPlayers.length === 0) {
+    scrollWrap.style.display = "none";
+    emptyEl.classList.remove("hidden");
+    return;
+  }
+  scrollWrap.style.display = "";
+  emptyEl.classList.add("hidden");
+
+  initSortableHeaders(document.querySelector("#myClubView .squad-table thead"), MYCLUB_COLUMNS, myClubSortState, renderMyClubBody);
+  renderMyClubBody();
 }
 
 // ===================== CHARGEMENT =====================
