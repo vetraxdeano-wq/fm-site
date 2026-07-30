@@ -53,6 +53,14 @@
     text-align: center; color: var(--text-dim); font-size: 14px;
     padding: 60px 20px;
   }
+  button {
+    font-family: inherit; cursor: pointer; border-radius: 8px; font-weight: 600;
+  }
+  button.secondary {
+    background: transparent; border: 1px solid var(--border); color: var(--text);
+    padding: 8px 14px; font-size: 13px;
+  }
+  button.secondary:hover { border-color: var(--text-dim); }
 
   /* Bouton Demarrer flottant, toujours visible dans un coin pour le host */
   .floating-start {
@@ -81,6 +89,34 @@
   .toast.show { opacity: 1; }
   .toast.error { border-color: var(--danger); color: var(--danger); }
   .hidden { display: none !important; }
+
+  .select-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  select {
+    background: #0d0f13; border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: 8px; font-size: 14px; min-width: 200px;
+  }
+  select:disabled { opacity: 0.5; }
+  .club-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .club-table th {
+    text-align: left; color: var(--text-dim); font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .club-table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .club-table tr:last-child td { border-bottom: none; }
+  .club-name { font-weight: 600; }
+  .club-taken { color: var(--text-dim); font-size: 11px; }
+  .pick-btn {
+    background: var(--accent); color: #06210f; border: none;
+    padding: 7px 14px; border-radius: 8px; font-weight: 600;
+    font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
+  .pick-btn:hover { filter: brightness(1.08); }
+  .pick-btn:disabled { opacity: 0.4; cursor: default; background: var(--border); color: var(--text-dim); }
+  .my-club-header { display: flex; justify-content: space-between; align-items: center; }
+  .my-club-header .name { font-weight: 700; font-size: 16px; }
+  .my-club-header .meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  button.secondary.small { padding: 6px 10px; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -96,10 +132,39 @@
 </div>
 
 <div class="wrap">
-  <div class="card">
-    <div class="empty-state">
-      🚧 Dashboard du jeu a venir (effectif, mercato, tactique, calendrier...)<br>
-      La structure de base est en place, on construit les onglets ensuite.
+  <div id="clubSelectScreen" class="hidden">
+    <div class="card">
+      <h2>Choisir un club</h2>
+      <div class="select-row">
+        <select id="nationSelect">
+          <option value="">Nation...</option>
+        </select>
+        <select id="divisionSelect" disabled>
+          <option value="">Division...</option>
+        </select>
+      </div>
+    </div>
+    <div class="card" id="clubListCard" style="display:none;">
+      <h2>Clubs disponibles</h2>
+      <table class="club-table">
+        <thead>
+          <tr>
+            <th>Club</th><th>Rép.</th><th>Budget</th><th>Effectif</th><th>Meilleur joueur</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="clubListBody"></tbody>
+      </table>
+      <div id="clubListEmpty" class="empty-state hidden">Aucun club dans cette division.</div>
+    </div>
+  </div>
+
+  <div id="mainDashboard" class="hidden">
+    <div class="card" id="myClubCard"></div>
+    <div class="card">
+      <div class="empty-state">
+        🚧 Dashboard du jeu a venir (effectif, mercato, tactique, calendrier...)<br>
+        La structure de base est en place, on construit les onglets ensuite.
+      </div>
     </div>
   </div>
 </div>
@@ -121,6 +186,7 @@ const params = new URLSearchParams(window.location.search);
 const gameId = params.get("game");
 
 let userId = null;
+let currentGame = null;
 
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
@@ -133,6 +199,11 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+function formatMoney(n) {
+  if (n === null || n === undefined) return "-";
+  return new Intl.NumberFormat("fr-FR").format(n) + " €";
 }
 
 async function loadDashboard() {
@@ -159,6 +230,7 @@ async function loadDashboard() {
     toast("Impossible de charger cette partie", true);
     return;
   }
+  currentGame = game;
 
   document.getElementById("gameName").textContent = game.nom;
   document.getElementById("gameMeta").textContent =
@@ -166,7 +238,7 @@ async function loadDashboard() {
 
   const { data: participants } = await supabaseClient
     .from("game_participants")
-    .select("pseudo, is_host, user_id")
+    .select("pseudo, is_host, user_id, game_club_id")
     .eq("game_id", gameId);
 
   const me = (participants || []).find(p => p.user_id === userId);
@@ -175,6 +247,164 @@ async function loadDashboard() {
   if (isHost && game.statut === "lobby") {
     document.getElementById("floatingStart").classList.remove("hidden");
     document.getElementById("startGameBtn").addEventListener("click", () => startGame(participants?.length || 1));
+  }
+
+  if (!me?.game_club_id) {
+    document.getElementById("clubSelectScreen").classList.remove("hidden");
+    document.getElementById("mainDashboard").classList.add("hidden");
+    initClubSelection();
+  } else {
+    document.getElementById("clubSelectScreen").classList.add("hidden");
+    document.getElementById("mainDashboard").classList.remove("hidden");
+    showMyClub(me.game_club_id, game.statut === "lobby");
+  }
+}
+
+// ============================================================
+// SELECTION DE CLUB
+// ============================================================
+async function initClubSelection() {
+  const nationSelect = document.getElementById("nationSelect");
+  const divisionSelect = document.getElementById("divisionSelect");
+
+  if (nationSelect.dataset.loaded) return; // deja initialise
+  nationSelect.dataset.loaded = "1";
+
+  const { data: nations, error } = await supabaseClient
+    .from("distinct_nations")
+    .select("nation");
+
+  if (error) {
+    toast("Erreur chargement des nations : " + error.message, true);
+    return;
+  }
+
+  nationSelect.innerHTML = '<option value="">Nation...</option>' +
+    (nations || []).map(n => `<option value="${escapeHtml(n.nation)}">${escapeHtml(n.nation)}</option>`).join("");
+
+  nationSelect.addEventListener("change", async () => {
+    const nation = nationSelect.value;
+    divisionSelect.innerHTML = '<option value="">Division...</option>';
+    document.getElementById("clubListCard").style.display = "none";
+
+    if (!nation) { divisionSelect.disabled = true; return; }
+
+    const { data: divisions, error: divErr } = await supabaseClient
+      .rpc("divisions_for_nation", { p_nation: nation });
+
+    if (divErr) {
+      toast("Erreur chargement des divisions : " + divErr.message, true);
+      return;
+    }
+
+    divisionSelect.disabled = false;
+    divisionSelect.innerHTML = '<option value="">Division...</option>' +
+      (divisions || []).map(d => `<option value="${escapeHtml(d.division)}">${escapeHtml(d.division)} (${d.nb_clubs})</option>`).join("");
+  });
+
+  divisionSelect.addEventListener("change", () => {
+    if (!divisionSelect.value) return;
+    loadClubList(nationSelect.value, divisionSelect.value);
+  });
+}
+
+async function loadClubList(nation, division) {
+  const card = document.getElementById("clubListCard");
+  const body = document.getElementById("clubListBody");
+  const emptyEl = document.getElementById("clubListEmpty");
+  card.style.display = "block";
+  body.innerHTML = "";
+  emptyEl.classList.add("hidden");
+
+  const { data: clubs, error } = await supabaseClient
+    .from("game_club_overview")
+    .select("game_club_id, nom, reputation, budget_actuel, nb_joueurs, moyenne_effectif, meilleur_joueur_nom, user_id")
+    .eq("game_id", gameId)
+    .eq("nation", nation)
+    .eq("division", division)
+    .order("reputation", { ascending: false });
+
+  if (error) {
+    toast("Erreur chargement des clubs : " + error.message, true);
+    return;
+  }
+
+  if (!clubs || clubs.length === 0) {
+    emptyEl.classList.remove("hidden");
+    return;
+  }
+
+  body.innerHTML = clubs.map(c => {
+    const taken = c.user_id && c.user_id !== userId;
+    return `
+      <tr>
+        <td class="club-name">${escapeHtml(c.nom)}</td>
+        <td>${c.reputation ?? "-"}</td>
+        <td>${formatMoney(c.budget_actuel)}</td>
+        <td>${c.nb_joueurs} joueurs · ${c.moyenne_effectif ?? "-"}/20 moy.</td>
+        <td>${escapeHtml(c.meilleur_joueur_nom || "-")}</td>
+        <td>
+          ${taken
+            ? `<span class="club-taken">Deja pris</span>`
+            : `<button class="pick-btn" data-pick="${c.game_club_id}">Choisir</button>`}
+        </td>
+      </tr>`;
+  }).join("");
+
+  body.querySelectorAll("[data-pick]").forEach(btn => {
+    btn.addEventListener("click", () => pickClub(parseInt(btn.getAttribute("data-pick"), 10), btn));
+  });
+}
+
+async function pickClub(gameClubId, btnEl) {
+  btnEl.disabled = true;
+  btnEl.textContent = "...";
+  try {
+    const { error } = await supabaseClient.rpc("choose_club", {
+      p_game_id: gameId,
+      p_game_club_id: gameClubId,
+    });
+    if (error) throw error;
+
+    toast("Club choisi !");
+    loadDashboard();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur : " + e.message, true);
+    btnEl.disabled = false;
+    btnEl.textContent = "Choisir";
+  }
+}
+
+async function showMyClub(gameClubId, canChange) {
+  const { data: club, error } = await supabaseClient
+    .from("game_club_overview")
+    .select("nom, reputation, budget_actuel, nb_joueurs, moyenne_effectif")
+    .eq("game_club_id", gameClubId)
+    .single();
+
+  const card = document.getElementById("myClubCard");
+  if (error || !club) {
+    card.innerHTML = `<div class="empty-state">Impossible de charger ton club.</div>`;
+    return;
+  }
+
+  card.innerHTML = `
+    <div class="my-club-header">
+      <div>
+        <div class="name">${escapeHtml(club.nom)}</div>
+        <div class="meta">Rép. ${club.reputation ?? "-"} · Budget ${formatMoney(club.budget_actuel)} · ${club.nb_joueurs} joueurs · ${club.moyenne_effectif ?? "-"}/20 de moyenne</div>
+      </div>
+      ${canChange ? `<button class="secondary" id="changeClubBtn">Changer de club</button>` : ""}
+    </div>
+  `;
+
+  if (canChange) {
+    document.getElementById("changeClubBtn").addEventListener("click", () => {
+      document.getElementById("clubSelectScreen").classList.remove("hidden");
+      document.getElementById("mainDashboard").classList.add("hidden");
+      initClubSelection();
+    });
   }
 }
 
