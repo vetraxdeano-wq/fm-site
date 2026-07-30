@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FM Web — Fiche joueur</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1c2029;
+    --border: #262a33;
+    --text: #e8eaed;
+    --text-dim: #8b909c;
+    --accent: #4ade80;
+    --gold: #fbbf24;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    background: var(--panel); gap: 14px; flex-wrap: wrap;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; white-space: nowrap; }
+  .back-link:hover { color: var(--text); }
+  .player-name { font-weight: 700; font-size: 16px; }
+  .player-meta { font-size: 12px; color: var(--text-dim); }
+  .nav-arrows { display: flex; gap: 6px; }
+  .nav-btn {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:hover:not(:disabled) { background: #23283299; border-color: #3a4050; }
+  .nav-btn:disabled { opacity: 0.35; cursor: default; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 18px; }
+  .hidden { display: none !important; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .card h3 {
+    margin: 0 0 14px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); font-weight: 600;
+  }
+
+  .top-grid { display: grid; grid-template-columns: 260px 1fr 280px; gap: 18px; align-items: start; }
+  @media (max-width: 980px) { .top-grid { grid-template-columns: 1fr; } }
+
+  .identity-photo {
+    width: 100%; aspect-ratio: 1/1; border-radius: 10px; background: var(--panel-2);
+    border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+    font-size: 46px; color: var(--text-dim); margin-bottom: 14px;
+  }
+  .identity-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .identity-row:last-child { border-bottom: none; }
+  .identity-label { color: var(--text-dim); }
+  .identity-value { font-weight: 600; text-align: right; }
+  .nat-chip {
+    display: inline-flex; align-items: center; gap: 5px; background: #14171d; border: 1px solid var(--border);
+    padding: 2px 6px; border-radius: 5px;
+  }
+  .flag-icon { width: 18px; height: auto; display: block; border-radius: 2px; }
+  .poste-chip {
+    display: inline-block; background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3);
+    color: var(--accent); font-size: 11px; padding: 2px 7px; border-radius: 5px; font-weight: 600; margin: 2px 2px 0 0;
+  }
+  .status-chip {
+    display: inline-block; background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.35);
+    color: var(--gold); font-size: 11px; padding: 2px 7px; border-radius: 5px; font-weight: 600;
+  }
+
+  .attrs-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 700px) { .attrs-cols { grid-template-columns: 1fr; } }
+  .attr-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .attr-name { color: var(--text-dim); }
+  .attr-val { font-weight: 600; min-width: 22px; text-align: right; }
+  .attr-high { color: var(--accent); font-weight: 700; }
+  .attr-mid { color: var(--text); }
+  .attr-low { color: var(--text-dim); }
+
+  .radar-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .stars-row { display: flex; justify-content: space-between; width: 100%; font-size: 12px; padding: 4px 0; }
+  .stars { position: relative; display: inline-block; font-size: 14px; letter-spacing: 2px; line-height: 1; }
+  .stars-bg { color: var(--border); }
+  .stars-fg { position: absolute; top: 0; left: 0; overflow: hidden; white-space: nowrap; color: var(--gold); }
+
+  .bottom-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px; }
+  @media (max-width: 980px) { .bottom-grid { grid-template-columns: 1fr; } }
+
+  .contract-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .contract-row:last-child { border-bottom: none; }
+  .contract-label { color: var(--text-dim); }
+  .contract-value { font-weight: 600; }
+  .contract-soon { color: var(--danger); }
+
+  .bar-row { margin-bottom: 12px; }
+  .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .bar-label { color: var(--text-dim); }
+  .bar-track { height: 6px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); }
+  .bar-fill.risk { background: var(--gold); }
+
+  .empty-state { text-align: center; color: var(--text-dim); font-size: 14px; padding: 60px 20px; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); padding: 10px 18px;
+    border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="#" id="backLink" class="back-link">← Retour à l'effectif</a>
+    <div>
+      <div class="player-name" id="playerName">Chargement...</div>
+      <div class="player-meta" id="playerMeta"></div>
+    </div>
+  </div>
+  <div class="nav-arrows">
+    <button class="nav-btn" id="prevBtn" title="Joueur précédent">◀</button>
+    <button class="nav-btn" id="nextBtn" title="Joueur suivant">▶</button>
+  </div>
+</div>
+
+<div class="wrap" id="content">
+  <div class="top-grid">
+    <div class="card">
+      <div class="identity-photo" id="identityPhoto">👤</div>
+      <div id="identityRows"></div>
+    </div>
+
+    <div class="card">
+      <h3>Attributs</h3>
+      <div class="attrs-cols" id="attrsCols"></div>
+    </div>
+
+    <div class="card">
+      <h3>Profil global</h3>
+      <div class="radar-wrap">
+        <div id="radarHolder"></div>
+        <div style="width:100%">
+          <div class="stars-row"><span>Niveau actuel</span><span id="starsCA"></span></div>
+          <div class="stars-row"><span>Potentiel</span><span id="starsPotentiel"></span></div>
+          <div class="stars-row"><span>Réputation mondiale</span><span id="starsRep"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-grid">
+    <div class="card">
+      <h3>Contrat &amp; valeur</h3>
+      <div id="contractRows"></div>
+    </div>
+
+    <div class="card">
+      <h3>Traits &amp; personnalité</h3>
+      <div id="hiddenAttrs"></div>
+    </div>
+  </div>
+</div>
+
+<div id="emptyState" class="empty-state hidden">Joueur introuvable.</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const params = new URLSearchParams(window.location.search);
+const gameId = params.get("game");
+const playerId = params.get("player");
+let clubIdParam = params.get("club");
+
+function toast(msg, isError = false) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (isError ? " error" : "");
+  setTimeout(() => { el.className = "toast"; }, 2500);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+// ---------- Drapeaux (repris de la vue effectif) ----------
+const GB_SUBCODES = { ENG: "gb-eng", SCO: "gb-sct", WAL: "gb-wls" };
+const NAT_CODE_TO_ISO2 = {
+  FRA: "fr", GER: "de", ALL: "de", ESP: "es", ITA: "it", POR: "pt", NED: "nl",
+  HOL: "nl", BEL: "be", NIR: "gb", IRL: "ie", SUI: "ch", AUT: "at", TUR: "tr",
+  GRE: "gr", RUS: "ru", UKR: "ua", POL: "pl", CZE: "cz", CRO: "hr", SRB: "rs",
+  ROU: "ro", BUL: "bg", HUN: "hu", DEN: "dk", SWE: "se", NOR: "no", FIN: "fi",
+  ISL: "is", BRA: "br", ARG: "ar", URU: "uy", CHI: "cl", COL: "co", PER: "pe",
+  ECU: "ec", PAR: "py", BOL: "bo", VEN: "ve", MEX: "mx", USA: "us", CAN: "ca",
+  JPN: "jp", KOR: "kr", AUS: "au", MAR: "ma", ALG: "dz", TUN: "tn", SEN: "sn",
+  CIV: "ci", CMR: "cm", NGA: "ng", GHA: "gh", EGY: "eg", KSA: "sa", QAT: "qa",
+  CHN: "cn", BIH: "ba", SVK: "sk", SVN: "si", ALB: "al", MKD: "mk", MNE: "me",
+  ISR: "il", GEO: "ge", ARM: "am", AZE: "az", KAZ: "kz", LUX: "lu", CYP: "cy",
+  MLT: "mt", LTU: "lt", LVA: "lv", EST: "ee", BLR: "by", MDA: "md", FRO: "fo",
+  AND: "ad", SMR: "sm", LIE: "li", GIB: "gb", GNB: "gw", GAM: "gm", MLI: "ml",
+  BFA: "bf", GAB: "ga", COD: "cd", RSA: "za", ANG: "ao", MOZ: "mz", ZIM: "zw",
+  KEN: "ke", ETH: "et", TAN: "tz", UGA: "ug", CPV: "cv", GUI: "gn", GNE: "gq",
+  TOG: "tg", BEN: "bj", NIG: "ne", TCH: "td", CTA: "cf", CGO: "cg", RWA: "rw",
+  ZAM: "zm", MWI: "mw", NAM: "na", BOT: "bw", SWZ: "sz", LES: "ls", MDG: "mg",
+  IND: "in", PAK: "pk", THA: "th", VIE: "vn", IDN: "id", MAS: "my",
+  SIN: "sg", PHI: "ph", IRN: "ir", IRQ: "iq", SYR: "sy", LIB: "lb", JOR: "jo",
+  UAE: "ae", OMA: "om", KUW: "kw", BHR: "bh", YEM: "ye", AFG: "af", UZB: "uz",
+  KGZ: "kg", TJK: "tj", TKM: "tm", MNG: "mn", NZL: "nz", FIJ: "fj", HAI: "ht",
+  JAM: "jm", TRI: "tt", CRC: "cr", PAN: "pa", HON: "hn", GUA: "gt", NCA: "ni",
+  SLV: "sv", CUB: "cu", DOM: "do", PUR: "pr",
+};
+function flagCodeForNat(code) {
+  if (!code) return null;
+  const c = code.trim().toUpperCase();
+  if (GB_SUBCODES[c]) return GB_SUBCODES[c];
+  if (NAT_CODE_TO_ISO2[c]) return NAT_CODE_TO_ISO2[c];
+  if (/^[A-Z]{2}$/.test(c)) return c.toLowerCase();
+  return null;
+}
+function flagImg(code) {
+  const flagCode = flagCodeForNat(code);
+  if (!flagCode) return `<span class="nat-chip">${escapeHtml(code || "-")}</span>`;
+  return `<span class="nat-chip" title="${escapeHtml(code)}"><img class="flag-icon" src="https://flagcdn.com/${flagCode}.svg" alt="${escapeHtml(code)}" loading="lazy"> ${escapeHtml(code)}</span>`;
+}
+
+// ---------- Argent / valeur (repris de la vue effectif) ----------
+function formatMoneyShort(n) {
+  if (n === null || n === undefined) return "-";
+  if (Math.abs(n) >= 1000000) return (n / 1000000).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " M€";
+  if (Math.abs(n) >= 1000) return (n / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " k€";
+  return new Intl.NumberFormat("fr-FR").format(n) + " €";
+}
+function roundStep(n) {
+  if (n < 500000) return 50000;
+  if (n < 2000000) return 100000;
+  if (n < 10000000) return 500000;
+  if (n < 50000000) return 1000000;
+  if (n < 150000000) return 5000000;
+  return 10000000;
+}
+function valueRange(v) {
+  if (v === null || v === undefined) return "-";
+  const step = roundStep(v);
+  const low = Math.max(0, Math.round((v * 0.85) / step) * step);
+  const high = Math.round((v * 1.15) / step) * step;
+  if (low === high) return formatMoneyShort(low);
+  return `${formatMoneyShort(low)} - ${formatMoneyShort(high)}`;
+}
+
+// ---------- Étoiles ----------
+const STAR_BANDS = [
+  [500, 1], [1000, 1.5], [1750, 2], [2750, 2.5],
+  [4250, 3], [5800, 3.5], [7500, 4], [9000, 4.5], [Infinity, 5]
+];
+function starsFromReputation(rep) {
+  if (rep === null || rep === undefined) return 0.5;
+  for (const [max, stars] of STAR_BANDS) { if (rep < max) return stars; }
+  return 5;
+}
+function starsFromScale200(v) {
+  if (v === null || v === undefined) return 0.5;
+  return Math.max(0.5, Math.min(5, Math.round((v / 200) * 5 * 2) / 2));
+}
+function starsHtml(rating) {
+  const pct = (rating / 5) * 100;
+  return `<span class="stars" title="${rating}/5">
+    <span class="stars-bg">★★★★★</span>
+    <span class="stars-fg" style="width:${pct}%">★★★★★</span>
+  </span>`;
+}
+
+function formatDate(d) {
+  if (!d) return "-";
+  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+function ageFromDob(dob) {
+  if (!dob) return "-";
+  const b = new Date(dob), now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
+}
+
+let gameCurrentDate = null;
+function isContractSoon(d) {
+  if (!d || !gameCurrentDate) return false;
+  const months = (new Date(d) - gameCurrentDate) / (1000 * 60 * 60 * 24 * 30);
+  return months < 6;
+}
+
+// ---------- Groupes d'attributs ----------
+const TECH = [["centres","Centres"],["controle_de_balle","Contrôle de balle"],["corners","Corners"],
+  ["coup_franc","Coups francs"],["dribbles","Dribbles"],["finition","Finition"],["jeu_de_tete","Jeu de tête"],
+  ["marquage","Marquage"],["passes","Passes"],["penalty","Penalty"],["tacles","Tacles"],["technique","Technique"],
+  ["tir_de_loin","Tirs de loin"],["touche_longues","Touches longues"]];
+const MENTAL = [["agressivite","Agressivité"],["anticipation","Anticipation"],["appels_de_balle","Appels de balle"],
+  ["concentration","Concentration"],["courage","Courage"],["decisions","Décisions"],["determination","Détermination"],
+  ["inspiration","Inspiration"],["jeu_collectif","Jeu collectif"],["leadership","Leadership"],["placement","Placement"],
+  ["sang_froid","Sang-froid"],["vision_du_jeu","Vision du jeu"],["volume_de_jeu","Volume de jeu"]];
+const PHYSIQUE = [["acceleration","Accélération"],["agilite","Agilité"],["detente_verticale","Détente verticale"],
+  ["endurance","Endurance"],["equilibre","Équilibre"],["puissance","Puissance"],
+  ["qualite_physique_naturelle","Qualités phys. nat."],["vitesse","Vitesse"]];
+const GARDIEN = [["reflexes","Réflexes"],["sorties_dans_surface","Sorties dans la surface"],
+  ["sorties_dans_les_pieds","Sorties aux pieds"],["degagement_au_poing","Dégagement au poing"],
+  ["relance_a_la_main","Relance à la main"],["communication","Communication"],
+  ["attr_1c1","Un contre un"],["detente","Détente / envergure"]];
+
+function attrValClass(v) {
+  if (v === null || v === undefined) return "attr-low";
+  if (v >= 15) return "attr-high";
+  if (v >= 10) return "attr-mid";
+  return "attr-low";
+}
+function renderAttrColumn(title, list, data) {
+  const rows = list.map(([key, label]) => {
+    const v = data[key];
+    return `<div class="attr-row"><span class="attr-name">${label}</span><span class="attr-val ${attrValClass(v)}">${v ?? "-"}</span></div>`;
+  }).join("");
+  return `<div><h3 style="margin-top:0">${title}</h3>${rows}</div>`;
+}
+
+function avgOf(list, data) {
+  const vals = list.map(([key]) => data[key]).filter(v => v !== null && v !== undefined);
+  if (!vals.length) return 0;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+// ---------- Radar SVG générique (3 axes techn./mental/physique) ----------
+function radarSVG(axes) {
+  const size = 240, cx = size / 2, cy = size / 2, maxR = 88;
+  const n = axes.length;
+  const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
+  const pt = (r, i) => [cx + r * Math.cos(angleFor(i)), cy + r * Math.sin(angleFor(i))];
+
+  let grid = "";
+  [0.25, 0.5, 0.75, 1].forEach(frac => {
+    const pts = axes.map((_, i) => pt(maxR * frac, i).join(",")).join(" ");
+    grid += `<polygon points="${pts}" fill="none" stroke="#262a33" stroke-width="1"/>`;
+  });
+  let spokes = "";
+  axes.forEach((_, i) => {
+    const [x, y] = pt(maxR, i);
+    spokes += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#262a33" stroke-width="1"/>`;
+  });
+
+  const valuePts = axes.map((a, i) => pt(maxR * Math.min(1, a.value / 20), i).join(",")).join(" ");
+  const shape = `<polygon points="${valuePts}" fill="rgba(74,222,128,0.25)" stroke="#4ade80" stroke-width="2"/>`;
+
+  let labels = "";
+  axes.forEach((a, i) => {
+    const [x, y] = pt(maxR + 22, i);
+    labels += `<text x="${x}" y="${y}" fill="#8b909c" font-size="11" text-anchor="middle" dominant-baseline="middle">${escapeHtml(a.label)} (${a.value.toFixed(1)})</text>`;
+  });
+
+  return `<svg width="${size}" height="${size + 10}" viewBox="0 0 ${size} ${size + 10}">${grid}${spokes}${shape}${labels}</svg>`;
+}
+
+function bar(label, value, max = 20, riskStyle = false) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  return `
+    <div class="bar-row">
+      <div class="bar-head"><span class="bar-label">${label}</span><span>${value ?? "-"}</span></div>
+      <div class="bar-track"><div class="bar-fill ${riskStyle ? "risk" : ""}" style="width:${pct}%"></div></div>
+    </div>`;
+}
+
+let rosterOrder = [];
+let currentIndex = -1;
+
+function goTo(id) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("player", id);
+  window.location.href = url.toString();
+}
+
+async function loadRoster(gid, clubId) {
+  const { data } = await supabaseClient
+    .from("game_players")
+    .select("id, nom")
+    .eq("game_id", gid)
+    .eq("game_club_id", clubId)
+    .order("reputation_mondiale", { ascending: false, nullsFirst: false });
+  rosterOrder = data || [];
+  currentIndex = rosterOrder.findIndex(p => String(p.id) === String(playerId));
+  document.getElementById("prevBtn").disabled = currentIndex <= 0;
+  document.getElementById("nextBtn").disabled = currentIndex === -1 || currentIndex >= rosterOrder.length - 1;
+}
+
+document.getElementById("prevBtn").addEventListener("click", () => {
+  if (currentIndex > 0) goTo(rosterOrder[currentIndex - 1].id);
+});
+document.getElementById("nextBtn").addEventListener("click", () => {
+  if (currentIndex >= 0 && currentIndex < rosterOrder.length - 1) goTo(rosterOrder[currentIndex + 1].id);
+});
+
+async function loadFiche() {
+  if (!gameId || !playerId) {
+    document.getElementById("playerName").textContent = "Joueur introuvable";
+    document.getElementById("content").classList.add("hidden");
+    document.getElementById("emptyState").classList.remove("hidden");
+    return;
+  }
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session?.user) { window.location.href = "index.html"; return; }
+
+  const { data: game } = await supabaseClient
+    .from("games").select("date_debut, jour_actuel").eq("id", gameId).single();
+  if (game) {
+    gameCurrentDate = new Date(game.date_debut);
+    gameCurrentDate.setDate(gameCurrentDate.getDate() + (game.jour_actuel || 0));
+  }
+
+  const { data: gp, error } = await supabaseClient
+    .from("game_players")
+    .select(`*, players:player_ref ( taille_cm, poids_kg, ambition, fidelite, adaptabilite, tendance_blessure, regularite, polemique, pression_medias, matchs_importants )`)
+    .eq("id", playerId)
+    .eq("game_id", gameId)
+    .single();
+
+  if (error || !gp) {
+    document.getElementById("playerName").textContent = "Joueur introuvable";
+    document.getElementById("content").classList.add("hidden");
+    document.getElementById("emptyState").classList.remove("hidden");
+    toast("Impossible de charger ce joueur", true);
+    return;
+  }
+
+  const extra = gp.players || {};
+  clubIdParam = clubIdParam || gp.game_club_id;
+
+  document.getElementById("backLink").href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubIdParam || "")}`;
+
+  let clubNom = "";
+  if (clubIdParam) {
+    const { data: club } = await supabaseClient.from("game_clubs").select("nom").eq("id", clubIdParam).single();
+    clubNom = club?.nom || "";
+  }
+
+  document.getElementById("playerName").textContent = gp.nom;
+  document.getElementById("playerMeta").textContent = [gp.poste_brut, clubNom].filter(Boolean).join(" · ");
+
+  // Identité
+  const postesChips = (gp.postes || []).map(p => `<span class="poste-chip">${escapeHtml(p)}</span>`).join("");
+  document.getElementById("identityRows").innerHTML = `
+    <div style="margin-bottom:10px">${postesChips || `<span class="poste-chip">${escapeHtml(gp.poste_brut || "-")}</span>`}</div>
+    ${gp.statut_special ? `<div style="margin-bottom:10px"><span class="status-chip">${escapeHtml(gp.statut_special)}</span></div>` : ""}
+    <div class="identity-row"><span class="identity-label">Nationalité</span><span class="identity-value">${flagImg(gp.nationalite)}</span></div>
+    <div class="identity-row"><span class="identity-label">Âge</span><span class="identity-value">${gp.age ?? ageFromDob(gp.date_naissance)}</span></div>
+    <div class="identity-row"><span class="identity-label">Date de naissance</span><span class="identity-value">${formatDate(gp.date_naissance)}</span></div>
+    <div class="identity-row"><span class="identity-label">Taille / Poids</span><span class="identity-value">${extra.taille_cm ? extra.taille_cm + " cm" : "-"} / ${extra.poids_kg ? extra.poids_kg + " kg" : "-"}</span></div>
+    <div class="identity-row"><span class="identity-label">Pied gauche</span><span class="identity-value">${escapeHtml(gp.pied_gauche || "-")}</span></div>
+    <div class="identity-row"><span class="identity-label">Pied droit</span><span class="identity-value">${escapeHtml(gp.pied_droit || "-")}</span></div>
+    <div class="identity-row"><span class="identity-label">Personnalité</span><span class="identity-value">${escapeHtml(gp.personnalite || "-")}</span></div>
+  `;
+
+  // Attributs
+  const isGK = (gp.poste_brut || "").toUpperCase().includes("GB");
+  let colsHtml = renderAttrColumn("Technique", TECH, gp) + renderAttrColumn("Mental", MENTAL, gp) + renderAttrColumn("Physique", PHYSIQUE, gp);
+  if (isGK) colsHtml += renderAttrColumn("Gardien", GARDIEN, gp);
+  document.getElementById("attrsCols").innerHTML = colsHtml;
+  if (isGK) document.getElementById("attrsCols").style.gridTemplateColumns = "repeat(2, 1fr)";
+
+  // Radar
+  const axes = [
+    { label: "Technique", value: avgOf(TECH, gp) },
+    { label: "Mental", value: avgOf(MENTAL, gp) },
+    { label: "Physique", value: avgOf(PHYSIQUE, gp) },
+  ];
+  document.getElementById("radarHolder").innerHTML = radarSVG(axes);
+  document.getElementById("starsCA").innerHTML = starsHtml(starsFromScale200(gp.ca));
+  document.getElementById("starsPotentiel").innerHTML = starsHtml(starsFromScale200(gp.potentiel));
+  document.getElementById("starsRep").innerHTML = starsHtml(starsFromReputation(gp.reputation_mondiale));
+
+  // Contrat
+  document.getElementById("contractRows").innerHTML = `
+    <div class="contract-row"><span class="contract-label">Club</span><span class="contract-value">${escapeHtml(clubNom || "-")}</span></div>
+    <div class="contract-row"><span class="contract-label">Salaire</span><span class="contract-value">${formatMoneyShort(gp.salaire_actuel)}${gp.salaire_actuel ? " / mois" : ""}</span></div>
+    <div class="contract-row"><span class="contract-label">Fin de contrat</span><span class="contract-value ${isContractSoon(gp.contrat_expire) ? "contract-soon" : ""}">${formatDate(gp.contrat_expire)}</span></div>
+    <div class="contract-row"><span class="contract-label">Valeur estimée</span><span class="contract-value">${valueRange(gp.valeur_marchande_actuelle)}</span></div>
+    <div class="contract-row"><span class="contract-label">CA / Potentiel (brut)</span><span class="contract-value">${gp.ca ?? "-"} / ${gp.potentiel ?? "-"}</span></div>
+  `;
+
+  // Traits & personnalité (attributs cachés)
+  document.getElementById("hiddenAttrs").innerHTML = `
+    ${bar("Ambition", extra.ambition)}
+    ${bar("Fidélité", extra.fidelite)}
+    ${bar("Adaptabilité", extra.adaptabilite)}
+    ${bar("Régularité", extra.regularite)}
+    ${bar("Grands matchs", extra.matchs_importants)}
+    ${bar("Tendance blessure", extra.tendance_blessure, 20, true)}
+    ${bar("Polémique", extra.polemique, 20, true)}
+    ${bar("Pression médias", extra.pression_medias, 20, true)}
+  `;
+
+  await loadRoster(gameId, clubIdParam);
+}
+
+loadFiche();
+</script>
+</body>
+</html>
