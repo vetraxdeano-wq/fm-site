@@ -15,6 +15,7 @@
     --accent: #4ade80;
     --accent-dim: #1f6b42;
     --danger: #ef4444;
+    --gold: #fbbf24;
   }
   * { box-sizing: border-box; }
   body {
@@ -25,128 +26,59 @@
     min-height: 100vh;
     padding: 24px 16px;
   }
-  .wrap {
-    max-width: 640px;
-    margin: 0 auto;
-  }
-  header {
-    margin-bottom: 32px;
-  }
-  h1 {
-    font-size: 22px;
-    margin: 0 0 4px;
-    letter-spacing: -0.02em;
-  }
-  .sub {
-    color: var(--text-dim);
-    font-size: 14px;
-  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header { margin-bottom: 32px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--text-dim); font-size: 14px; }
   .pseudo-box {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    font-size: 13px;
-    color: var(--text-dim);
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 12px; font-size: 13px; color: var(--text-dim);
   }
   .pseudo-box input {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 13px;
-    width: 140px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 8px; border-radius: 6px; font-size: 13px; width: 140px;
   }
   .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 16px;
   }
   .card h2 {
-    font-size: 15px;
-    margin: 0 0 14px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-size: 15px; margin: 0 0 14px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em;
   }
-  .row {
-    display: flex;
-    gap: 8px;
-  }
+  .row { display: flex; gap: 8px; }
   input[type=text] {
-    flex: 1;
-    background: #0d0f13;
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 12px;
-    border-radius: 8px;
-    font-size: 14px;
+    flex: 1; background: #0d0f13; border: 1px solid var(--border); color: var(--text);
+    padding: 10px 12px; border-radius: 8px; font-size: 14px;
   }
-  input[type=text]:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
   button {
-    background: var(--accent);
-    color: #06210f;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    white-space: nowrap;
+    background: var(--accent); color: #06210f; border: none;
+    padding: 10px 16px; border-radius: 8px; font-weight: 600;
+    font-size: 14px; cursor: pointer; white-space: nowrap;
   }
   button:hover { filter: brightness(1.08); }
   button:disabled { opacity: 0.5; cursor: default; }
-  button.secondary {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text);
-  }
+  button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  button.gold { background: var(--gold); color: #3a2a00; }
   .room-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 14px;
-    background: #0d0f13;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin-bottom: 8px;
+    padding: 12px 14px; background: #0d0f13; border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 8px;
   }
+  .room-item-top { display: flex; justify-content: space-between; align-items: center; }
   .room-item .name { font-weight: 600; font-size: 14px; }
   .room-item .meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
   .code-badge {
-    font-family: monospace;
-    background: var(--accent-dim);
-    color: var(--accent);
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    letter-spacing: 0.05em;
+    font-family: monospace; background: var(--accent-dim); color: var(--accent);
+    padding: 3px 8px; border-radius: 6px; font-size: 12px; letter-spacing: 0.05em;
   }
-  .empty {
-    color: var(--text-dim);
-    font-size: 13px;
-    text-align: center;
-    padding: 20px 0;
-  }
+  .host-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
+  .participant-count { font-size: 12px; color: var(--text-dim); }
+  .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px 0; }
   .toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 13px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); padding: 10px 18px;
+    border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
   }
   .toast.show { opacity: 1; }
   .toast.error { border-color: var(--danger); color: var(--danger); }
@@ -158,7 +90,7 @@
     <h1>FM Web — Test Rooms</h1>
     <div class="sub">Page de test : creation / jonction de rooms</div>
     <div class="pseudo-box">
-      Pseudo :
+      Pseudo (affichage local) :
       <input type="text" id="pseudoInput" placeholder="ton pseudo">
       <button class="secondary" id="savePseudoBtn" style="padding:4px 10px;font-size:12px;">OK</button>
     </div>
@@ -183,7 +115,7 @@
   <div class="card">
     <h2>Mes rooms</h2>
     <div id="roomsList">
-      <div class="empty">Chargement...</div>
+      <div class="empty">Connexion...</div>
     </div>
   </div>
 </div>
@@ -194,32 +126,39 @@
 // ============================================================
 // CONFIG SUPABASE — remplace avec tes propres valeurs
 // ============================================================
-const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
+const SUPABASE_URL = "https://TON_PROJET.supabase.co";
+const SUPABASE_ANON_KEY = "TA_CLE_ANON_PUBLIQUE";
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+let userId = null; // rempli apres l'auth anonyme
+
 // ============================================================
-// AUTH PSEUDO (UUID en localStorage, pas de vrai compte)
+// AUTH ANONYME SUPABASE (vrai auth.uid(), pas de mot de passe)
+// Le "pseudo" reste juste un nom d'affichage local (pas stocke en base
+// pour l'instant, tes tables n'ont pas de colonne pseudo).
 // ============================================================
-function getUserId() {
-  let id = localStorage.getItem("fm_user_id");
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("fm_user_id", id);
+async function ensureAuth() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    userId = session.user.id;
+    return;
   }
-  return id;
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    console.error(error);
+    toast("Erreur d'authentification : " + error.message, true);
+    throw error;
+  }
+  userId = data.user.id;
 }
 
 function getPseudo() {
   return localStorage.getItem("fm_pseudo") || "";
 }
-
 function setPseudo(p) {
   localStorage.setItem("fm_pseudo", p);
 }
-
-const userId = getUserId();
 
 // ============================================================
 // UI HELPERS
@@ -251,13 +190,10 @@ document.getElementById("savePseudoBtn").addEventListener("click", () => {
 });
 
 // ============================================================
-// CREER UNE ROOM (table "games")
+// CREER UNE ROOM
 // ============================================================
 document.getElementById("createRoomBtn").addEventListener("click", async () => {
   const name = document.getElementById("roomNameInput").value.trim();
-  const pseudo = getPseudo();
-
-  if (!pseudo) { toast("Definis d'abord ton pseudo", true); return; }
   if (!name) { toast("Donne un nom a la room", true); return; }
 
   const btn = document.getElementById("createRoomBtn");
@@ -274,7 +210,7 @@ document.getElementById("createRoomBtn").addEventListener("click", async () => {
     if (gameErr) throw gameErr;
 
     const { error: memberErr } = await supabase
-      .from("games_participants")
+      .from("game_participants")
       .insert({ game_id: game.id, user_id: userId, is_host: true });
 
     if (memberErr) throw memberErr;
@@ -291,13 +227,10 @@ document.getElementById("createRoomBtn").addEventListener("click", async () => {
 });
 
 // ============================================================
-// REJOINDRE UNE ROOM (table "games")
+// REJOINDRE UNE ROOM
 // ============================================================
 document.getElementById("joinRoomBtn").addEventListener("click", async () => {
   const code = document.getElementById("joinCodeInput").value.trim().toUpperCase();
-  const pseudo = getPseudo();
-
-  if (!pseudo) { toast("Definis d'abord ton pseudo", true); return; }
   if (!code) { toast("Entre un code de room", true); return; }
 
   const btn = document.getElementById("joinRoomBtn");
@@ -312,10 +245,13 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
 
     if (gameErr || !game) { toast("Room introuvable pour ce code", true); return; }
 
-    // Verifie si l'utilisateur est deja participant (pas d'upsert : on ne
-    // suppose pas l'existence d'une contrainte unique sur game_id+user_id)
+    if (game.statut !== "lobby") {
+      toast("Cette partie a deja demarre, impossible de la rejoindre", true);
+      return;
+    }
+
     const { data: existing } = await supabase
-      .from("games_participants")
+      .from("game_participants")
       .select("id")
       .eq("game_id", game.id)
       .eq("user_id", userId)
@@ -323,7 +259,7 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
 
     if (!existing) {
       const { error: memberErr } = await supabase
-        .from("games_participants")
+        .from("game_participants")
         .insert({ game_id: game.id, user_id: userId, is_host: false });
 
       if (memberErr) throw memberErr;
@@ -341,14 +277,47 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
 });
 
 // ============================================================
-// LISTER MES ROOMS (table "games" via "games_participants")
+// DEMARRER LA PARTIE (host uniquement)
+// ============================================================
+async function startGame(gameId, btnEl) {
+  btnEl.disabled = true;
+  try {
+    const { count } = await supabase
+      .from("game_participants")
+      .select("id", { count: "exact", head: true })
+      .eq("game_id", gameId);
+
+    if (!count || count < 2) {
+      toast("Il faut au moins 2 joueurs pour demarrer", true);
+      btnEl.disabled = false;
+      return;
+    }
+
+    const { error } = await supabase
+      .from("games")
+      .update({ statut: "mercato" })
+      .eq("id", gameId);
+
+    if (error) throw error;
+
+    toast("Partie demarree !");
+    loadRooms();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur au demarrage : " + e.message, true);
+    btnEl.disabled = false;
+  }
+}
+
+// ============================================================
+// LISTER MES ROOMS
 // ============================================================
 async function loadRooms() {
   const container = document.getElementById("roomsList");
 
   try {
     const { data: memberships, error } = await supabase
-      .from("games_participants")
+      .from("game_participants")
       .select("game_id, is_host, games(id, nom, code_invitation, statut, jour_actuel, saison)")
       .eq("user_id", userId);
 
@@ -359,19 +328,51 @@ async function loadRooms() {
       return;
     }
 
-    container.innerHTML = memberships.map(m => {
+    const hostGameIds = memberships.filter(m => m.is_host).map(m => m.game_id);
+    let countsByGame = {};
+    if (hostGameIds.length > 0) {
+      const { data: allParticipants } = await supabase
+        .from("game_participants")
+        .select("game_id")
+        .in("game_id", hostGameIds);
+      (allParticipants || []).forEach(p => {
+        countsByGame[p.game_id] = (countsByGame[p.game_id] || 0) + 1;
+      });
+    }
+
+    container.innerHTML = "";
+    memberships.forEach(m => {
       const g = m.games;
-      if (!g) return "";
-      return `
-        <div class="room-item">
+      if (!g) return;
+
+      const div = document.createElement("div");
+      div.className = "room-item";
+
+      const count = countsByGame[g.id];
+      const canStart = m.is_host && g.statut === "lobby";
+
+      div.innerHTML = `
+        <div class="room-item-top">
           <div>
             <div class="name">${escapeHtml(g.nom)} ${m.is_host ? "👑" : ""}</div>
             <div class="meta">Saison ${g.saison} · Jour ${g.jour_actuel} · ${escapeHtml(g.statut)}</div>
           </div>
           <div class="code-badge">${escapeHtml(g.code_invitation)}</div>
         </div>
+        ${canStart ? `
+          <div class="host-actions">
+            <button class="gold" data-start="${g.id}">Demarrer la partie</button>
+            <span class="participant-count">${count || 1} joueur(s) inscrit(s)</span>
+          </div>
+        ` : ""}
       `;
-    }).join("");
+
+      container.appendChild(div);
+    });
+
+    container.querySelectorAll("[data-start]").forEach(btn => {
+      btn.addEventListener("click", () => startGame(btn.getAttribute("data-start"), btn));
+    });
   } catch (e) {
     console.error(e);
     container.innerHTML = '<div class="empty">Erreur de chargement des rooms.</div>';
@@ -387,7 +388,15 @@ function escapeHtml(str) {
 // ============================================================
 // INIT
 // ============================================================
-loadRooms();
+(async () => {
+  try {
+    await ensureAuth();
+    loadRooms();
+  } catch (e) {
+    document.getElementById("roomsList").innerHTML =
+      '<div class="empty">Impossible de se connecter a Supabase.</div>';
+  }
+})();
 </script>
 </body>
 </html>
