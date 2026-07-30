@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FM Web — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262a33;
+    --text: #e8eaed;
+    --text-dim: #8b909c;
+    --accent: #4ade80;
+    --accent-dim: #1f6b42;
+    --danger: #ef4444;
+    --gold: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; }
+  .back-link:hover { color: var(--text); }
+  .game-name { font-weight: 700; font-size: 16px; }
+  .game-meta { font-size: 12px; color: var(--text-dim); }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 15px; margin: 0 0 14px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .pseudo-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pseudo-chip {
+    background: #14171d; border: 1px solid var(--border); color: var(--text);
+    padding: 5px 12px; border-radius: 999px; font-size: 13px;
+  }
+  .empty-state {
+    text-align: center; color: var(--text-dim); font-size: 14px;
+    padding: 60px 20px;
+  }
+
+  /* Bouton Demarrer flottant, toujours visible dans un coin pour le host */
+  .floating-start {
+    position: fixed; bottom: 20px; right: 20px; z-index: 50;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  }
+  .floating-start button {
+    background: var(--gold); color: #3a2a00; border: none;
+    padding: 12px 20px; border-radius: 999px; font-weight: 700;
+    font-size: 14px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .floating-start button:hover { filter: brightness(1.08); }
+  .floating-start button:disabled { opacity: 0.5; cursor: default; }
+  .floating-hint {
+    font-size: 11px; color: var(--text-dim); background: var(--panel);
+    border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px;
+    max-width: 220px; text-align: right; line-height: 1.4;
+  }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); padding: 10px 18px;
+    border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">← Mes rooms</a>
+    <div>
+      <div class="game-name" id="gameName">Chargement...</div>
+      <div class="game-meta" id="gameMeta"></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h2>Participants</h2>
+    <div class="pseudo-list" id="pseudoList"></div>
+  </div>
+
+  <div class="card">
+    <div class="empty-state">
+      🚧 Dashboard du jeu a venir (effectif, mercato, tactique, calendrier...)<br>
+      La structure de base est en place, on construit les onglets ensuite.
+    </div>
+  </div>
+</div>
+
+<div class="floating-start hidden" id="floatingStart">
+  <div class="floating-hint">A faire une fois que tous les joueurs attendus ont rejoint. Demarre le decompte des jours (mercato, matchs...).</div>
+  <button id="startGameBtn">Demarrer la partie</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const params = new URLSearchParams(window.location.search);
+const gameId = params.get("game");
+
+let userId = null;
+
+function toast(msg, isError = false) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (isError ? " error" : "");
+  setTimeout(() => { el.className = "toast"; }, 2500);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function loadDashboard() {
+  if (!gameId) {
+    document.getElementById("gameName").textContent = "Aucune partie specifiee";
+    return;
+  }
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session?.user) {
+    window.location.href = "index.html";
+    return;
+  }
+  userId = session.user.id;
+
+  const { data: game, error: gameErr } = await supabaseClient
+    .from("games")
+    .select()
+    .eq("id", gameId)
+    .single();
+
+  if (gameErr || !game) {
+    document.getElementById("gameName").textContent = "Partie introuvable";
+    toast("Impossible de charger cette partie", true);
+    return;
+  }
+
+  document.getElementById("gameName").textContent = game.nom;
+  document.getElementById("gameMeta").textContent =
+    `Saison ${game.saison} · Jour ${game.jour_actuel} · ${game.statut}`;
+
+  const { data: participants } = await supabaseClient
+    .from("game_participants")
+    .select("pseudo, is_host, user_id")
+    .eq("game_id", gameId);
+
+  document.getElementById("pseudoList").innerHTML = (participants || [])
+    .map(p => `<span class="pseudo-chip">${p.is_host ? "👑 " : ""}${escapeHtml(p.pseudo || "?")}</span>`)
+    .join("");
+
+  const me = (participants || []).find(p => p.user_id === userId);
+  const isHost = me?.is_host === true;
+
+  if (isHost && game.statut === "lobby") {
+    document.getElementById("floatingStart").classList.remove("hidden");
+    document.getElementById("startGameBtn").addEventListener("click", () => startGame(participants?.length || 1));
+  }
+}
+
+async function startGame(participantCount) {
+  const btn = document.getElementById("startGameBtn");
+  btn.disabled = true;
+
+  if (participantCount < 2) {
+    toast("Il faut au moins 2 joueurs pour demarrer", true);
+    btn.disabled = false;
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from("games")
+      .update({ statut: "mercato" })
+      .eq("id", gameId);
+
+    if (error) throw error;
+
+    toast("Partie demarree !");
+    document.getElementById("floatingStart").classList.add("hidden");
+    loadDashboard();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur au demarrage : " + e.message, true);
+    btn.disabled = false;
+  }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
