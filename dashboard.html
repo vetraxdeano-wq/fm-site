@@ -135,7 +135,7 @@
   .division-row .count { color: var(--text-dim); font-size: 11px; }
   .menu-loading { padding: 12px; font-size: 12px; color: var(--text-dim); }
 
-  .club-list { max-height: 520px; overflow-y: auto; }
+  .club-list {}
   .club-row {
     display: flex; align-items: center; gap: 10px; padding: 10px 16px;
     border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13px;
@@ -167,6 +167,11 @@
     color: var(--text-dim); margin-bottom: 3px;
   }
   .detail-item .value { font-size: 14px; font-weight: 600; }
+  .stars { position: relative; display: inline-block; font-size: 14px; letter-spacing: 2px; line-height: 1; }
+  .stars-bg { color: var(--border); }
+  .stars-fg {
+    position: absolute; top: 0; left: 0; overflow: hidden; white-space: nowrap; color: var(--gold);
+  }
   .club-actions { display: flex; gap: 10px; }
   .pick-btn {
     background: var(--accent); color: #06210f; border: none;
@@ -341,6 +346,7 @@ let divisionsCache = {};   // nation -> [{division, nb_clubs}]
 let currentClubs = [];     // clubs de la ligue actuellement chargee
 let selectedGameClubId = null;
 let selectedNation = null;
+let selectedDivision = null;
 
 async function initClubSelection() {
   const nationBtn = document.getElementById("nationBtn");
@@ -399,6 +405,7 @@ async function initClubSelection() {
 
 function selectNation(nation) {
   selectedNation = nation;
+  selectedDivision = null;
   document.getElementById("nationBtnLabel").textContent = nation;
 
   const divisionBtn = document.getElementById("divisionBtn");
@@ -426,6 +433,8 @@ async function loadDivisions(nation) {
   const { data: divisions, error: divErr } = await supabaseClient
     .rpc("divisions_for_nation", { p_nation: nation });
 
+  if (selectedNation !== nation) return; // l'utilisateur a change de nation entre-temps
+
   if (divErr) {
     divisionMenu.innerHTML = `<div class="menu-loading">Erreur de chargement</div>`;
     return;
@@ -436,6 +445,7 @@ async function loadDivisions(nation) {
 }
 
 function renderDivisionMenu(nation, divisions) {
+  if (selectedNation !== nation) return; // reponse perimee, on l'ignore
   const divisionMenu = document.getElementById("divisionMenu");
 
   divisionMenu.innerHTML = (divisions || []).map(d => `
@@ -450,6 +460,7 @@ function renderDivisionMenu(nation, divisions) {
       const d = row.getAttribute("data-division");
       document.getElementById("divisionBtnLabel").textContent = d;
       divisionMenu.classList.add("hidden");
+      selectedDivision = d;
       loadClubs(nation, d);
     });
   });
@@ -462,11 +473,13 @@ async function loadClubs(nation, division) {
 
   const { data: clubs, error } = await supabaseClient
     .from("game_club_overview")
-    .select("game_club_id, nom, budget_actuel, classement, statut, niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne, niveau_pct, nb_joueurs, meilleur_joueur_nom, user_id")
+    .select("game_club_id, nom, budget_actuel, classement, statut, niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne, nb_joueurs, meilleur_joueur_nom, user_id")
     .eq("game_id", gameId)
     .eq("nation", nation)
     .eq("division", division)
     .order("nom", { ascending: true });
+
+  if (selectedNation !== nation || selectedDivision !== division) return; // selection changee entre-temps
 
   if (error) {
     toast("Erreur chargement des clubs : " + error.message, true);
@@ -501,9 +514,17 @@ function resetSelectMain() {
     `<div class="hint">Sélectionne un club dans la liste à gauche pour voir ses infos.</div>`;
 }
 
-function formatPct(n) {
-  if (n === null || n === undefined) return "-";
-  return Number(n).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";
+function starsFromScale(n, maxScale = 20) {
+  if (n === null || n === undefined) return 0;
+  return (Number(n) / maxScale) * 5;
+}
+
+function starsHtml(rating) {
+  const pct = (rating / 5) * 100;
+  return `<span class="stars" title="${rating.toFixed(1)}/5">
+    <span class="stars-bg">★★★★★</span>
+    <span class="stars-fg" style="width:${pct}%">★★★★★</span>
+  </span>`;
 }
 
 function formatInt(n) {
@@ -541,11 +562,11 @@ function selectClubRow(gameClubId) {
       </div>
       <div class="detail-item">
         <div class="label">Niveau d'entraînement</div>
-        <div class="value">${c.niveau_entrainement ? c.niveau_entrainement + "/20" : "-"}</div>
+        <div class="value">${c.niveau_entrainement ? starsHtml(starsFromScale(c.niveau_entrainement)) : "-"}</div>
       </div>
       <div class="detail-item">
         <div class="label">Centre de formation</div>
-        <div class="value">${c.centre_formation && c.centre_formation > 0 ? c.centre_formation + "/20" : "Aucun"}</div>
+        <div class="value">${c.centre_formation && c.centre_formation > 0 ? starsHtml(starsFromScale(c.centre_formation)) : "Aucun"}</div>
       </div>
       <div class="detail-item">
         <div class="label">Stade</div>
@@ -554,10 +575,6 @@ function selectClubRow(gameClubId) {
       <div class="detail-item">
         <div class="label">Affluence moyenne</div>
         <div class="value">${formatInt(c.affluence_moyenne)}</div>
-      </div>
-      <div class="detail-item">
-        <div class="label">Niveau du club</div>
-        <div class="value">${formatPct(c.niveau_pct)}</div>
       </div>
       <div class="detail-item">
         <div class="label">Meilleur joueur</div>
