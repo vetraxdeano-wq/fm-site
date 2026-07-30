@@ -57,6 +57,40 @@
   .nav-btn:hover:not(:disabled) { background: #23283299; border-color: #3a4050; }
   .nav-btn:disabled { opacity: 0.35; cursor: default; }
 
+  /* Recherche globale (clubs + joueurs) depuis la topbar */
+  .topbar-search-wrap { position: relative; display: flex; align-items: center; gap: 6px; }
+  .search-toggle-btn {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; width: 34px; height: 34px; cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .search-toggle-btn:hover { background: #23283299; border-color: #3a4050; }
+  .search-toggle-btn.active { border-color: var(--gold); color: var(--gold); }
+  .topbar-search-input {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; width: 220px;
+    font-family: inherit;
+  }
+  .topbar-search-input:focus { border-color: var(--gold); }
+  .fm-search-dropdown {
+    position: absolute; top: calc(100% + 8px); right: 0; min-width: 300px; max-width: 380px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 200; max-height: 380px; overflow-y: auto;
+  }
+  .fm-search-dropdown.hidden { display: none !important; }
+  .search-group-label {
+    padding: 8px 12px 4px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-dim);
+  }
+  .search-result-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px;
+    color: var(--text); cursor: pointer;
+  }
+  .search-result-item:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
+  .search-result-icon { flex-shrink: 0; font-size: 13px; }
+  .search-result-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .search-empty { padding: 14px 12px; font-size: 12px; color: var(--text-dim); text-align: center; }
+
   .wrap {
     flex: 1 1 auto;
     width: 100%;
@@ -255,6 +289,11 @@
       <div class="player-name" id="playerName">Chargement...</div>
       <div class="player-meta" id="playerMeta"></div>
     </div>
+  </div>
+  <div class="topbar-search-wrap" id="fmSearchWrap">
+    <button class="search-toggle-btn" id="searchToggleBtn" title="Rechercher un joueur ou un club">🔍</button>
+    <input type="text" class="topbar-search-input hidden" id="fmSearchInput" placeholder="Rechercher un joueur, un club..." autocomplete="off">
+    <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
   </div>
   <div class="nav-arrows">
     <button class="nav-btn" id="prevBtn" title="Joueur précédent">◀</button>
@@ -916,6 +955,122 @@ function autoSelectDefaultPosition() {
     }
   }
 }
+
+// ===================== RECHERCHE GLOBALE (icone dans la topbar) =====================
+// Meme principe que sur dashboard.html / squad.html : recherche live sur les
+// clubs et joueurs de la partie, avec redirection au clic sur un resultat.
+let searchDebounceTimer = null;
+
+function initHeaderSearch() {
+  const toggleBtn = document.getElementById("searchToggleBtn");
+  const input = document.getElementById("fmSearchInput");
+  const dropdown = document.getElementById("fmSearchDropdown");
+  if (!toggleBtn || !input || !dropdown) return;
+
+  function closeSearch() {
+    input.classList.add("hidden");
+    toggleBtn.classList.remove("active");
+    input.value = "";
+    dropdown.classList.add("hidden");
+    dropdown.innerHTML = "";
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    if (input.classList.contains("hidden")) {
+      input.classList.remove("hidden");
+      toggleBtn.classList.add("active");
+      input.focus();
+    } else {
+      closeSearch();
+    }
+  });
+
+  input.addEventListener("input", () => {
+    clearTimeout(searchDebounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) {
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      return;
+    }
+    searchDebounceTimer = setTimeout(() => runGlobalSearch(q, dropdown), 250);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSearch();
+  });
+
+  document.addEventListener("click", (e) => {
+    const wrap = document.getElementById("fmSearchWrap");
+    if (wrap && !wrap.contains(e.target)) dropdown.classList.add("hidden");
+  });
+}
+
+async function runGlobalSearch(q, dropdown) {
+  const [{ data: clubs }, { data: players }] = await Promise.all([
+    supabaseClient
+      .from("game_clubs")
+      .select("id, nom")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(6),
+    supabaseClient
+      .from("game_players")
+      .select("id, nom, poste_brut, game_club_id, club:game_clubs(nom)")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(8),
+  ]);
+
+  const hasClubs = clubs && clubs.length > 0;
+  const hasPlayers = players && players.length > 0;
+
+  if (!hasClubs && !hasPlayers) {
+    dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${escapeHtml(q)}"</div>`;
+    dropdown.classList.remove("hidden");
+    return;
+  }
+
+  let html = "";
+  if (hasClubs) {
+    html += `<div class="search-group-label">Clubs</div>`;
+    html += clubs.map(c => `
+      <div class="search-result-item" data-type="club" data-id="${c.id}">
+        <span class="search-result-icon">🛡️</span>
+        <span>${escapeHtml(c.nom)}</span>
+      </div>
+    `).join("");
+  }
+  if (hasPlayers) {
+    html += `<div class="search-group-label">Joueurs</div>`;
+    html += players.map(p => `
+      <div class="search-result-item" data-type="player" data-id="${p.id}" data-club="${p.game_club_id ?? ""}">
+        <span class="search-result-icon">🧍</span>
+        <span>
+          <div>${escapeHtml(p.nom)}</div>
+          <div class="search-result-sub">${escapeHtml(p.poste_brut || "-")}${p.club?.nom ? " · " + escapeHtml(p.club.nom) : ""}</div>
+        </span>
+      </div>
+    `).join("");
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove("hidden");
+
+  dropdown.querySelectorAll(".search-result-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const type = item.getAttribute("data-type");
+      const id = item.getAttribute("data-id");
+      if (type === "club") {
+        window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
+      } else {
+        const clubId = item.getAttribute("data-club");
+        window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}&player=${encodeURIComponent(id)}`;
+      }
+    });
+  });
+}
+initHeaderSearch();
 
 async function loadFiche() {
   if (!gameId || !playerId) {
