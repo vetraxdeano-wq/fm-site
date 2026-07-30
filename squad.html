@@ -94,8 +94,10 @@
     position: absolute; top: 0; left: 0; overflow: hidden; white-space: nowrap; color: var(--gold);
   }
   .stars.pot .stars-fg { color: var(--accent); }
-  .stars.dimmed .stars-bg { opacity: 0.5; }
-  .stars.dimmed .stars-fg { color: var(--text-dim) !important; opacity: 0.6; }
+  .rating-hidden {
+    display: inline-block; color: var(--text-dim); font-size: 13px;
+    font-weight: 600; opacity: 0.6;
+  }
 
   .contract-soon { color: var(--danger); }
 
@@ -434,33 +436,20 @@ function starsFromCA(ca) {
   return 5;
 }
 
-function starsHtml(rating, extraClass = "", titleSuffix = "") {
+function starsHtml(rating, extraClass = "") {
   if (rating === null || rating === undefined) return "-";
   const pct = (rating / 5) * 100;
-  return `<span class="stars ${extraClass}" title="${rating}/5${titleSuffix}">
+  return `<span class="stars ${extraClass}" title="${rating}/5">
     <span class="stars-bg">★★★★★</span>
     <span class="stars-fg" style="width:${pct}%">★★★★★</span>
   </span>`;
 }
 
-// Floutage deterministe : quand on consulte un autre club, on n'affiche
-// jamais le niveau/potentiel exact, mais une estimation decalee de +/-0.5
-// etoile. Le decalage depend du joueur + de la colonne (hash simple) donc
-// il reste stable a chaque re-rendu / tri, sans jamais reveler la vraie valeur.
-function scoutingHash(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (h * 31 + str.charCodeAt(i)) >>> 0;
-  }
-  return h;
-}
-
-function scoutedStars(realStars, playerId, columnKey) {
-  if (realStars === null || realStars === undefined) return null;
-  const bucket = scoutingHash(`${playerId}-${columnKey}`) % 3; // 0, 1 ou 2
-  const offset = (bucket - 1) * 0.5; // -0.5, 0, +0.5
-  const fuzzed = Math.max(0.5, Math.min(5, realStars + offset));
-  return Math.round(fuzzed * 2) / 2;
+// Quand on consulte un club adverse, le niveau/potentiel ne sont pas
+// affiches du tout (ni valeur exacte, ni estimation) : on ne connait pas
+// ces informations sur un effectif qu'on ne dirige pas.
+function hiddenRatingHtml() {
+  return `<span class="rating-hidden" title="Inconnu">?</span>`;
 }
 
 function noteClass(note) {
@@ -838,14 +827,13 @@ const myClubSortState = { key: "niveau_actuel", dir: -1 };
 const rivalSquadSortState = { key: "nom", dir: 1 };
 let activeMyClubSortState = myClubSortState;
 // true si le club affiche est bien celui du manager connecte ; false si on
-// consulte l'effectif d'un autre club (meme vue, mais niveau/potentiel flous
-// car ce ne sont que des estimations sur un effectif qu'on ne dirige pas).
+// consulte l'effectif d'un autre club (meme vue, mais niveau/potentiel non
+// affiches du tout : on ne connait pas ces infos sur un effectif adverse).
 let isOwnClubView = true;
 
 function renderMyClubBody() {
   const body = document.getElementById("myClubBody");
   const sorted = sortPlayers(myClubPlayers, MYCLUB_COLUMNS, activeMyClubSortState);
-  const dim = isOwnClubView ? "" : " dimmed";
 
   body.innerHTML = sorted.map(p => {
     const note = p.note_moyenne_saison === null || p.note_moyenne_saison === undefined
@@ -858,8 +846,8 @@ function renderMyClubBody() {
       <td>${p.age ?? "-"}</td>
       <td class="player-name">${escapeHtml(p.nom)}</td>
       <td class="postes-cell">${escapeHtml(p.poste_brut || "-")}</td>
-      <td>${starsHtml(isOwnClubView ? starsFromCA(p.niveau_actuel) : scoutedStars(starsFromCA(p.niveau_actuel), p.id, "cur"), "cur" + dim, isOwnClubView ? "" : " (estimation)")}</td>
-      <td>${starsHtml(isOwnClubView ? starsFromCA(p.potentiel) : scoutedStars(starsFromCA(p.potentiel), p.id, "pot"), "pot" + dim, isOwnClubView ? "" : " (estimation)")}</td>
+      <td>${isOwnClubView ? starsHtml(starsFromCA(p.niveau_actuel), "cur") : hiddenRatingHtml()}</td>
+      <td>${isOwnClubView ? starsHtml(starsFromCA(p.potentiel), "pot") : hiddenRatingHtml()}</td>
       <td>${p.matchs_joues_saison ?? 0}</td>
       <td>${p.buts_saison ?? 0}</td>
       <td>${p.passes_decisives_saison ?? 0}</td>
