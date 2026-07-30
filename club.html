@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FM Web — Infos club</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1c2029;
+    --border: #262a33;
+    --text: #e8eaed;
+    --text-dim: #8b909c;
+    --accent: #4ade80;
+    --gold: #fbbf24;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  .hidden { display: none !important; }
+
+  .empty-state {
+    text-align: center; color: var(--text-dim); font-size: 14px;
+    padding: 60px 20px;
+  }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); padding: 10px 18px;
+    border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* ============================================================
+     VUE PRINCIPALE (meme esprit que dashboard.html / squad.html :
+     topbar rouge, sidebar de navigation a gauche, plein ecran)
+     ============================================================ */
+  #clubView {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    background: var(--bg); z-index: 5;
+  }
+
+  .fm-header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;
+    gap: 14px; padding: 12px 22px; flex: 0 0 auto;
+    background: linear-gradient(120deg, #4c1116, #7a1620 55%, #9c2430);
+    border-bottom: 1px solid rgba(0,0,0,0.3);
+  }
+  .fm-header .title-block { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .fm-header .back-link {
+    color: rgba(255,255,255,0.75); text-decoration: none; font-size: 13px;
+    flex-shrink: 0; padding-right: 14px; border-right: 1px solid rgba(255,255,255,0.2);
+  }
+  .fm-header .back-link:hover { color: #fff; }
+  .fm-header .right-block { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .fm-date-badge {
+    background: rgba(0,0,0,0.28); border-radius: 8px; padding: 7px 14px;
+    text-align: right; line-height: 1.35; color: #fff;
+  }
+  .fm-date-badge .day-num { font-size: 13px; font-weight: 800; white-space: nowrap; }
+  .fm-date-badge .season-line { font-size: 11px; color: rgba(255,255,255,0.7); }
+
+  .page-title-wrap { position: relative; }
+  .page-title-input {
+    background: transparent; border: none; outline: none; color: #fff;
+    font-size: 18px; font-weight: 800; letter-spacing: 0.02em; padding: 2px 0;
+    width: 230px; max-width: 40vw; font-family: inherit;
+  }
+  .page-title-input::placeholder {
+    color: rgba(255,255,255,0.92); font-weight: 800; opacity: 1;
+  }
+  .manager-line {
+    font-size: 12px; color: rgba(255,255,255,0.78); margin-top: 2px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .fm-search-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 0; min-width: 300px; max-width: 380px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 200; max-height: 380px; overflow-y: auto;
+  }
+  .fm-search-dropdown.hidden { display: none !important; }
+  .search-group-label {
+    padding: 8px 12px 4px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-dim);
+  }
+  .search-result-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px;
+    color: var(--text); cursor: pointer;
+  }
+  .search-result-item:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
+  .search-result-icon { flex-shrink: 0; font-size: 13px; }
+  .search-result-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .search-empty { padding: 14px 12px; font-size: 12px; color: var(--text-dim); text-align: center; }
+
+  .fm-body { flex: 1; display: flex; align-items: stretch; min-height: 0; }
+
+  .fm-sidebar {
+    width: 220px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 10px 0;
+  }
+  .fm-nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 13.5px;
+    color: var(--text-dim); cursor: pointer; border-left: 3px solid transparent; user-select: none;
+  }
+  .fm-nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+  .fm-nav-item.active {
+    background: rgba(251,191,36,0.08); color: var(--gold); border-left-color: var(--gold); font-weight: 700;
+  }
+  .fm-nav-icon { width: 18px; text-align: center; flex-shrink: 0; }
+
+  /* Sous-onglets de la page club (Infos club / Effectif) */
+  .fm-subtabs {
+    display: flex; gap: 4px; padding: 10px 24px 0; background: var(--panel);
+    border-bottom: 1px solid var(--border); flex: 0 0 auto;
+  }
+  .fm-subtab {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 13px;
+    font-weight: 700; color: var(--text-dim); cursor: pointer; border-bottom: 3px solid transparent;
+    user-select: none;
+  }
+  .fm-subtab:hover { color: var(--text); }
+  .fm-subtab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding: 20px 24px; }
+
+  .club-hero {
+    display: flex; align-items: center; gap: 18px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin-bottom: 16px;
+  }
+  .club-badge {
+    width: 64px; height: 64px; border-radius: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: #1a1300;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  .club-badge img { width: 100%; height: 100%; object-fit: contain; border-radius: 14px; }
+  .club-hero-info { flex: 1; min-width: 0; }
+  .club-hero-name { font-size: 20px; font-weight: 800; }
+  .club-hero-sub {
+    display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12.5px; color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .flag-icon { width: 18px; height: auto; border-radius: 2px; vertical-align: middle; }
+  .chip {
+    display: inline-block; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+    color: var(--gold); font-size: 11px; padding: 3px 9px; border-radius: 999px; font-weight: 700;
+  }
+  .chip.dim { background: rgba(255,255,255,0.05); border-color: var(--border); color: var(--text-dim); }
+
+  .club-grid {
+    display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; align-items: start;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+  }
+  .card-title {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--gold); margin-bottom: 14px;
+  }
+  .fm-empty { color: var(--text-dim); font-size: 13px; padding: 4px 0; line-height: 1.5; }
+
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--text-dim); }
+  .stat-row .value { font-weight: 700; }
+
+  .stars { position: relative; display: inline-block; font-size: 14px; letter-spacing: 2px; line-height: 1; }
+  .stars-bg { color: var(--border); }
+  .stars-fg {
+    position: absolute; top: 0; left: 0; overflow: hidden; white-space: nowrap; color: var(--gold);
+  }
+
+  .key-people { display: flex; flex-direction: column; gap: 10px; }
+  .key-person {
+    display: flex; align-items: center; gap: 10px; padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .key-person:last-child { border-bottom: none; }
+  .key-person-icon {
+    width: 30px; height: 30px; border-radius: 8px; background: rgba(251,191,36,0.1);
+    display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  }
+  .key-person-role { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); }
+  .key-person-name { font-size: 13.5px; font-weight: 700; }
+  .key-person-name.muted { color: var(--text-dim); font-weight: 500; }
+
+  .palmares-list { display: flex; flex-direction: column; gap: 6px; }
+  .palmares-item {
+    display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .palmares-item:last-child { border-bottom: none; }
+  .palmares-item .trophy { font-size: 15px; }
+  .palmares-item .count { margin-left: auto; color: var(--gold); font-weight: 800; font-size: 12px; }
+
+  /* Terrain illustre pour la derniere composition */
+  .pitch-caption { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5; }
+  .pitch-wrap { width: 100%; }
+  .pitch-svg { width: 100%; height: auto; display: block; }
+  .pitch-player-dot { fill: var(--gold); stroke: #3a2a00; stroke-width: 1.5; }
+  .pitch-player-label {
+    fill: #fff; font-size: 9px; font-weight: 800; text-anchor: middle; pointer-events: none;
+  }
+  .pitch-name-label {
+    fill: var(--text-dim); font-size: 7.5px; text-anchor: middle; pointer-events: none;
+  }
+
+  @media (max-width: 900px) {
+    .fm-header { padding: 10px 14px; }
+    .fm-header .back-link { display: none; }
+    .fm-body { flex-direction: column; }
+    .fm-sidebar {
+      width: 100%; height: auto; flex-shrink: 0; display: flex; overflow-x: auto;
+      overflow-y: hidden; padding: 4px; border-right: none; border-bottom: 1px solid var(--border);
+    }
+    .fm-nav-item { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+    .fm-nav-item.active { border-left-color: transparent; border-bottom-color: var(--gold); }
+    .fm-subtabs { padding: 8px 12px 0; overflow-x: auto; }
+    .fm-content-wrap { padding: 14px; }
+    .club-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="clubView">
+  <div class="fm-header" id="fmHeader"></div>
+
+  <div class="fm-subtabs" id="fmSubtabs"></div>
+
+  <div class="fm-body">
+    <div class="fm-sidebar" id="fmSidebar"></div>
+
+    <div class="fm-content-wrap">
+      <div class="club-hero" id="clubHero">
+        <div class="empty-state">Chargement...</div>
+      </div>
+
+      <div class="club-grid" id="clubGrid" style="display:none;">
+        <div class="fm-col-main">
+          <div class="card">
+            <div class="card-title"><span>Dernière composition utilisée</span></div>
+            <div id="clubPitch"></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>Finances</span></div>
+            <div id="clubFinances" class="fm-empty">Chargement...</div>
+          </div>
+        </div>
+        <div class="fm-col-side">
+          <div class="card">
+            <div class="card-title"><span>Réputation &amp; infrastructures</span></div>
+            <div id="clubReputation" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>Effectif clé</span></div>
+            <div id="clubKeyPeople" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>Palmarès</span></div>
+            <div id="clubPalmares" class="fm-empty">Chargement...</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="clubError" class="empty-state hidden"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const params = new URLSearchParams(window.location.search);
+const gameId = params.get("game");
+const gameClubId = params.get("club");
+
+let currentGame = null;
+let isOwnClubView = true;
+
+function toast(msg, isError = false) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (isError ? " error" : "");
+  setTimeout(() => { el.className = "toast"; }, 2500);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+// ===================== DRAPEAUX (nom complet de nation, comme dashboard.html) =====================
+const GB_SUBCODES_NAT = {
+  "angleterre": "gb-eng", "ecosse": "gb-sct", "pays de galles": "gb-wls",
+};
+const NATION_NAME_TO_ISO2 = {
+  "france": "fr", "allemagne": "de", "espagne": "es", "italie": "it",
+  "portugal": "pt", "pays-bas": "nl", "belgique": "be", "irlande": "ie",
+  "irlande du nord": "gb", "suisse": "ch", "autriche": "at", "turquie": "tr",
+  "grece": "gr", "russie": "ru", "ukraine": "ua", "pologne": "pl",
+  "republique tcheque": "cz", "rep. tcheque": "cz", "croatie": "hr", "serbie": "rs",
+  "roumanie": "ro", "bulgarie": "bg", "hongrie": "hu", "danemark": "dk",
+  "suede": "se", "norvege": "no", "finlande": "fi", "islande": "is",
+  "bresil": "br", "argentine": "ar", "uruguay": "uy", "chili": "cl",
+  "colombie": "co", "perou": "pe", "equateur": "ec", "paraguay": "py",
+  "bolivie": "bo", "venezuela": "ve", "mexique": "mx", "etats-unis": "us",
+  "canada": "ca", "japon": "jp", "coree du sud": "kr", "australie": "au",
+  "nouvelle-zelande": "nz", "maroc": "ma", "algerie": "dz", "tunisie": "tn",
+  "senegal": "sn", "cote d'ivoire": "ci", "cameroun": "cm", "nigeria": "ng",
+  "ghana": "gh", "egypte": "eg", "arabie saoudite": "sa", "qatar": "qa",
+  "chine": "cn", "bosnie-herzegovine": "ba", "slovaquie": "sk", "slovenie": "si",
+  "albanie": "al", "macedoine du nord": "mk", "montenegro": "me", "israel": "il",
+  "luxembourg": "lu", "chypre": "cy", "malte": "mt", "lituanie": "lt",
+  "lettonie": "lv", "estonie": "ee", "bielorussie": "by", "moldavie": "md",
+  "kosovo": "xk", "georgie": "ge", "armenie": "am", "azerbaidjan": "az",
+  "kazakhstan": "kz", "andorre": "ad", "saint-marin": "sm", "feroe": "fo",
+  "afrique du sud": "za", "indonesie": "id", "thailande": "th", "vietnam": "vn",
+  "singapour": "sg", "iran": "ir", "irak": "iq", "inde": "in",
+};
+function normalizeNationKey(name) {
+  return (name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+function flagCodeForNation(name) {
+  const key = normalizeNationKey(name);
+  if (GB_SUBCODES_NAT[key]) return GB_SUBCODES_NAT[key];
+  return NATION_NAME_TO_ISO2[key] || null;
+}
+function nationFlagImg(name) {
+  const flagCode = flagCodeForNation(name);
+  return flagCode ? `<img class="flag-icon" src="https://flagcdn.com/${flagCode}.svg" alt="" loading="lazy">` : "";
+}
+
+// Drapeaux joueurs (codes 3 lettres type FIFA), comme squad.html
+const GB_SUBCODES = { ENG: "gb-eng", SCO: "gb-sct", WAL: "gb-wls" };
+const NAT_CODE_TO_ISO2 = {
+  FRA: "fr", GER: "de", ALL: "de", ESP: "es", ITA: "it", POR: "pt", NED: "nl",
+  HOL: "nl", BEL: "be", NIR: "gb", IRL: "ie", SUI: "ch", AUT: "at", TUR: "tr",
+  GRE: "gr", RUS: "ru", UKR: "ua", POL: "pl", CZE: "cz", CRO: "hr", SRB: "rs",
+  ROU: "ro", BUL: "bg", HUN: "hu", DEN: "dk", SWE: "se", NOR: "no", FIN: "fi",
+  ISL: "is", BRA: "br", ARG: "ar", URU: "uy", CHI: "cl", COL: "co", PER: "pe",
+  ECU: "ec", PAR: "py", BOL: "bo", VEN: "ve", MEX: "mx", USA: "us", CAN: "ca",
+  JPN: "jp", KOR: "kr", AUS: "au", MAR: "ma", ALG: "dz", TUN: "tn", SEN: "sn",
+  CIV: "ci", CMR: "cm", NGA: "ng", GHA: "gh", EGY: "eg", KSA: "sa", QAT: "qa",
+  CHN: "cn", BIH: "ba", SVK: "sk", SVN: "si", ALB: "al", MKD: "mk", MNE: "me",
+  ISR: "il",
+};
+function flagCodeForNat(code) {
+  if (!code) return null;
+  const c = code.trim().toUpperCase();
+  if (GB_SUBCODES[c]) return GB_SUBCODES[c];
+  if (NAT_CODE_TO_ISO2[c]) return NAT_CODE_TO_ISO2[c];
+  if (/^[A-Z]{2}$/.test(c)) return c.toLowerCase();
+  return null;
+}
+
+function formatMoney(n) {
+  if (n === null || n === undefined) return "-";
+  return new Intl.NumberFormat("fr-FR").format(n) + " €";
+}
+function formatInt(n) {
+  if (n === null || n === undefined) return "-";
+  return new Intl.NumberFormat("fr-FR").format(n);
+}
+
+function starsFromScale(n, maxScale = 20) {
+  if (n === null || n === undefined) return 0;
+  return (Number(n) / maxScale) * 5;
+}
+// Bareme etoiles pour la reputation moyenne des joueurs (echelle 5-10000,
+// identique a celle de squad.html)
+const STAR_BANDS = [
+  [500, 1], [1000, 1.5], [1750, 2], [2750, 2.5],
+  [4250, 3], [5800, 3.5], [7500, 4], [9000, 4.5], [Infinity, 5]
+];
+function starsFromReputation(rep) {
+  if (rep === null || rep === undefined) return 0;
+  for (const [max, stars] of STAR_BANDS) {
+    if (rep < max) return stars;
+  }
+  return 5;
+}
+function starsHtml(rating) {
+  if (rating === null || rating === undefined) return "-";
+  const pct = Math.max(0, Math.min(100, (rating / 5) * 100));
+  return `<span class="stars" title="${rating.toFixed(1)}/5">
+    <span class="stars-bg">★★★★★</span>
+    <span class="stars-fg" style="width:${pct}%">★★★★★</span>
+  </span>`;
+}
+
+function computeRealDate(dateDebut, jourActuel) {
+  if (!dateDebut) return null;
+  const base = new Date(`${dateDebut}T00:00:00`);
+  if (isNaN(base.getTime())) return null;
+  const jours = Number(jourActuel);
+  base.setDate(base.getDate() + (Number.isFinite(jours) ? jours : 0));
+  return base;
+}
+function formatRealDate(date) {
+  if (!date) return null;
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
+    .format(date).toUpperCase();
+}
+
+// ===================== NAVIGATION (sidebar + sous-onglets) =====================
+const FM_NAV_ITEMS = [
+  { key: "accueil", icon: "🏠", label: "Accueil", href: "dashboard.html" },
+  { key: "effectif", icon: "👥", label: "Effectif", href: "squad.html" },
+  { key: "staff", icon: "🧑‍💼", label: "Staff", href: null },
+  { key: "tactique", icon: "♟️", label: "Tactique", href: null },
+  { key: "datacenter", icon: "📊", label: "Data Center", href: null },
+  { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: null },
+  { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
+  { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
+  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
+];
+
+function renderFmSidebar(navClubId) {
+  const el = document.getElementById("fmSidebar");
+  el.innerHTML = FM_NAV_ITEMS.map(item => `
+    <div class="fm-nav-item ${item.key === "infosclub" ? "active" : ""}" data-key="${item.key}">
+      <span class="fm-nav-icon">${item.icon}</span>
+      <span>${item.label}</span>
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".fm-nav-item").forEach(row => {
+    const item = FM_NAV_ITEMS.find(i => i.key === row.getAttribute("data-key"));
+    row.addEventListener("click", () => {
+      if (item.key === "infosclub" && isOwnClubView) return;
+      if (item.href) {
+        // Le menu de gauche ramene toujours vers son propre club (comme
+        // dans dashboard.html / squad.html), meme quand on consulte le
+        // profil d'un autre club.
+        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(navClubId)}`;
+      } else {
+        toast(`${item.label} arrive bientôt !`);
+      }
+    });
+  });
+}
+
+// Sous-onglets propres a la fiche club consultee (Infos club / Effectif) :
+// contrairement au menu de gauche, ceux-ci restent scopes au club affiche.
+function renderFmSubtabs(viewedClubId) {
+  const el = document.getElementById("fmSubtabs");
+  el.innerHTML = `
+    <div class="fm-subtab active" data-key="infosclub">
+      <span>🛡️</span><span>Infos club</span>
+    </div>
+    <div class="fm-subtab" data-key="effectif">
+      <span>👥</span><span>Effectif</span>
+    </div>
+  `;
+  el.querySelector('[data-key="effectif"]').addEventListener("click", () => {
+    window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(viewedClubId)}`;
+  });
+}
+
+function renderFmHeader(pseudo, headerClubName, canSearch = true) {
+  const el = document.getElementById("fmHeader");
+  const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml((headerClubName || "").toUpperCase())}`;
+
+  const realDate = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  const dateLabel = formatRealDate(realDate) || `Jour ${currentGame?.jour_actuel ?? "-"}`;
+
+  el.innerHTML = `
+    <div class="title-block">
+      <a href="dashboard.html?game=${encodeURIComponent(gameId)}" class="back-link">← Accueil</a>
+      <div class="page-title-wrap" id="fmSearchWrap">
+        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="INFOS CLUB" autocomplete="off">
+        <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
+        <div class="manager-line">${managerLine}</div>
+      </div>
+    </div>
+    <div class="right-block">
+      <div class="fm-date-badge">
+        <div class="day-num">${dateLabel}</div>
+        <div class="season-line">Saison ${escapeHtml(String(currentGame?.saison ?? "-"))}</div>
+      </div>
+    </div>
+  `;
+
+  initHeaderSearch();
+}
+
+// ===================== RECHERCHE GLOBALE (identique a dashboard.html / squad.html,
+// sauf que le clic sur un club redirige ici vers sa fiche "Infos club") =====================
+let searchDebounceTimer = null;
+let headerSearchDocListenerAttached = false;
+
+function initHeaderSearch() {
+  const input = document.getElementById("fmSearchInput");
+  const dropdown = document.getElementById("fmSearchDropdown");
+  if (!input || !dropdown) return;
+
+  input.addEventListener("input", () => {
+    clearTimeout(searchDebounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) {
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      return;
+    }
+    searchDebounceTimer = setTimeout(() => runGlobalSearch(q, dropdown), 250);
+  });
+
+  input.addEventListener("focus", () => {
+    if (input.value.trim().length >= 2 && dropdown.innerHTML) dropdown.classList.remove("hidden");
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      input.blur();
+    }
+  });
+
+  if (!headerSearchDocListenerAttached) {
+    document.addEventListener("click", (e) => {
+      const wrap = document.getElementById("fmSearchWrap");
+      const dd = document.getElementById("fmSearchDropdown");
+      if (wrap && dd && !wrap.contains(e.target)) dd.classList.add("hidden");
+    });
+    headerSearchDocListenerAttached = true;
+  }
+}
+
+async function runGlobalSearch(q, dropdown) {
+  const [{ data: clubs }, { data: players }] = await Promise.all([
+    supabaseClient
+      .from("game_clubs")
+      .select("id, nom")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(6),
+    supabaseClient
+      .from("game_players")
+      .select("id, nom, poste_brut, game_club_id, club:game_clubs(nom)")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(8),
+  ]);
+
+  const hasClubs = clubs && clubs.length > 0;
+  const hasPlayers = players && players.length > 0;
+
+  if (!hasClubs && !hasPlayers) {
+    dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${escapeHtml(q)}"</div>`;
+    dropdown.classList.remove("hidden");
+    return;
+  }
+
+  let html = "";
+  if (hasClubs) {
+    html += `<div class="search-group-label">Clubs</div>`;
+    html += clubs.map(c => `
+      <div class="search-result-item" data-type="club" data-id="${c.id}">
+        <span class="search-result-icon">🛡️</span>
+        <span>${escapeHtml(c.nom)}</span>
+      </div>
+    `).join("");
+  }
+  if (hasPlayers) {
+    html += `<div class="search-group-label">Joueurs</div>`;
+    html += players.map(p => `
+      <div class="search-result-item" data-type="player" data-id="${p.id}" data-club="${p.game_club_id ?? ""}">
+        <span class="search-result-icon">🧍</span>
+        <span>
+          <div>${escapeHtml(p.nom)}</div>
+          <div class="search-result-sub">${escapeHtml(p.poste_brut || "-")}${p.club?.nom ? " · " + escapeHtml(p.club.nom) : ""}</div>
+        </span>
+      </div>
+    `).join("");
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove("hidden");
+
+  dropdown.querySelectorAll(".search-result-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const type = item.getAttribute("data-type");
+      const id = item.getAttribute("data-id");
+      if (type === "club") {
+        window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
+      } else {
+        const clubId = item.getAttribute("data-club");
+        window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}&player=${encodeURIComponent(id)}`;
+      }
+    });
+  });
+}
+
+// ===================== BADGE / LOGO DU CLUB =====================
+// Pas encore de veritable logo uploade pour les clubs : on genere un blason
+// de substitution a partir des initiales du nom, avec une couleur stable
+// (derivee du nom) pour que chaque club garde toujours le meme badge.
+function initials(nom) {
+  const words = (nom || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+function colorFromName(nom) {
+  let hash = 0;
+  for (let i = 0; i < (nom || "").length; i++) hash = nom.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 62%, 46%)`;
+}
+function renderClubBadge(club, rawClub) {
+  const logoUrl = rawClub?.logo_url || rawClub?.logo || null;
+  if (logoUrl) return `<img src="${escapeHtml(logoUrl)}" alt="">`;
+  return initials(club.nom);
+}
+
+// ===================== TERRAIN ILLUSTRE (composition la plus forte connue) =====================
+function positionBucket(poste) {
+  if (!poste) return "mid";
+  const first = poste.toUpperCase().split(/[,\/]/)[0].trim();
+  if (first.startsWith("G")) return "gk";
+  if (first.startsWith("D")) return "def";
+  if (first.startsWith("M")) return "mid";
+  if (first.startsWith("A") || first.startsWith("B")) return "att";
+  return "mid";
+}
+
+function pickBestXI(players, metricFn) {
+  const withScore = players.map(p => ({ p, score: metricFn(p) ?? -1, bucket: positionBucket(p.poste_brut) }));
+  const byBucket = { gk: [], def: [], mid: [], att: [] };
+  withScore.forEach(x => byBucket[x.bucket].push(x));
+  Object.values(byBucket).forEach(arr => arr.sort((a, b) => b.score - a.score));
+
+  const need = { gk: 1, def: 4, mid: 3, att: 3 };
+  const picked = [];
+  const usedIds = new Set();
+  for (const b of ["gk", "def", "mid", "att"]) {
+    const arr = byBucket[b];
+    for (let i = 0; i < need[b] && i < arr.length; i++) {
+      picked.push({ p: arr[i].p, role: b, score: arr[i].score });
+      usedIds.add(arr[i].p.id);
+    }
+  }
+  const remaining = 11 - picked.length;
+  if (remaining > 0) {
+    const rest = withScore.filter(x => !usedIds.has(x.p.id)).sort((a, b) => b.score - a.score);
+    for (let i = 0; i < remaining && i < rest.length; i++) {
+      picked.push({ p: rest[i].p, role: rest[i].bucket, score: rest[i].score });
+      usedIds.add(rest[i].p.id);
+    }
+  }
+  return picked;
+}
+
+function renderPitch(players, isOwnClub) {
+  const el = document.getElementById("clubPitch");
+
+  if (!players || players.length === 0) {
+    el.innerHTML = `
+      <div class="pitch-caption">Aucun joueur dans l'effectif : impossible de proposer une composition.</div>
+      ${emptyPitchSvg()}
+    `;
+    return;
+  }
+
+  const metricFn = isOwnClub ? (p => p.niveau_actuel) : (p => p.reputation_mondiale);
+  const xi = pickBestXI(players, metricFn);
+
+  if (xi.length === 0) {
+    el.innerHTML = `
+      <div class="pitch-caption">Aucune composition disponible pour l'instant.</div>
+      ${emptyPitchSvg()}
+    `;
+    return;
+  }
+
+  const byRole = { gk: [], def: [], mid: [], att: [] };
+  xi.forEach(x => byRole[x.role].push(x));
+
+  const lineY = { att: 70, mid: 175, mid2: null, def: 285, gk: 375 };
+  const lines = [
+    { role: "att", y: 70 },
+    { role: "mid", y: 175 },
+    { role: "def", y: 285 },
+    { role: "gk", y: 375 },
+  ];
+
+  let dots = "";
+  lines.forEach(line => {
+    const arr = byRole[line.role];
+    const n = arr.length;
+    if (n === 0) return;
+    arr.forEach((x, i) => {
+      const cx = 30 + (i + 0.5) * (240 / n);
+      const cy = line.y;
+      const surname = (x.p.nom || "?").trim().split(/\s+/).pop();
+      const initial = surname.slice(0, 3).toUpperCase();
+      const title = `${escapeHtml(x.p.nom)} — ${escapeHtml(x.p.poste_brut || "-")}`;
+      dots += `
+        <g>
+          <circle class="pitch-player-dot" cx="${cx}" cy="${cy}" r="14"><title>${title}</title></circle>
+          <text class="pitch-player-label" x="${cx}" y="${cy + 3}">${escapeHtml(initial)}</text>
+          <text class="pitch-name-label" x="${cx}" y="${cy + 24}">${escapeHtml(surname)}</text>
+        </g>
+      `;
+    });
+  });
+
+  const caption = xi.length < 11
+    ? `Effectif incomplet (${xi.length} joueur${xi.length > 1 ? "s" : ""}) : composition la plus forte disponible, à défaut d'une composition officielle enregistrée.`
+    : `Aucune composition officielle enregistrée pour l'instant — voici la composition la plus forte disponible d'après ${isOwnClub ? "le niveau actuel des joueurs" : "leur réputation"}.`;
+
+  el.innerHTML = `
+    <div class="pitch-caption">${caption}</div>
+    <div class="pitch-wrap">
+      <svg class="pitch-svg" viewBox="0 0 300 430" xmlns="http://www.w3.org/2000/svg">
+        ${pitchBackground()}
+        ${dots}
+      </svg>
+    </div>
+  `;
+}
+
+function pitchBackground() {
+  return `
+    <rect x="0" y="0" width="300" height="430" rx="6" fill="#123a1f"/>
+    <rect x="6" y="6" width="288" height="418" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <line x1="6" y1="215" x2="294" y2="215" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <circle cx="150" cy="215" r="34" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <rect x="80" y="6" width="140" height="46" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <rect x="80" y="378" width="140" height="46" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+  `;
+}
+function emptyPitchSvg() {
+  return `
+    <div class="pitch-wrap">
+      <svg class="pitch-svg" viewBox="0 0 300 430" xmlns="http://www.w3.org/2000/svg">
+        ${pitchBackground()}
+      </svg>
+    </div>
+  `;
+}
+
+// ===================== FINANCES (reprend la logique de dashboard.html) =====================
+async function fetchFinanceHistory(club) {
+  const { data, error } = await supabaseClient
+    .from("game_events")
+    .select("jour, payload")
+    .eq("game_id", gameId)
+    .eq("game_club_id", club.game_club_id)
+    .eq("type", "finance")
+    .order("jour", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error || !data || data.length === 0) return [];
+
+  const deltas = data.map(ev => Number(ev.payload?.montant) || 0);
+  const totalDelta = deltas.reduce((a, b) => a + b, 0);
+  let running = (club.budget_actuel || 0) - totalDelta;
+
+  return data.map((ev, i) => {
+    running += deltas[i];
+    return { jour: ev.jour, value: running, delta: deltas[i], motif: ev.payload?.motif || null };
+  });
+}
+
+function renderFinanceChart(history) {
+  const w = 400, h = 90, padY = 8;
+  const values = history.map(p => p.value);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const stepX = history.length > 1 ? w / (history.length - 1) : 0;
+
+  const coords = history.map((pt, i) => {
+    const x = history.length > 1 ? i * stepX : w / 2;
+    const y = h - padY - ((pt.value - min) / range) * (h - padY * 2);
+    return { x, y, pt };
+  });
+
+  const linePoints = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const dots = coords.map(c => {
+    const color = c.pt.delta >= 0 ? "var(--accent)" : "var(--danger)";
+    const label = `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)}`;
+    return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.6" fill="${color}"><title>${label}</title></circle>`;
+  }).join("");
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%; height:auto; overflow:visible; margin-top:8px;">
+      <polyline points="${linePoints}" fill="none" stroke="var(--accent)" stroke-width="2" />
+      ${dots}
+    </svg>
+  `;
+}
+
+async function renderFinances(club) {
+  const el = document.getElementById("clubFinances");
+  const history = await fetchFinanceHistory(club);
+  el.innerHTML = `
+    <div class="stat-row">
+      <span class="label">Budget disponible</span>
+      <span class="value">${formatMoney(club.budget_actuel)}</span>
+    </div>
+    ${history.length > 1
+      ? renderFinanceChart(history)
+      : `<div class="fm-empty" style="padding-top:6px;">Aucun mouvement enregistré pour l'instant.</div>`}
+  `;
+}
+
+// ===================== REPUTATION & INFRASTRUCTURES =====================
+function renderReputation(club, players) {
+  const el = document.getElementById("clubReputation");
+
+  const withRep = (players || []).filter(p => p.reputation_mondiale !== null && p.reputation_mondiale !== undefined);
+  const avgRep = withRep.length > 0
+    ? withRep.reduce((s, p) => s + Number(p.reputation_mondiale), 0) / withRep.length
+    : null;
+  const repStars = avgRep !== null ? starsFromReputation(avgRep) : null;
+
+  const entrainementStars = club.niveau_entrainement ? starsFromScale(club.niveau_entrainement) : null;
+  const formationStars = club.centre_formation && club.centre_formation > 0 ? starsFromScale(club.centre_formation) : null;
+
+  el.innerHTML = `
+    <div class="stat-row">
+      <span class="label">Réputation du club</span>
+      <span class="value">${repStars !== null ? starsHtml(repStars) : "-"}</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Centre d'entraînement</span>
+      <span class="value">${entrainementStars !== null ? starsHtml(entrainementStars) : "-"}</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Centre de formation</span>
+      <span class="value">${formationStars !== null ? starsHtml(formationStars) : "Aucun"}</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Stade</span>
+      <span class="value">${formatInt(club.capacite_stade)} places</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Affluence moyenne</span>
+      <span class="value">${formatInt(club.affluence_moyenne)}</span>
+    </div>
+  `;
+}
+
+// ===================== EFFECTIF CLE (capitaine / vice-capitaine / meilleur joueur) =====================
+// Pas encore de champ dedie "capitaine" en base : on le deduit du statut
+// special du joueur (ex: "Capitaine", "Vice-capitaine") quand il est
+// renseigne. A defaut, on l'affiche comme non designe plutot que d'inventer
+// une info qu'on ne connait pas reellement.
+function findByStatut(players, keyword) {
+  return (players || []).find(p => (p.statut_special || "").toLowerCase().includes(keyword));
+}
+
+function renderKeyPeople(club, players) {
+  const el = document.getElementById("clubKeyPeople");
+  const capitaine = findByStatut(players, "capitaine") && !findByStatut(players, "vice-capitaine")
+    ? findByStatut(players, "capitaine")
+    : (players || []).find(p => (p.statut_special || "").toLowerCase() === "capitaine");
+  const viceCapitaine = findByStatut(players, "vice");
+
+  el.innerHTML = `
+    <div class="key-people">
+      <div class="key-person">
+        <div class="key-person-icon">©</div>
+        <div>
+          <div class="key-person-role">Capitaine</div>
+          <div class="key-person-name ${capitaine ? "" : "muted"}">${capitaine ? escapeHtml(capitaine.nom) : "Non désigné"}</div>
+        </div>
+      </div>
+      <div class="key-person">
+        <div class="key-person-icon">Ⓥ</div>
+        <div>
+          <div class="key-person-role">Vice-capitaine</div>
+          <div class="key-person-name ${viceCapitaine ? "" : "muted"}">${viceCapitaine ? escapeHtml(viceCapitaine.nom) : "Non désigné"}</div>
+        </div>
+      </div>
+      <div class="key-person">
+        <div class="key-person-icon">★</div>
+        <div>
+          <div class="key-person-role">Meilleur joueur</div>
+          <div class="key-person-name ${club.meilleur_joueur_nom ? "" : "muted"}">${club.meilleur_joueur_nom ? escapeHtml(club.meilleur_joueur_nom) : "-"}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ===================== PALMARES =====================
+// Pas encore de table de trophees dediee : on tente de lire un champ deja
+// present sur la fiche club brute (au cas ou), sinon etat honnete "aucun
+// trophee pour l'instant" (coherent avec une partie qui commence en pre-saison).
+function renderPalmares(rawClub) {
+  const el = document.getElementById("clubPalmares");
+  const raw = rawClub?.palmares || rawClub?.titres || rawClub?.trophees;
+
+  let list = null;
+  if (Array.isArray(raw)) list = raw;
+  else if (raw && typeof raw === "object") list = Object.entries(raw).map(([nom, count]) => ({ nom, count }));
+
+  if (!list || list.length === 0) {
+    el.innerHTML = `<div class="fm-empty">Aucun trophée remporté pour l'instant.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="palmares-list">
+      ${list.map(item => `
+        <div class="palmares-item">
+          <span class="trophy">🏆</span>
+          <span>${escapeHtml(item.nom || item.titre || String(item))}</span>
+          ${item.count ? `<span class="count">×${escapeHtml(String(item.count))}</span>` : ""}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+// ===================== EN-TETE DE LA FICHE CLUB =====================
+function renderClubHero(club, rawClub) {
+  const el = document.getElementById("clubHero");
+  el.innerHTML = `
+    <div class="club-badge" style="background:${club.logoUrl ? "transparent" : colorFromName(club.nom)};">
+      ${renderClubBadge(club, rawClub)}
+    </div>
+    <div class="club-hero-info">
+      <div class="club-hero-name">${escapeHtml(club.nom)}</div>
+      <div class="club-hero-sub">
+        ${club.nation ? `${nationFlagImg(club.nation)} ${escapeHtml(club.nation)}` : ""}
+        ${club.division ? `<span class="chip dim">${escapeHtml(club.division)}</span>` : ""}
+        ${club.classement ? `<span class="chip">Classement pronostiqué : ${club.classement}e</span>` : ""}
+        ${club.statut ? `<span class="chip dim">${escapeHtml(club.statut)}</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+// ===================== CHARGEMENT =====================
+async function loadClub() {
+  if (!gameId || !gameClubId) {
+    showFatalError("Club introuvable.");
+    return;
+  }
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session?.user) {
+    window.location.href = "index.html";
+    return;
+  }
+  const userId = session.user.id;
+
+  const { data: game } = await supabaseClient
+    .from("games")
+    .select("date_debut, jour_actuel, saison, statut")
+    .eq("id", gameId)
+    .single();
+  currentGame = game || null;
+
+  const { data: participants } = await supabaseClient
+    .from("game_participants")
+    .select("pseudo, user_id, game_club_id")
+    .eq("game_id", gameId);
+  const me = (participants || []).find(p => p.user_id === userId);
+
+  if (!me?.game_club_id) {
+    showFatalError("Choisis d'abord un club depuis la page d'accueil pour consulter les fiches club.");
+    return;
+  }
+
+  const myClubId = me.game_club_id;
+  const isOwnClub = String(myClubId) === String(gameClubId);
+  isOwnClubView = isOwnClub;
+
+  const { data: club, error: clubErr } = await supabaseClient
+    .from("game_club_overview")
+    .select(`
+      game_club_id, nom, budget_actuel, classement, statut, nation, division,
+      niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne,
+      nb_joueurs, meilleur_joueur_nom
+    `)
+    .eq("game_id", gameId)
+    .eq("game_club_id", gameClubId)
+    .single();
+
+  if (clubErr || !club) {
+    showFatalError("Impossible de charger ce club.");
+    return;
+  }
+
+  // Requete complementaire "large" (select *) pour recuperer sans risque
+  // d'erreur d'eventuels champs pas encore utilises ailleurs (logo, palmares...).
+  let rawClub = null;
+  try {
+    const { data: raw } = await supabaseClient
+      .from("game_clubs")
+      .select("*")
+      .eq("id", gameClubId)
+      .eq("game_id", gameId)
+      .single();
+    rawClub = raw || null;
+  } catch (e) {
+    rawClub = null;
+  }
+
+  const { data: players } = await supabaseClient
+    .from("game_players")
+    .select(`
+      id, nom, age, nationalite, poste_brut, statut_special, salaire_actuel,
+      contrat_expire, valeur_marchande_actuelle, reputation_mondiale,
+      niveau_actuel, potentiel, buts_saison, passes_decisives_saison,
+      matchs_joues_saison, note_moyenne_saison
+    `)
+    .eq("game_id", gameId)
+    .eq("game_club_id", gameClubId)
+    .order("reputation_mondiale", { ascending: false, nullsFirst: false });
+
+  // Le bandeau identifie toujours le manager et SON club, meme quand la
+  // fiche affichee en dessous est celle d'un autre club (comme dans squad.html).
+  let headerClubName = club.nom;
+  if (!isOwnClub) {
+    const { data: myClubRow } = await supabaseClient
+      .from("game_clubs")
+      .select("nom")
+      .eq("id", myClubId)
+      .eq("game_id", gameId)
+      .single();
+    headerClubName = myClubRow?.nom || club.nom;
+  }
+
+  document.getElementById("clubHero").classList.remove("hidden");
+  document.getElementById("clubGrid").style.display = "";
+
+  renderFmHeader(me.pseudo, headerClubName);
+  renderFmSidebar(myClubId);
+  renderFmSubtabs(gameClubId);
+  renderClubHero(club, rawClub);
+  renderPitch(players || [], isOwnClub);
+  renderFinances(club);
+  renderReputation(club, players || []);
+  renderKeyPeople(club, players || []);
+  renderPalmares(rawClub);
+}
+
+function showFatalError(message) {
+  document.getElementById("clubHero").classList.add("hidden");
+  document.getElementById("clubGrid").style.display = "none";
+  const el = document.getElementById("clubError");
+  el.classList.remove("hidden");
+  el.innerHTML = `${escapeHtml(message)}<br><br><a href="dashboard.html?game=${encodeURIComponent(gameId || "")}" style="color:var(--gold);">← Retour à l'accueil</a>`;
+}
+
+loadClub();
+</script>
+</body>
+</html>
