@@ -97,11 +97,6 @@
 
 <div class="wrap">
   <div class="card">
-    <h2>Participants</h2>
-    <div class="pseudo-list" id="pseudoList"></div>
-  </div>
-
-  <div class="card">
     <div class="empty-state">
       🚧 Dashboard du jeu a venir (effectif, mercato, tactique, calendrier...)<br>
       La structure de base est en place, on construit les onglets ensuite.
@@ -173,10 +168,6 @@ async function loadDashboard() {
     .from("game_participants")
     .select("pseudo, is_host, user_id")
     .eq("game_id", gameId);
-
-  document.getElementById("pseudoList").innerHTML = (participants || [])
-    .map(p => `<span class="pseudo-chip">${p.is_host ? "👑 " : ""}${escapeHtml(p.pseudo || "?")}</span>`)
-    .join("");
 
   const me = (participants || []).find(p => p.user_id === userId);
   const isHost = me?.is_host === true;
