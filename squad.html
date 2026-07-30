@@ -59,6 +59,8 @@
   }
   .squad-table thead th:hover { color: var(--text); }
   .squad-table thead th.sorted { color: var(--gold); }
+  .squad-table thead th.no-sort { cursor: default; }
+  .squad-table thead th.no-sort:hover { color: var(--text-dim); }
   .sort-arrow { margin-left: 4px; font-size: 9px; }
   .squad-table tbody td {
     padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle;
@@ -432,13 +434,33 @@ function starsFromCA(ca) {
   return 5;
 }
 
-function starsHtml(rating, extraClass = "") {
+function starsHtml(rating, extraClass = "", titleSuffix = "") {
   if (rating === null || rating === undefined) return "-";
   const pct = (rating / 5) * 100;
-  return `<span class="stars ${extraClass}" title="${rating}/5">
+  return `<span class="stars ${extraClass}" title="${rating}/5${titleSuffix}">
     <span class="stars-bg">★★★★★</span>
     <span class="stars-fg" style="width:${pct}%">★★★★★</span>
   </span>`;
+}
+
+// Floutage deterministe : quand on consulte un autre club, on n'affiche
+// jamais le niveau/potentiel exact, mais une estimation decalee de +/-0.5
+// etoile. Le decalage depend du joueur + de la colonne (hash simple) donc
+// il reste stable a chaque re-rendu / tri, sans jamais reveler la vraie valeur.
+function scoutingHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+function scoutedStars(realStars, playerId, columnKey) {
+  if (realStars === null || realStars === undefined) return null;
+  const bucket = scoutingHash(`${playerId}-${columnKey}`) % 3; // 0, 1 ou 2
+  const offset = (bucket - 1) * 0.5; // -0.5, 0, +0.5
+  const fuzzed = Math.max(0.5, Math.min(5, realStars + offset));
+  return Math.round(fuzzed * 2) / 2;
 }
 
 function noteClass(note) {
@@ -498,13 +520,22 @@ function sortPlayers(players, columns, state) {
   });
 }
 
-function initSortableHeaders(theadEl, columns, state, onSortChange) {
+function initSortableHeaders(theadEl, columns, state, onSortChange, isSortable = () => true) {
   if (!theadEl) return;
   const ths = theadEl.querySelectorAll("th");
   ths.forEach((th, i) => {
     const col = columns[i];
     if (!col) return;
     th.dataset.baseLabel = th.textContent.trim();
+
+    if (!isSortable(col)) {
+      th.classList.add("no-sort");
+      th.classList.remove("sorted");
+      th.innerHTML = th.dataset.baseLabel;
+      return;
+    }
+    th.classList.remove("no-sort");
+
     th.addEventListener("click", () => {
       if (state.key === col.key) {
         state.dir *= -1;
@@ -801,14 +832,19 @@ async function runGlobalSearch(q, dropdown) {
 
 let myClubPlayers = [];
 const myClubSortState = { key: "niveau_actuel", dir: -1 };
+// Etat de tri distinct quand on consulte un club adverse : jamais base sur
+// niveau_actuel/potentiel (qui restent non triables dans ce cas), pour ne
+// pas reveler le vrai classement des joueurs via l'ordre des lignes.
+const rivalSquadSortState = { key: "nom", dir: 1 };
+let activeMyClubSortState = myClubSortState;
 // true si le club affiche est bien celui du manager connecte ; false si on
-// consulte l'effectif d'un autre club (meme vue, mais niveau/potentiel grises
+// consulte l'effectif d'un autre club (meme vue, mais niveau/potentiel flous
 // car ce ne sont que des estimations sur un effectif qu'on ne dirige pas).
 let isOwnClubView = true;
 
 function renderMyClubBody() {
   const body = document.getElementById("myClubBody");
-  const sorted = sortPlayers(myClubPlayers, MYCLUB_COLUMNS, myClubSortState);
+  const sorted = sortPlayers(myClubPlayers, MYCLUB_COLUMNS, activeMyClubSortState);
   const dim = isOwnClubView ? "" : " dimmed";
 
   body.innerHTML = sorted.map(p => {
@@ -822,8 +858,8 @@ function renderMyClubBody() {
       <td>${p.age ?? "-"}</td>
       <td class="player-name">${escapeHtml(p.nom)}</td>
       <td class="postes-cell">${escapeHtml(p.poste_brut || "-")}</td>
-      <td>${starsHtml(starsFromCA(p.niveau_actuel), "cur" + dim)}</td>
-      <td>${starsHtml(starsFromCA(p.potentiel), "pot" + dim)}</td>
+      <td>${starsHtml(isOwnClubView ? starsFromCA(p.niveau_actuel) : scoutedStars(starsFromCA(p.niveau_actuel), p.id, "cur"), "cur" + dim, isOwnClubView ? "" : " (estimation)")}</td>
+      <td>${starsHtml(isOwnClubView ? starsFromCA(p.potentiel) : scoutedStars(starsFromCA(p.potentiel), p.id, "pot"), "pot" + dim, isOwnClubView ? "" : " (estimation)")}</td>
       <td>${p.matchs_joues_saison ?? 0}</td>
       <td>${p.buts_saison ?? 0}</td>
       <td>${p.passes_decisives_saison ?? 0}</td>
@@ -848,6 +884,7 @@ function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   document.getElementById("myClubView").classList.remove("hidden");
 
   isOwnClubView = isOwnClub;
+  activeMyClubSortState = isOwnClub ? myClubSortState : rivalSquadSortState;
 
   const titleEl = document.getElementById("fmSquadTitle");
   titleEl.textContent = isOwnClub ? "Effectif" : `Effectif — ${club.nom}`;
@@ -869,7 +906,8 @@ function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   scrollWrap.style.display = "";
   emptyEl.classList.add("hidden");
 
-  initSortableHeaders(document.querySelector("#myClubView .squad-table thead"), MYCLUB_COLUMNS, myClubSortState, renderMyClubBody);
+  const isSortable = col => isOwnClub || (col.key !== "niveau_actuel" && col.key !== "potentiel");
+  initSortableHeaders(document.querySelector("#myClubView .squad-table thead"), MYCLUB_COLUMNS, activeMyClubSortState, renderMyClubBody, isSortable);
   renderMyClubBody();
 }
 
