@@ -303,7 +303,7 @@ async function loadSquad() {
 
   const { data: players, error } = await supabaseClient
     .from("game_players")
-    .select("nom, age, nationalite, poste_brut, statut_special, salaire_actuel, contrat_expire, valeur_marchande_actuelle, reputation_mondiale")
+    .select("id, nom, age, nationalite, poste_brut, statut_special, salaire_actuel, contrat_expire, valeur_marchande_actuelle, reputation_mondiale")
     .eq("game_id", gameId)
     .eq("game_club_id", gameClubId)
     .order("reputation_mondiale", { ascending: false, nullsFirst: false });
@@ -325,7 +325,7 @@ async function loadSquad() {
   }
 
   body.innerHTML = players.map(p => `
-    <tr>
+    <tr class="player-row" data-player-id="${p.id}" style="cursor:pointer">
       <td>${p.statut_special ? `<span class="status-chip">${escapeHtml(p.statut_special)}</span>` : ""}</td>
       <td><span class="nat-chip" title="${escapeHtml(p.nationalite || '')}">${flagImg(p.nationalite)}</span></td>
       <td>${p.age ?? "-"}</td>
@@ -337,6 +337,13 @@ async function loadSquad() {
       <td>${starsHtml(starsFromReputation(p.reputation_mondiale))}</td>
     </tr>
   `).join("");
+
+  body.querySelectorAll(".player-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const pid = row.getAttribute("data-player-id");
+      window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}&player=${encodeURIComponent(pid)}`;
+    });
+  });
 }
 
 loadSquad();
