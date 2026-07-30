@@ -16,7 +16,7 @@
     --accent: #4ade80;
     --gold: #fbbf24;
     --danger: #ef4444;
-    --topbar-h: 50px;
+    --topbar-h: 60px;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -31,27 +31,27 @@
   }
   .topbar {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 20px; border-bottom: 1px solid var(--border);
+    padding: 10px 24px; border-bottom: 1px solid var(--border);
     background: var(--panel); gap: 14px; flex-wrap: wrap; flex: 0 0 auto;
     min-height: var(--topbar-h);
   }
-  .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .back-link { color: var(--text-dim); text-decoration: none; font-size: 12px; white-space: nowrap; }
+  .topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; white-space: nowrap; }
   .back-link:hover { color: var(--text); }
   .topbar-avatar {
-    width: 32px; height: 32px; border-radius: 50%; flex: 0 0 auto;
+    width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto;
     border: 2px solid var(--border); overflow: hidden; background: var(--panel-2);
   }
   .topbar-avatar img, .topbar-avatar svg { width: 100%; height: 100%; display: block; }
   .player-name {
-    font-weight: 800; font-size: 18px; line-height: 1.15; letter-spacing: 0.01em;
+    font-weight: 800; font-size: 24px; line-height: 1.15; letter-spacing: 0.01em;
     color: #fff; text-shadow: 0 0 22px rgba(74,222,128,0.18);
   }
-  .player-meta { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
+  .player-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
   .nav-arrows { display: flex; gap: 6px; }
   .nav-btn {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
-    border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 13px;
+    border-radius: 8px; width: 34px; height: 34px; cursor: pointer; font-size: 14px;
     display: flex; align-items: center; justify-content: center;
   }
   .nav-btn:hover:not(:disabled) { background: #23283299; border-color: #3a4050; }
@@ -61,10 +61,10 @@
     flex: 1 1 auto;
     width: 100%;
     margin: 0;
-    padding: clamp(8px, 1vw, 14px);
+    padding: clamp(10px, 1.4vw, 20px);
     display: grid;
-    gap: clamp(8px, 1vw, 12px);
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(280px, 380px);
+    gap: clamp(10px, 1.2vw, 18px);
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(260px, 380px);
     grid-template-rows: auto auto auto;
     grid-template-areas:
       "identity attrs radar"
@@ -97,18 +97,18 @@
 
   .card {
     background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 12px 14px;
+    border-radius: 12px; padding: 16px 18px;
     display: flex; flex-direction: column; min-width: 0;
   }
   .card h3 {
-    margin: 0 0 8px 0; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 0 0 14px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--text-dim); font-weight: 600;
   }
 
   .area-identity { grid-area: identity; }
   .area-postes { grid-area: postes; }
   .area-radar { grid-area: radar; }
-  .area-footer { grid-area: footer; display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(8px,1vw,12px); }
+  .area-footer { grid-area: footer; display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(10px,1.2vw,18px); }
   @media (max-width: 980px) { .area-footer { grid-template-columns: 1fr; } }
 
   /* --- Attributs : écran le plus important, mis en valeur --- */
@@ -118,27 +118,27 @@
     border: 1px solid rgba(74,222,128,0.35);
     box-shadow: 0 0 0 1px rgba(74,222,128,0.05), 0 12px 28px rgba(0,0,0,0.35);
   }
-  .attrs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
-  .attrs-head h3 { margin: 0; font-size: 13px; color: var(--accent); letter-spacing: 0.06em; }
+  .attrs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .attrs-head h3 { margin: 0; font-size: 14px; color: var(--accent); letter-spacing: 0.06em; }
   .poste-select-label {
-    font-size: 11px; color: var(--gold); font-weight: 600; background: rgba(251,191,36,0.1);
-    border: 1px solid rgba(251,191,36,0.3); padding: 2px 9px; border-radius: 20px;
+    font-size: 12px; color: var(--gold); font-weight: 600; background: rgba(251,191,36,0.1);
+    border: 1px solid rgba(251,191,36,0.3); padding: 3px 10px; border-radius: 20px;
   }
   .poste-select-label.empty { color: var(--text-dim); background: transparent; border-color: var(--border); }
-  .attrs-legend { display: flex; gap: 14px; font-size: 10.5px; color: var(--text-dim); margin: 4px 0 8px; flex-wrap: wrap; }
+  .attrs-legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-dim); margin: 6px 0 14px; flex-wrap: wrap; }
   .attrs-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
   .legend-dot.major { background: var(--accent); }
   .legend-dot.minor { background: var(--gold); }
 
-  .attrs-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(8px,1.2vw,18px); flex: 1; }
+  .attrs-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(10px,1.6vw,22px); flex: 1; }
   @media (max-width: 1500px) and (min-width: 1301px) { .attrs-cols { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 700px) { .attrs-cols { grid-template-columns: 1fr; } }
-  .attrs-cols h4 { margin: 0 0 4px 0; font-size: 11.5px; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .attrs-cols h4 { margin: 0 0 6px 0; font-size: 12.5px; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
 
   .attr-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 2.5px 7px; font-size: 12.5px; border-radius: 5px; margin: 0;
+    padding: 5px 8px; font-size: 13.5px; border-radius: 6px; margin: 1px 0;
     transition: background 0.15s;
   }
   .attr-name { color: var(--text-dim); }
@@ -159,10 +159,10 @@
   .attr-row.stat-minor .attr-name { color: #fde8b4; font-weight: 600; }
 
   /* --- Identité / photo --- */
-  .player-photo-wrap { width: 100%; aspect-ratio: 1 / 1; max-height: 160px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--panel-2); margin-bottom: 8px; }
+  .player-photo-wrap { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--panel-2); margin-bottom: 14px; }
   .player-photo-wrap img, .player-photo-wrap svg { width: 100%; height: 100%; display: block; object-fit: cover; }
 
-  .identity-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12.5px; border-bottom: 1px solid var(--border); }
+  .identity-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
   .identity-row:last-child { border-bottom: none; }
   .identity-label { color: var(--text-dim); }
   .identity-value { font-weight: 600; text-align: right; }
@@ -187,28 +187,28 @@
   .fit-ok { background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.35); color: var(--accent); }
   .fit-bad { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: var(--danger); }
 
-  .radar-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; justify-content: center; }
-  #radarHolder { width: 100%; max-width: 400px; }
+  .radar-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; flex: 1; justify-content: center; }
+  #radarHolder { width: 100%; max-width: 380px; }
   #radarHolder svg { width: 100%; height: auto; display: block; }
-  .stars-row { display: flex; justify-content: space-between; width: 100%; font-size: 12px; padding: 2px 0; align-items: center; }
+  .stars-row { display: flex; justify-content: space-between; width: 100%; font-size: 12px; padding: 4px 0; align-items: center; }
   .stars { position: relative; display: inline-block; font-size: 14px; letter-spacing: 2px; line-height: 1; }
   .stars-bg { color: var(--border); }
   .stars-fg { position: absolute; top: 0; left: 0; overflow: hidden; white-space: nowrap; color: var(--gold); }
   .stars.locked .stars-bg { color: #30343e; }
   .locked-hint { font-size: 10px; color: var(--text-dim); cursor: help; }
 
-  .feet-row { display: flex; gap: 18px; justify-content: center; margin-top: 2px; }
+  .feet-row { display: flex; gap: 18px; justify-content: center; margin-top: 4px; }
   .foot-block { text-align: center; }
-  .foot-label { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
-  .foot-level { font-size: 10.5px; font-weight: 600; }
+  .foot-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .foot-level { font-size: 11px; font-weight: 600; }
 
-  .contract-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .contract-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .contract-row:last-child { border-bottom: none; }
   .contract-label { color: var(--text-dim); }
   .contract-value { font-weight: 600; }
   .contract-soon { color: var(--danger); }
 
-  .bar-row { margin-bottom: 8px; }
+  .bar-row { margin-bottom: 12px; }
   .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
   .bar-label { color: var(--text-dim); }
   .bar-track { height: 6px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
@@ -223,6 +223,15 @@
 
   .empty-state { text-align: center; color: var(--text-dim); font-size: 14px; padding: 60px 20px; }
 
+  /* --- Mise à l'échelle globale : au lieu de compresser l'intérieur de chaque module,
+     on réduit tout l'ensemble (topbar + contenu) proportionnellement pour que ça tienne
+     sans scroll sur les résolutions plus modestes. Calculé en JS (fitScale). --- */
+  #scaleOuter {
+    flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
+    overflow: hidden; width: 100%;
+  }
+  #scaleRoot { width: 100%; transform-origin: top center; flex: 0 0 auto; }
+
   .toast {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
     background: var(--panel); border: 1px solid var(--border); padding: 10px 18px;
@@ -234,6 +243,9 @@
 </style>
 </head>
 <body>
+
+<div id="scaleOuter">
+<div id="scaleRoot">
 
 <div class="topbar">
   <div class="topbar-left">
@@ -299,6 +311,9 @@
       <div id="conditionRows"></div>
     </div>
   </div>
+</div>
+
+</div>
 </div>
 
 <div id="emptyState" class="empty-state hidden">Joueur introuvable.</div>
@@ -690,8 +705,8 @@ function buildRadarAxes(gp) {
       ["finition",1.5],["appels_de_balle",1],["tir_de_loin",1],["penalty",0.4],
     ], gp) },
     { label: "Technique", value: avgOf([
-      ["technique",1.6],["controle_de_balle",1.6],["dribbles",1.4],
-      ["centres",0.5],["corners",0.35],["coup_franc",0.35],["touche_longues",0.35],
+      ["technique",1.8],["controle_de_balle",1.8],["dribbles",1.6],
+      ["centres",0.45],["corners",0.3],["coup_franc",0.3],["touche_longues",0.3],
     ], gp) },
     { label: "Jeu aérien", value: avgOf([
       ["jeu_de_tete",1.7],["detente_verticale",1.5],["puissance",0.5],
@@ -1027,7 +1042,45 @@ async function loadFiche() {
   autoSelectDefaultPosition();
 
   await loadRoster(gameId, clubIdParam);
+
+  scheduleFitScale();
 }
+
+// ---------- Mise à l'échelle globale ----------
+// Plutôt que de compresser l'intérieur de chaque module, on réduit l'ensemble
+// (topbar + contenu) proportionnellement pour que tout tienne sans scroll,
+// quelle que soit la résolution. Sous 800px de large (mise en page mobile
+// empilée), on ne touche à rien : le scroll y est normal et attendu.
+const SCALE_MIN = 0.6;
+let fitScaleRAF = null;
+function fitScale() {
+  const outer = document.getElementById("scaleOuter");
+  const root = document.getElementById("scaleRoot");
+  if (!outer || !root) return;
+
+  if (window.innerWidth <= 800) {
+    root.style.transform = "none";
+    outer.style.height = "auto";
+    return;
+  }
+
+  root.style.transform = "none";
+  outer.style.height = "auto";
+  // Force un reflow avant mesure pour avoir la vraie hauteur naturelle du contenu.
+  const naturalHeight = root.scrollHeight;
+  const available = window.innerHeight;
+
+  let scale = Math.min(1, available / naturalHeight);
+  scale = Math.max(SCALE_MIN, scale);
+
+  root.style.transform = `scale(${scale})`;
+  outer.style.height = Math.round(naturalHeight * scale) + "px";
+}
+function scheduleFitScale() {
+  if (fitScaleRAF) cancelAnimationFrame(fitScaleRAF);
+  fitScaleRAF = requestAnimationFrame(fitScale);
+}
+window.addEventListener("resize", scheduleFitScale);
 
 loadFiche();
 </script>
