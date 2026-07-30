@@ -138,12 +138,12 @@
     border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin-bottom: 16px;
   }
   .club-badge {
-    width: 64px; height: 64px; border-radius: 14px; flex-shrink: 0;
+    width: 96px; height: 138px; border-radius: 16px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; font-weight: 800; color: #1a1300;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    font-size: 30px; font-weight: 800; color: #1a1300;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
   }
-  .club-badge img { width: 100%; height: 100%; object-fit: contain; border-radius: 14px; }
+  .club-badge img { width: 100%; height: 100%; object-fit: contain; border-radius: 16px; }
   .club-hero-info { flex: 1; min-width: 0; }
   .club-hero-name { font-size: 20px; font-weight: 800; }
   .club-hero-sub {
@@ -219,6 +219,9 @@
   .pitch-name-label {
     fill: var(--text-dim); font-size: 7.5px; text-anchor: middle; pointer-events: none;
   }
+  /* Version miniature du terrain, casee en bas de la colonne laterale */
+  .pitch-mini .pitch-wrap { max-width: 170px; margin: 0 0 0 auto; }
+  .pitch-mini .pitch-caption { text-align: right; }
 
   @media (max-width: 900px) {
     .fm-header { padding: 10px 14px; }
@@ -254,10 +257,6 @@
       <div class="club-grid" id="clubGrid" style="display:none;">
         <div class="fm-col-main">
           <div class="card">
-            <div class="card-title"><span>Dernière composition utilisée</span></div>
-            <div id="clubPitch"></div>
-          </div>
-          <div class="card">
             <div class="card-title"><span>Finances</span></div>
             <div id="clubFinances" class="fm-empty">Chargement...</div>
           </div>
@@ -274,6 +273,10 @@
           <div class="card">
             <div class="card-title"><span>Palmarès</span></div>
             <div id="clubPalmares" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card pitch-mini">
+            <div class="card-title"><span>Dernière composition utilisée</span></div>
+            <div id="clubPitch"></div>
           </div>
         </div>
       </div>
@@ -636,110 +639,15 @@ function renderClubBadge(club, rawClub) {
   return initials(club.nom);
 }
 
-// ===================== TERRAIN ILLUSTRE (composition la plus forte connue) =====================
-function positionBucket(poste) {
-  if (!poste) return "mid";
-  const first = poste.toUpperCase().split(/[,\/]/)[0].trim();
-  if (first.startsWith("G")) return "gk";
-  if (first.startsWith("D")) return "def";
-  if (first.startsWith("M")) return "mid";
-  if (first.startsWith("A") || first.startsWith("B")) return "att";
-  return "mid";
-}
+// ===================== TERRAIN ILLUSTRE (derniere composition) =====================
+// Pas encore de vraie composition/tactique enregistree cote base de donnees :
+// on affiche un terrain vide en attendant que cette donnee existe.
 
-function pickBestXI(players, metricFn) {
-  const withScore = players.map(p => ({ p, score: metricFn(p) ?? -1, bucket: positionBucket(p.poste_brut) }));
-  const byBucket = { gk: [], def: [], mid: [], att: [] };
-  withScore.forEach(x => byBucket[x.bucket].push(x));
-  Object.values(byBucket).forEach(arr => arr.sort((a, b) => b.score - a.score));
-
-  const need = { gk: 1, def: 4, mid: 3, att: 3 };
-  const picked = [];
-  const usedIds = new Set();
-  for (const b of ["gk", "def", "mid", "att"]) {
-    const arr = byBucket[b];
-    for (let i = 0; i < need[b] && i < arr.length; i++) {
-      picked.push({ p: arr[i].p, role: b, score: arr[i].score });
-      usedIds.add(arr[i].p.id);
-    }
-  }
-  const remaining = 11 - picked.length;
-  if (remaining > 0) {
-    const rest = withScore.filter(x => !usedIds.has(x.p.id)).sort((a, b) => b.score - a.score);
-    for (let i = 0; i < remaining && i < rest.length; i++) {
-      picked.push({ p: rest[i].p, role: rest[i].bucket, score: rest[i].score });
-      usedIds.add(rest[i].p.id);
-    }
-  }
-  return picked;
-}
-
-function renderPitch(players, isOwnClub) {
+function renderPitch() {
   const el = document.getElementById("clubPitch");
-
-  if (!players || players.length === 0) {
-    el.innerHTML = `
-      <div class="pitch-caption">Aucun joueur dans l'effectif : impossible de proposer une composition.</div>
-      ${emptyPitchSvg()}
-    `;
-    return;
-  }
-
-  const metricFn = isOwnClub ? (p => p.niveau_actuel) : (p => p.reputation_mondiale);
-  const xi = pickBestXI(players, metricFn);
-
-  if (xi.length === 0) {
-    el.innerHTML = `
-      <div class="pitch-caption">Aucune composition disponible pour l'instant.</div>
-      ${emptyPitchSvg()}
-    `;
-    return;
-  }
-
-  const byRole = { gk: [], def: [], mid: [], att: [] };
-  xi.forEach(x => byRole[x.role].push(x));
-
-  const lineY = { att: 70, mid: 175, mid2: null, def: 285, gk: 375 };
-  const lines = [
-    { role: "att", y: 70 },
-    { role: "mid", y: 175 },
-    { role: "def", y: 285 },
-    { role: "gk", y: 375 },
-  ];
-
-  let dots = "";
-  lines.forEach(line => {
-    const arr = byRole[line.role];
-    const n = arr.length;
-    if (n === 0) return;
-    arr.forEach((x, i) => {
-      const cx = 30 + (i + 0.5) * (240 / n);
-      const cy = line.y;
-      const surname = (x.p.nom || "?").trim().split(/\s+/).pop();
-      const initial = surname.slice(0, 3).toUpperCase();
-      const title = `${escapeHtml(x.p.nom)} — ${escapeHtml(x.p.poste_brut || "-")}`;
-      dots += `
-        <g>
-          <circle class="pitch-player-dot" cx="${cx}" cy="${cy}" r="14"><title>${title}</title></circle>
-          <text class="pitch-player-label" x="${cx}" y="${cy + 3}">${escapeHtml(initial)}</text>
-          <text class="pitch-name-label" x="${cx}" y="${cy + 24}">${escapeHtml(surname)}</text>
-        </g>
-      `;
-    });
-  });
-
-  const caption = xi.length < 11
-    ? `Effectif incomplet (${xi.length} joueur${xi.length > 1 ? "s" : ""}) : composition la plus forte disponible, à défaut d'une composition officielle enregistrée.`
-    : `Aucune composition officielle enregistrée pour l'instant — voici la composition la plus forte disponible d'après ${isOwnClub ? "le niveau actuel des joueurs" : "leur réputation"}.`;
-
   el.innerHTML = `
-    <div class="pitch-caption">${caption}</div>
-    <div class="pitch-wrap">
-      <svg class="pitch-svg" viewBox="0 0 300 430" xmlns="http://www.w3.org/2000/svg">
-        ${pitchBackground()}
-        ${dots}
-      </svg>
-    </div>
+    <div class="pitch-caption">Aucune composition enregistrée pour l'instant.</div>
+    ${emptyPitchSvg()}
   `;
 }
 
@@ -1056,7 +964,7 @@ async function loadClub() {
   renderFmSidebar(myClubId);
   renderFmSubtabs(gameClubId);
   renderClubHero(club, rawClub);
-  renderPitch(players || [], isOwnClub);
+  renderPitch();
   renderFinances(club);
   renderReputation(club, players || []);
   renderKeyPeople(club, players || []);
