@@ -115,6 +115,12 @@
   .pick-btn:disabled { opacity: 0.4; cursor: default; background: var(--border); color: var(--text-dim); }
   .my-club-header { display: flex; justify-content: space-between; align-items: center; }
   .my-club-header .name { font-weight: 700; font-size: 16px; }
+  .club-name-link {
+    background: none; border: none; padding: 0; margin: 0;
+    color: var(--text); font-weight: 700; font-size: 16px;
+    font-family: inherit; cursor: pointer; text-align: left;
+  }
+  .club-name-link:hover { color: var(--accent); text-decoration: underline; }
   .my-club-header .meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
   button.secondary.small { padding: 6px 10px; font-size: 12px; }
 </style>
@@ -149,7 +155,7 @@
       <table class="club-table">
         <thead>
           <tr>
-            <th>Club</th><th>Rép.</th><th>Budget</th><th>Effectif</th><th>Meilleur joueur</th><th></th>
+            <th>Club</th><th>Budget</th><th>Meilleur joueur</th><th></th>
           </tr>
         </thead>
         <tbody id="clubListBody"></tbody>
@@ -318,11 +324,11 @@ async function loadClubList(nation, division) {
 
   const { data: clubs, error } = await supabaseClient
     .from("game_club_overview")
-    .select("game_club_id, nom, reputation, budget_actuel, nb_joueurs, moyenne_effectif, meilleur_joueur_nom, user_id")
+    .select("game_club_id, nom, budget_actuel, meilleur_joueur_nom, user_id")
     .eq("game_id", gameId)
     .eq("nation", nation)
     .eq("division", division)
-    .order("reputation", { ascending: false });
+    .order("nom", { ascending: true });
 
   if (error) {
     toast("Erreur chargement des clubs : " + error.message, true);
@@ -339,9 +345,7 @@ async function loadClubList(nation, division) {
     return `
       <tr>
         <td class="club-name">${escapeHtml(c.nom)}</td>
-        <td>${c.reputation ?? "-"}</td>
         <td>${formatMoney(c.budget_actuel)}</td>
-        <td>${c.nb_joueurs} joueurs · ${c.moyenne_effectif ?? "-"}/20 moy.</td>
         <td>${escapeHtml(c.meilleur_joueur_nom || "-")}</td>
         <td>
           ${taken
@@ -379,7 +383,7 @@ async function pickClub(gameClubId, btnEl) {
 async function showMyClub(gameClubId, canChange) {
   const { data: club, error } = await supabaseClient
     .from("game_club_overview")
-    .select("nom, reputation, budget_actuel, nb_joueurs, moyenne_effectif")
+    .select("nom, budget_actuel")
     .eq("game_club_id", gameClubId)
     .single();
 
@@ -392,12 +396,16 @@ async function showMyClub(gameClubId, canChange) {
   card.innerHTML = `
     <div class="my-club-header">
       <div>
-        <div class="name">${escapeHtml(club.nom)}</div>
-        <div class="meta">Rép. ${club.reputation ?? "-"} · Budget ${formatMoney(club.budget_actuel)} · ${club.nb_joueurs} joueurs · ${club.moyenne_effectif ?? "-"}/20 de moyenne</div>
+        <button class="club-name-link" id="myClubNameBtn">${escapeHtml(club.nom)}</button>
+        <div class="meta">Budget ${formatMoney(club.budget_actuel)}</div>
       </div>
       ${canChange ? `<button class="secondary" id="changeClubBtn">Changer de club</button>` : ""}
     </div>
   `;
+
+  document.getElementById("myClubNameBtn").addEventListener("click", () => {
+    window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
+  });
 
   if (canChange) {
     document.getElementById("changeClubBtn").addEventListener("click", () => {
