@@ -81,8 +81,15 @@
   .pseudo-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .pseudo-chip {
     background: #14171d; border: 1px solid var(--border); color: var(--text-dim);
-    padding: 3px 9px; border-radius: 999px; font-size: 12px;
+    padding: 3px 6px 3px 9px; border-radius: 999px; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 6px;
   }
+  .kick-btn {
+    background: transparent; border: none; color: var(--text-dim);
+    padding: 0 2px; font-size: 12px; font-weight: 700; line-height: 1;
+    cursor: pointer; border-radius: 999px;
+  }
+  .kick-btn:hover { color: var(--danger); }
   .start-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.4; }
   .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px 0; }
   .hidden { display: none !important; }
@@ -459,6 +466,58 @@ async function deleteGame(gameId, gameName, btnEl) {
 }
 
 // ============================================================
+// QUITTER UNE ROOM (participant non-host)
+// ============================================================
+async function leaveGame(gameId, gameName, btnEl) {
+  const sure = confirm(`Quitter la room "${gameName}" ?`);
+  if (!sure) return;
+
+  btnEl.disabled = true;
+  try {
+    const { error } = await supabaseClient
+      .from("game_participants")
+      .delete()
+      .eq("game_id", gameId)
+      .eq("user_id", userId);
+
+    if (error) throw error;
+
+    toast(`Tu as quitte "${gameName}"`);
+    loadRooms();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur en quittant la room : " + e.message, true);
+    btnEl.disabled = false;
+  }
+}
+
+// ============================================================
+// KICKER UN PARTICIPANT (host uniquement)
+// ============================================================
+async function kickParticipant(gameId, targetUserId, targetPseudo, btnEl) {
+  const sure = confirm(`Exclure "${targetPseudo}" de la room ?`);
+  if (!sure) return;
+
+  btnEl.disabled = true;
+  try {
+    const { error } = await supabaseClient
+      .from("game_participants")
+      .delete()
+      .eq("game_id", gameId)
+      .eq("user_id", targetUserId);
+
+    if (error) throw error;
+
+    toast(`"${targetPseudo}" a ete exclu de la room`);
+    loadRooms();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur lors de l'exclusion : " + e.message, true);
+    btnEl.disabled = false;
+  }
+}
+
+// ============================================================
 // LISTER MES ROOMS
 // ============================================================
 async function loadRooms() {
@@ -481,7 +540,7 @@ async function loadRooms() {
     const allGameIds = memberships.map(m => m.game_id);
     const { data: allParticipants } = await supabaseClient
       .from("game_participants")
-      .select("game_id, pseudo, is_host")
+      .select("game_id, user_id, pseudo, is_host")
       .in("game_id", allGameIds);
 
     const participantsByGame = {};
@@ -501,7 +560,13 @@ async function loadRooms() {
       const participants = participantsByGame[g.id] || [];
       const canStart = m.is_host && g.statut === "lobby";
       const pseudosHtml = participants
-        .map(p => `<span class="pseudo-chip">${p.is_host ? "👑 " : ""}${escapeHtml(p.pseudo || "?")}</span>`)
+        .map(p => {
+          const kickable = m.is_host && p.user_id !== userId;
+          const kickBtn = kickable
+            ? `<button class="kick-btn" data-kick-game="${g.id}" data-kick-user="${p.user_id}" data-kick-pseudo="${escapeHtml(p.pseudo || "?")}" title="Kicker">✕</button>`
+            : "";
+          return `<span class="pseudo-chip">${p.is_host ? "👑 " : ""}${escapeHtml(p.pseudo || "?")}${kickBtn}</span>`;
+        })
         .join("");
 
       div.innerHTML = `
@@ -516,7 +581,7 @@ async function loadRooms() {
         <div class="host-actions">
           <button class="secondary" data-goto="${g.id}">Acceder a la partie</button>
           ${canStart ? `<button class="gold" data-start="${g.id}">Demarrer la partie</button>` : ""}
-          ${m.is_host ? `<button class="danger" data-delete="${g.id}">Supprimer</button>` : ""}
+          ${m.is_host ? `<button class="danger" data-delete="${g.id}">Supprimer</button>` : `<button class="danger" data-leave="${g.id}">Quitter</button>`}
         </div>
         ${canStart ? `<div class="start-hint">Demarre le decompte des jours (mercato, matchs...) pour tout le monde. A faire une fois que tous les joueurs attendus ont rejoint — impossible d'ajouter quelqu'un apres.</div>` : ""}
       `;
@@ -531,6 +596,19 @@ async function loadRooms() {
       const id = btn.getAttribute("data-delete");
       const g = memberships.find(m => m.games && m.games.id === id)?.games;
       btn.addEventListener("click", () => deleteGame(id, g?.nom || "cette partie", btn));
+    });
+    container.querySelectorAll("[data-leave]").forEach(btn => {
+      const id = btn.getAttribute("data-leave");
+      const g = memberships.find(m => m.games && m.games.id === id)?.games;
+      btn.addEventListener("click", () => leaveGame(id, g?.nom || "cette partie", btn));
+    });
+    container.querySelectorAll("[data-kick-user]").forEach(btn => {
+      btn.addEventListener("click", () => kickParticipant(
+        btn.getAttribute("data-kick-game"),
+        btn.getAttribute("data-kick-user"),
+        btn.getAttribute("data-kick-pseudo"),
+        btn
+      ));
     });
     container.querySelectorAll("[data-goto]").forEach(btn => {
       btn.addEventListener("click", () => {
