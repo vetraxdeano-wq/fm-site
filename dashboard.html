@@ -1277,10 +1277,17 @@ const PDB_PAGE_SIZE = 100;
 let pdbCurrentPage = 1;
 let pdbLastFiltered = [];
 
-// Marge de tolerance autour de la reputation du club pour le mode "interesse
-// par transfert". Resserree fortement (etait 10%) : un club a 5000 de
-// reputation ne cible plus que les joueurs entre ~4850 et ~5150.
+// Marge de tolerance au-dessus de la reputation du club pour le mode
+// "interesse par transfert" : un joueur est considere interesse si sa
+// reputation mondiale ne depasse pas sensiblement celle du club (plafond),
+// mais TOUS les joueurs en dessous sont consideres interesses aussi — pas
+// uniquement ceux tres proches de la reputation du club.
 const PDB_REPUTATION_MARGIN_RATIO = 0.03;
+
+// Meme logique de plafond pour le niveau (CA) du joueur, compare a la
+// moyenne de niveau de l'effectif du manager : un joueur nettement plus
+// fort que l'effectif actuel ne serait pas interesse par le transfert.
+const PDB_CA_MARGIN_RATIO = 0.15;
 
 const PDB_FOOT_RANK = {
   "très faible": 0, "tres faible": 0,
@@ -1657,6 +1664,18 @@ async function loadPlayersDb(clubId) {
   }
 }
 
+// Moyenne du niveau (CA) de l'effectif actuel du manager, utilisee pour
+// juger si un joueur externe est "trop fort" pour vouloir rejoindre ce club
+// (mode "interesse par transfert"). Recalculee a chaque appel de filtre :
+// avec le chargement progressif, l'effectif peut se completer au fil des
+// lots recus.
+function getPdbUserSquadAverageCA() {
+  if (!pdbUserClubId) return null;
+  const mine = pdbAllPlayers.filter(p => p.game_club_id === pdbUserClubId && Number.isFinite(Number(p.niveau_actuel)));
+  if (!mine.length) return null;
+  return mine.reduce((s, p) => s + Number(p.niveau_actuel), 0) / mine.length;
+}
+
 // La reputation "officielle" d'un club vient de la table clubs (donnee de
 // base, colonne reputation), reliee via game_clubs.club_ref. A defaut (club
 // sans reference valide), on retombe sur la moyenne de reputation_mondiale
@@ -1804,19 +1823,34 @@ function applyPlayersDbFilters(clubId, opts = {}) {
   let filtered = pdbAllPlayers;
 
   if (interestedOnly) {
-    // Decoche = toute la BDD. Coche = seuls les joueurs dont la reputation
-    // mondiale est tres proche (+/- 3%) de la reputation reelle du club, en
-    // excluant les joueurs dont le club actuel a une reputation superieure
-    // au tien (generalement peu interesses par un transfert vers "moins bien").
+    // Decoche = toute la BDD. Coche = les joueurs potentiellement interesses
+    // par un transfert vers ton club :
+    // - reputation mondiale sous un PLAFOND (reputation du club + petite
+    //   marge) — tous les joueurs en dessous sont inclus, pas seulement ceux
+    //   tres proches ; on exclut seulement ceux nettement plus reputes ;
+    // - meme logique de plafond sur le niveau (CA), compare a la moyenne de
+    //   niveau de ton effectif : un joueur bien plus fort que ton equipe
+    //   actuelle ne serait pas interesse par la rejoindre ;
+    // - on exclut aussi les joueurs dont le club actuel est plus repute que
+    //   le tien (generalement peu interesses par un transfert "vers moins bien").
     if (pdbClubReputation != null) {
-      const margin = Math.max(pdbClubReputation * PDB_REPUTATION_MARGIN_RATIO, 50);
-      const lo = pdbClubReputation - margin;
-      const hi = pdbClubReputation + margin;
+      const repMargin = Math.max(pdbClubReputation * PDB_REPUTATION_MARGIN_RATIO, 50);
+      const repCeiling = pdbClubReputation + repMargin;
+
+      const squadAvgCA = getPdbUserSquadAverageCA();
+      const caCeiling = squadAvgCA != null
+        ? squadAvgCA + Math.max(squadAvgCA * PDB_CA_MARGIN_RATIO, 5)
+        : null;
+
       filtered = filtered.filter(p => {
         const r = Number(p.reputation_mondiale);
-        if (!Number.isFinite(r) || r < lo || r > hi) return false;
+        if (!Number.isFinite(r) || r > repCeiling) return false;
         const playerClubRep = p.game_club_id != null ? pdbClubReputationById[p.game_club_id] : null;
         if (playerClubRep != null && playerClubRep > pdbClubReputation) return false;
+        if (caCeiling != null) {
+          const ca = Number(p.niveau_actuel);
+          if (Number.isFinite(ca) && ca > caCeiling) return false;
+        }
         return true;
       });
     } else {
