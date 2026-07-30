@@ -255,15 +255,21 @@
   .fm-nav-icon { width: 18px; text-align: center; flex-shrink: 0; }
 
   .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 16px 24px; }
-  .fm-content { min-width: 0; height: 100%; display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: stretch; max-width: 1400px; margin: 0 auto; }
+  .fm-content {
+    width:100%;
+    height:100%;
+    display:grid;
+    grid-template-columns:68% 32%;
+    gap:16px;
+    align-items:stretch; }
   .fm-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: 100%; min-height: 0; }
 
   /* Les 3 cartes de chaque colonne se partagent la hauteur a parts egales
      (pas de trous), et seul le contenu interne d'une carte scrolle si
      besoin (ex: classement d'une grande division) — jamais toute la page. */
-  .fm-col .card { flex: 1 1 0; min-height: 0; margin-bottom: 0; padding: 14px 18px; display: flex; flex-direction: column; }
+  .fm-col .card { flex: 0 0 auto; min-height:220px; margin-bottom:0; padding:14px 18px; display:flex; flex-direction:column; }
   .fm-col .card .fm-card-title { flex: 0 0 auto; }
-  .fm-col .card > *:not(.fm-card-title) { flex: 1; min-height: 0; overflow-y: auto; }
+  .fm-col .card > *:not(.fm-card-title) { flex:1; min-height:0; overflow:visible; }
 
   .fm-card-title {
     display: flex; justify-content: space-between; align-items: center;
