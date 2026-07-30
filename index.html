@@ -27,17 +27,9 @@
     padding: 24px 16px;
   }
   .wrap { max-width: 640px; margin: 0 auto; }
-  header { margin-bottom: 32px; }
+  header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
   h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
   .sub { color: var(--text-dim); font-size: 14px; }
-  .pseudo-box {
-    display: flex; align-items: center; gap: 8px;
-    margin-top: 12px; font-size: 13px; color: var(--text-dim);
-  }
-  .pseudo-box input {
-    background: var(--panel); border: 1px solid var(--border); color: var(--text);
-    padding: 4px 8px; border-radius: 6px; font-size: 13px; width: 140px;
-  }
   .card {
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 12px; padding: 20px; margin-bottom: 16px;
@@ -47,11 +39,12 @@
     text-transform: uppercase; letter-spacing: 0.05em;
   }
   .row { display: flex; gap: 8px; }
-  input[type=text] {
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  input[type=text], input[type=password] {
     flex: 1; background: #0d0f13; border: 1px solid var(--border); color: var(--text);
     padding: 10px 12px; border-radius: 8px; font-size: 14px;
   }
-  input[type=text]:focus { outline: none; border-color: var(--accent); }
+  input:focus { outline: none; border-color: var(--accent); }
   button {
     background: var(--accent); color: #06210f; border: none;
     padding: 10px 16px; border-radius: 8px; font-weight: 600;
@@ -61,6 +54,15 @@
   button:disabled { opacity: 0.5; cursor: default; }
   button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
   button.gold { background: var(--gold); color: #3a2a00; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab-btn {
+    flex: 1; background: #0d0f13; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  }
+  .tab-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+  .user-bar {
+    display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-dim);
+  }
   .room-item {
     padding: 12px 14px; background: #0d0f13; border: 1px solid var(--border);
     border-radius: 8px; margin-bottom: 8px;
@@ -75,49 +77,87 @@
   .host-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
   .participant-count { font-size: 12px; color: var(--text-dim); }
   .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px 0; }
+  .hidden { display: none !important; }
   .toast {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
     background: var(--panel); border: 1px solid var(--border); padding: 10px 18px;
     border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 100;
   }
   .toast.show { opacity: 1; }
   .toast.error { border-color: var(--danger); color: var(--danger); }
+  .error-banner {
+    background: #2a1414; border: 1px solid var(--danger); color: #fca5a5;
+    padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 16px;
+    font-family: monospace; white-space: pre-wrap; word-break: break-word;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>FM Web — Test Rooms</h1>
-    <div class="sub">Page de test : creation / jonction de rooms</div>
-    <div class="pseudo-box">
-      Pseudo (affichage local) :
-      <input type="text" id="pseudoInput" placeholder="ton pseudo">
-      <button class="secondary" id="savePseudoBtn" style="padding:4px 10px;font-size:12px;">OK</button>
-    </div>
-  </header>
 
-  <div class="card">
-    <h2>Creer une room</h2>
-    <div class="row">
-      <input type="text" id="roomNameInput" placeholder="Nom de la room (ex: Ligue des potes)">
-      <button id="createRoomBtn">Creer</button>
+  <div id="errorBanner" class="error-banner hidden"></div>
+
+  <!-- ============ ECRAN AUTH ============ -->
+  <div id="authScreen">
+    <header>
+      <div>
+        <h1>FM Web</h1>
+        <div class="sub">Connecte-toi pour acceder a tes rooms</div>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabLogin">Se connecter</button>
+      <button class="tab-btn" id="tabRegister">Creer un compte</button>
+    </div>
+
+    <div class="card">
+      <div class="col">
+        <input type="text" id="authPseudo" placeholder="Pseudo" autocomplete="username">
+        <input type="password" id="authPassword" placeholder="Mot de passe" autocomplete="current-password">
+        <button id="authSubmitBtn">Se connecter</button>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Rejoindre une room</h2>
-    <div class="row">
-      <input type="text" id="joinCodeInput" placeholder="Code de la room (ex: A1B2C3)" style="text-transform:uppercase;">
-      <button id="joinRoomBtn">Rejoindre</button>
+  <!-- ============ ECRAN PRINCIPAL (une fois connecte) ============ -->
+  <div id="mainScreen" class="hidden">
+    <header>
+      <div>
+        <h1>FM Web — Rooms</h1>
+        <div class="sub">Cree ou rejoins une partie</div>
+      </div>
+      <div class="user-bar">
+        <span id="userPseudoLabel"></span>
+        <button class="secondary" id="logoutBtn" style="padding:6px 10px;font-size:12px;">Deconnexion</button>
+      </div>
+    </header>
+
+    <div class="card">
+      <h2>Creer une room</h2>
+      <div class="row">
+        <input type="text" id="roomNameInput" placeholder="Nom de la room (ex: Ligue des potes)">
+        <button id="createRoomBtn">Creer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Rejoindre une room</h2>
+      <div class="row">
+        <input type="text" id="joinCodeInput" placeholder="Code de la room (ex: A1B2C3)" style="text-transform:uppercase;">
+        <button id="joinRoomBtn">Rejoindre</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Mes rooms</h2>
+      <div id="roomsList">
+        <div class="empty">Chargement...</div>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Mes rooms</h2>
-    <div id="roomsList">
-      <div class="empty">Connexion...</div>
-    </div>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -126,43 +166,36 @@
 // ============================================================
 // CONFIG SUPABASE — remplace avec tes propres valeurs
 // ============================================================
-const SUPABASE_URL = "https://TON_PROJET.supabase.co";
-const SUPABASE_ANON_KEY = "TA_CLE_ANON_PUBLIQUE";
+const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const EMAIL_DOMAIN = "fmweb.local"; // domaine bidon pour transformer pseudo -> email
 
-let userId = null; // rempli apres l'auth anonyme
+let supabase = null;
+let userId = null;
+let userPseudo = null;
 
-// ============================================================
-// AUTH ANONYME SUPABASE (vrai auth.uid(), pas de mot de passe)
-// Le "pseudo" reste juste un nom d'affichage local (pas stocke en base
-// pour l'instant, tes tables n'ont pas de colonne pseudo).
-// ============================================================
-async function ensureAuth() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) {
-    userId = session.user.id;
-    return;
+function showFatalError(err) {
+  const banner = document.getElementById("errorBanner");
+  banner.textContent = "Erreur : " + (err && err.message ? err.message : String(err));
+  banner.classList.remove("hidden");
+  console.error(err);
+}
+
+try {
+  if (!window.supabase) {
+    throw new Error("La librairie Supabase (CDN) ne s'est pas chargee.");
   }
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) {
-    console.error(error);
-    toast("Erreur d'authentification : " + error.message, true);
-    throw error;
-  }
-  userId = data.user.id;
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  showFatalError(e);
 }
 
-function getPseudo() {
-  return localStorage.getItem("fm_pseudo") || "";
-}
-function setPseudo(p) {
-  localStorage.setItem("fm_pseudo", p);
+function pseudoToEmail(pseudo) {
+  const clean = pseudo.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return `${clean}@${EMAIL_DOMAIN}`;
 }
 
-// ============================================================
-// UI HELPERS
-// ============================================================
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
   el.textContent = msg;
@@ -171,23 +204,102 @@ function toast(msg, isError = false) {
 }
 
 function generateRoomCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sans caracteres ambigus
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
 
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // ============================================================
-// INIT PSEUDO
+// AUTH : bascule entre les onglets Connexion / Creation de compte
 // ============================================================
-const pseudoInput = document.getElementById("pseudoInput");
-pseudoInput.value = getPseudo();
-document.getElementById("savePseudoBtn").addEventListener("click", () => {
-  const val = pseudoInput.value.trim();
-  if (!val) { toast("Entre un pseudo", true); return; }
-  setPseudo(val);
-  toast("Pseudo enregistre");
+let authMode = "login"; // "login" | "register"
+
+document.getElementById("tabLogin").addEventListener("click", () => {
+  authMode = "login";
+  document.getElementById("tabLogin").classList.add("active");
+  document.getElementById("tabRegister").classList.remove("active");
+  document.getElementById("authSubmitBtn").textContent = "Se connecter";
 });
+
+document.getElementById("tabRegister").addEventListener("click", () => {
+  authMode = "register";
+  document.getElementById("tabRegister").classList.add("active");
+  document.getElementById("tabLogin").classList.remove("active");
+  document.getElementById("authSubmitBtn").textContent = "Creer le compte";
+});
+
+document.getElementById("authSubmitBtn").addEventListener("click", async () => {
+  const pseudo = document.getElementById("authPseudo").value.trim();
+  const password = document.getElementById("authPassword").value;
+
+  if (!pseudo || pseudo.length < 3) { toast("Pseudo trop court (3 caracteres min)", true); return; }
+  if (!password || password.length < 6) { toast("Mot de passe trop court (6 caracteres min)", true); return; }
+
+  const email = pseudoToEmail(pseudo);
+  const btn = document.getElementById("authSubmitBtn");
+  btn.disabled = true;
+
+  try {
+    if (authMode === "register") {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { pseudo } }
+      });
+      if (error) {
+        if (error.message.toLowerCase().includes("already registered")) {
+          toast("Ce pseudo est deja pris", true);
+        } else {
+          throw error;
+        }
+        return;
+      }
+      if (!data.session) {
+        // Certains projets Supabase demandent une confirmation email meme
+        // avec un faux domaine. Si c'est le cas, previens l'utilisateur.
+        toast("Compte cree. Si la confirmation email est activee sur ton projet, desactive-la (Auth > Providers > Email > Confirm email = off).", true);
+        return;
+      }
+      onAuthSuccess(data.user);
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        toast("Pseudo ou mot de passe incorrect", true);
+        return;
+      }
+      onAuthSuccess(data.user);
+    }
+  } catch (e) {
+    console.error(e);
+    toast("Erreur : " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await supabase.auth.signOut();
+  userId = null;
+  userPseudo = null;
+  document.getElementById("authScreen").classList.remove("hidden");
+  document.getElementById("mainScreen").classList.add("hidden");
+});
+
+function onAuthSuccess(user) {
+  userId = user.id;
+  userPseudo = user.user_metadata?.pseudo || "?";
+  document.getElementById("userPseudoLabel").textContent = userPseudo;
+  document.getElementById("authScreen").classList.add("hidden");
+  document.getElementById("mainScreen").classList.remove("hidden");
+  loadRooms();
+}
 
 // ============================================================
 // CREER UNE ROOM
@@ -379,22 +491,18 @@ async function loadRooms() {
   }
 }
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 // ============================================================
-// INIT
+// INIT : verifie si une session existe deja
 // ============================================================
 (async () => {
+  if (!supabase) return;
   try {
-    await ensureAuth();
-    loadRooms();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      onAuthSuccess(session.user);
+    }
   } catch (e) {
-    document.getElementById("roomsList").innerHTML =
-      '<div class="empty">Impossible de se connecter a Supabase.</div>';
+    showFatalError(e);
   }
 })();
 </script>
