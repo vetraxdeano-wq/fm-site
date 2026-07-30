@@ -92,6 +92,8 @@
     position: absolute; top: 0; left: 0; overflow: hidden; white-space: nowrap; color: var(--gold);
   }
   .stars.pot .stars-fg { color: var(--accent); }
+  .stars.dimmed .stars-bg { opacity: 0.5; }
+  .stars.dimmed .stars-fg { color: var(--text-dim) !important; opacity: 0.6; }
 
   .contract-soon { color: var(--danger); }
 
@@ -270,7 +272,7 @@
     <div class="fm-content-wrap">
       <div class="fm-squad-card">
         <div class="fm-squad-card-header">
-          <span class="title">Effectif</span>
+          <span class="title" id="fmSquadTitle">Effectif</span>
           <span class="fm-legend">
             <span><span class="dot cur"></span>Niveau actuel</span>
             <span><span class="dot pot"></span>Potentiel</span>
@@ -630,8 +632,10 @@ const FM_NAV_ITEMS = [
   { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
 ];
 
-function renderFmSidebar() {
+function renderFmSidebar(navClubId) {
   const el = document.getElementById("fmSidebar");
+  // "Effectif" reste actif tant qu'on est sur cette page, meme en consultant
+  // l'effectif d'un autre club.
   el.innerHTML = FM_NAV_ITEMS.map(item => `
     <div class="fm-nav-item ${item.key === "effectif" ? "active" : ""}" data-key="${item.key}">
       <span class="fm-nav-icon">${item.icon}</span>
@@ -642,9 +646,11 @@ function renderFmSidebar() {
   el.querySelectorAll(".fm-nav-item").forEach(row => {
     const item = FM_NAV_ITEMS.find(i => i.key === row.getAttribute("data-key"));
     row.addEventListener("click", () => {
-      if (item.key === "effectif") return;
+      if (item.key === "effectif" && isOwnClubView) return;
       if (item.href) {
-        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
+        // On navigue toujours vers le club du manager connecte (jamais vers
+        // le club consulte), y compris pour revenir a son propre effectif.
+        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(navClubId)}`;
       } else {
         toast(`${item.label} arrive bientôt !`);
       }
@@ -652,9 +658,12 @@ function renderFmSidebar() {
   });
 }
 
-function renderFmHeader(club, pseudo) {
+function renderFmHeader(club, pseudo, isOwnClub, myClub) {
   const el = document.getElementById("fmHeader");
-  const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml(club.nom.toUpperCase())}`;
+  // Le bandeau identifie toujours le manager et SON club, meme quand
+  // l'effectif affiche en dessous est celui d'un autre club.
+  const headerClubName = isOwnClub ? club.nom : (myClub?.nom || club.nom);
+  const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml(headerClubName.toUpperCase())}`;
 
   const realDate = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
   const dateLabel = formatRealDate(realDate) || `Jour ${currentGame?.jour_actuel ?? "-"}`;
@@ -792,10 +801,15 @@ async function runGlobalSearch(q, dropdown) {
 
 let myClubPlayers = [];
 const myClubSortState = { key: "niveau_actuel", dir: -1 };
+// true si le club affiche est bien celui du manager connecte ; false si on
+// consulte l'effectif d'un autre club (meme vue, mais niveau/potentiel grises
+// car ce ne sont que des estimations sur un effectif qu'on ne dirige pas).
+let isOwnClubView = true;
 
 function renderMyClubBody() {
   const body = document.getElementById("myClubBody");
   const sorted = sortPlayers(myClubPlayers, MYCLUB_COLUMNS, myClubSortState);
+  const dim = isOwnClubView ? "" : " dimmed";
 
   body.innerHTML = sorted.map(p => {
     const note = p.note_moyenne_saison === null || p.note_moyenne_saison === undefined
@@ -808,8 +822,8 @@ function renderMyClubBody() {
       <td>${p.age ?? "-"}</td>
       <td class="player-name">${escapeHtml(p.nom)}</td>
       <td class="postes-cell">${escapeHtml(p.poste_brut || "-")}</td>
-      <td>${starsHtml(starsFromCA(p.niveau_actuel), "cur")}</td>
-      <td>${starsHtml(starsFromCA(p.potentiel), "pot")}</td>
+      <td>${starsHtml(starsFromCA(p.niveau_actuel), "cur" + dim)}</td>
+      <td>${starsHtml(starsFromCA(p.potentiel), "pot" + dim)}</td>
       <td>${p.matchs_joues_saison ?? 0}</td>
       <td>${p.buts_saison ?? 0}</td>
       <td>${p.passes_decisives_saison ?? 0}</td>
@@ -829,12 +843,19 @@ function renderMyClubBody() {
   });
 }
 
-function renderMyClubView(club, players, pseudo) {
+function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   document.getElementById("genericView").classList.add("hidden");
   document.getElementById("myClubView").classList.remove("hidden");
 
-  renderFmHeader(club, pseudo);
-  renderFmSidebar();
+  isOwnClubView = isOwnClub;
+
+  const titleEl = document.getElementById("fmSquadTitle");
+  titleEl.textContent = isOwnClub ? "Effectif" : `Effectif — ${club.nom}`;
+
+  // La topbar (header + sidebar) doit toujours ramener vers le club du
+  // manager connecte, meme quand on consulte l'effectif d'un autre club.
+  renderFmHeader(club, pseudo, isOwnClub, myClub);
+  renderFmSidebar(myClub?.id ?? gameClubId);
 
   myClubPlayers = players || [];
   const scrollWrap = document.querySelector(".fm-squad-card .table-scroll");
@@ -892,14 +913,30 @@ async function loadSquad() {
     return;
   }
 
-  // Determine si le club consulte est bien celui du joueur connecte, pour
-  // decider quelle variante de la vue afficher.
+  // Determine si le manager connecte a deja choisi un club, et si le club
+  // consulte est bien le sien. Des qu'un club a ete choisi ("en gros"), on
+  // garde la vue "mon club" pour n'importe quel effectif consulte ; seule
+  // la vue generique (sans club choisi) reste inchangee.
   const { data: participants } = await supabaseClient
     .from("game_participants")
     .select("pseudo, user_id, game_club_id")
     .eq("game_id", gameId);
   const me = (participants || []).find(p => p.user_id === userId);
-  const isMyClub = !!(me && me.game_club_id !== null && String(me.game_club_id) === String(gameClubId));
+  const hasOwnClub = !!(me && me.game_club_id !== null);
+  const isMyClub = !!(hasOwnClub && String(me.game_club_id) === String(gameClubId));
+
+  let myClub = null;
+  if (hasOwnClub && !isMyClub) {
+    const { data: myClubRow } = await supabaseClient
+      .from("game_clubs")
+      .select("id, nom")
+      .eq("id", me.game_club_id)
+      .eq("game_id", gameId)
+      .single();
+    myClub = myClubRow || { id: me.game_club_id, nom: "Mon club" };
+  } else if (isMyClub) {
+    myClub = { id: gameClubId, nom: club.nom };
+  }
 
   const { data: players, error } = await supabaseClient
     .from("game_players")
@@ -918,8 +955,8 @@ async function loadSquad() {
     return;
   }
 
-  if (isMyClub) {
-    renderMyClubView(club, players, me?.pseudo);
+  if (hasOwnClub) {
+    renderMyClubView(club, players, me?.pseudo, isMyClub, myClub);
   } else {
     renderGenericView(club, players);
   }
