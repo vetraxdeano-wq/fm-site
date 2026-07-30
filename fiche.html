@@ -16,7 +16,7 @@
     --accent: #4ade80;
     --gold: #fbbf24;
     --danger: #ef4444;
-    --topbar-h: 60px;
+    --topbar-h: 50px;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -31,27 +31,27 @@
   }
   .topbar {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 24px; border-bottom: 1px solid var(--border);
+    padding: 6px 20px; border-bottom: 1px solid var(--border);
     background: var(--panel); gap: 14px; flex-wrap: wrap; flex: 0 0 auto;
     min-height: var(--topbar-h);
   }
-  .topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
-  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; white-space: nowrap; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .back-link { color: var(--text-dim); text-decoration: none; font-size: 12px; white-space: nowrap; }
   .back-link:hover { color: var(--text); }
   .topbar-avatar {
-    width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto;
+    width: 32px; height: 32px; border-radius: 50%; flex: 0 0 auto;
     border: 2px solid var(--border); overflow: hidden; background: var(--panel-2);
   }
   .topbar-avatar img, .topbar-avatar svg { width: 100%; height: 100%; display: block; }
   .player-name {
-    font-weight: 800; font-size: 24px; line-height: 1.15; letter-spacing: 0.01em;
+    font-weight: 800; font-size: 18px; line-height: 1.15; letter-spacing: 0.01em;
     color: #fff; text-shadow: 0 0 22px rgba(74,222,128,0.18);
   }
-  .player-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+  .player-meta { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
   .nav-arrows { display: flex; gap: 6px; }
   .nav-btn {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
-    border-radius: 8px; width: 34px; height: 34px; cursor: pointer; font-size: 14px;
+    border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 13px;
     display: flex; align-items: center; justify-content: center;
   }
   .nav-btn:hover:not(:disabled) { background: #23283299; border-color: #3a4050; }
@@ -61,10 +61,10 @@
     flex: 1 1 auto;
     width: 100%;
     margin: 0;
-    padding: clamp(10px, 1.4vw, 20px);
+    padding: clamp(8px, 1vw, 14px);
     display: grid;
-    gap: clamp(10px, 1.2vw, 18px);
-    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(240px, 320px);
+    gap: clamp(8px, 1vw, 12px);
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(280px, 380px);
     grid-template-rows: auto auto auto;
     grid-template-areas:
       "identity attrs radar"
@@ -97,18 +97,18 @@
 
   .card {
     background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 16px 18px;
+    border-radius: 12px; padding: 12px 14px;
     display: flex; flex-direction: column; min-width: 0;
   }
   .card h3 {
-    margin: 0 0 14px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 0 0 8px 0; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--text-dim); font-weight: 600;
   }
 
   .area-identity { grid-area: identity; }
   .area-postes { grid-area: postes; }
   .area-radar { grid-area: radar; }
-  .area-footer { grid-area: footer; display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(10px,1.2vw,18px); }
+  .area-footer { grid-area: footer; display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(8px,1vw,12px); }
   @media (max-width: 980px) { .area-footer { grid-template-columns: 1fr; } }
 
   /* --- Attributs : écran le plus important, mis en valeur --- */
@@ -118,27 +118,27 @@
     border: 1px solid rgba(74,222,128,0.35);
     box-shadow: 0 0 0 1px rgba(74,222,128,0.05), 0 12px 28px rgba(0,0,0,0.35);
   }
-  .attrs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-  .attrs-head h3 { margin: 0; font-size: 14px; color: var(--accent); letter-spacing: 0.06em; }
+  .attrs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+  .attrs-head h3 { margin: 0; font-size: 13px; color: var(--accent); letter-spacing: 0.06em; }
   .poste-select-label {
-    font-size: 12px; color: var(--gold); font-weight: 600; background: rgba(251,191,36,0.1);
-    border: 1px solid rgba(251,191,36,0.3); padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; color: var(--gold); font-weight: 600; background: rgba(251,191,36,0.1);
+    border: 1px solid rgba(251,191,36,0.3); padding: 2px 9px; border-radius: 20px;
   }
   .poste-select-label.empty { color: var(--text-dim); background: transparent; border-color: var(--border); }
-  .attrs-legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-dim); margin: 6px 0 14px; flex-wrap: wrap; }
+  .attrs-legend { display: flex; gap: 14px; font-size: 10.5px; color: var(--text-dim); margin: 4px 0 8px; flex-wrap: wrap; }
   .attrs-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
   .legend-dot.major { background: var(--accent); }
   .legend-dot.minor { background: var(--gold); }
 
-  .attrs-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(10px,1.6vw,22px); flex: 1; }
+  .attrs-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(8px,1.2vw,18px); flex: 1; }
   @media (max-width: 1500px) and (min-width: 1301px) { .attrs-cols { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 700px) { .attrs-cols { grid-template-columns: 1fr; } }
-  .attrs-cols h4 { margin: 0 0 6px 0; font-size: 12.5px; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .attrs-cols h4 { margin: 0 0 4px 0; font-size: 11.5px; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
 
   .attr-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 5px 8px; font-size: 13.5px; border-radius: 6px; margin: 1px 0;
+    padding: 2.5px 7px; font-size: 12.5px; border-radius: 5px; margin: 0;
     transition: background 0.15s;
   }
   .attr-name { color: var(--text-dim); }
@@ -159,10 +159,10 @@
   .attr-row.stat-minor .attr-name { color: #fde8b4; font-weight: 600; }
 
   /* --- Identité / photo --- */
-  .player-photo-wrap { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--panel-2); margin-bottom: 14px; }
+  .player-photo-wrap { width: 100%; aspect-ratio: 1 / 1; max-height: 160px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--panel-2); margin-bottom: 8px; }
   .player-photo-wrap img, .player-photo-wrap svg { width: 100%; height: 100%; display: block; object-fit: cover; }
 
-  .identity-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .identity-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12.5px; border-bottom: 1px solid var(--border); }
   .identity-row:last-child { border-bottom: none; }
   .identity-label { color: var(--text-dim); }
   .identity-value { font-weight: 600; text-align: right; }
@@ -187,28 +187,28 @@
   .fit-ok { background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.35); color: var(--accent); }
   .fit-bad { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: var(--danger); }
 
-  .radar-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; flex: 1; justify-content: center; }
-  #radarHolder { width: 100%; max-width: 320px; }
+  .radar-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; justify-content: center; }
+  #radarHolder { width: 100%; max-width: 400px; }
   #radarHolder svg { width: 100%; height: auto; display: block; }
-  .stars-row { display: flex; justify-content: space-between; width: 100%; font-size: 12px; padding: 4px 0; align-items: center; }
+  .stars-row { display: flex; justify-content: space-between; width: 100%; font-size: 12px; padding: 2px 0; align-items: center; }
   .stars { position: relative; display: inline-block; font-size: 14px; letter-spacing: 2px; line-height: 1; }
   .stars-bg { color: var(--border); }
   .stars-fg { position: absolute; top: 0; left: 0; overflow: hidden; white-space: nowrap; color: var(--gold); }
   .stars.locked .stars-bg { color: #30343e; }
   .locked-hint { font-size: 10px; color: var(--text-dim); cursor: help; }
 
-  .feet-row { display: flex; gap: 18px; justify-content: center; margin-top: 4px; }
+  .feet-row { display: flex; gap: 18px; justify-content: center; margin-top: 2px; }
   .foot-block { text-align: center; }
-  .foot-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
-  .foot-level { font-size: 11px; font-weight: 600; }
+  .foot-label { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
+  .foot-level { font-size: 10.5px; font-weight: 600; }
 
-  .contract-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .contract-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
   .contract-row:last-child { border-bottom: none; }
   .contract-label { color: var(--text-dim); }
   .contract-value { font-weight: 600; }
   .contract-soon { color: var(--danger); }
 
-  .bar-row { margin-bottom: 12px; }
+  .bar-row { margin-bottom: 8px; }
   .bar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
   .bar-label { color: var(--text-dim); }
   .bar-track { height: 6px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
@@ -573,10 +573,17 @@ function renderAttrColumn(title, list, data) {
   }).join("");
   return `<div><h4>${title}</h4>${rows}</div>`;
 }
+// list: paires [cle] ou [cle, poids] (poids par defaut = 1). Moyenne ponderee des stats renseignees.
 function avgOf(list, data) {
-  const vals = list.map(([key]) => data[key]).filter(v => v !== null && v !== undefined);
-  if (!vals.length) return 0;
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
+  let sum = 0, wsum = 0;
+  list.forEach(([key, weight]) => {
+    const v = data[key];
+    if (v === null || v === undefined) return;
+    const w = weight ?? 1;
+    sum += v * w;
+    wsum += w;
+  });
+  return wsum ? sum / wsum : 0;
 }
 
 // ---------- Highlighting des stats importantes selon le poste sélectionné ----------
@@ -617,8 +624,22 @@ function selectPositionByTokens(tokens) {
 
 // ---------- Radar SVG 8 axes ----------
 // Ordre imposé (sens horaire depuis le haut) : Défense, Physique, Vitesse, Vision du jeu, Attaque, Technique, Jeu aérien, Mental.
+//
+// Note sur l'échelle : les attributs vont techniquement de 1 à 20 mais dans les faits
+// tournent presque toujours entre ~3 et ~19. Une projection lineaire brute (valeur/20)
+// ecrase donc les ecarts reels au milieu de l'echelle : un point faible a 7 ne "rentre"
+// presque pas par rapport a un profil moyen a 11-12. RADAR_MIN/RADAR_MAX etirent la
+// plage utile sur tout le rayon du graphique pour que les points faibles se voient
+// vraiment, et RADAR_GAMMA accentue encore un peu l'ecart autour du centre du graphique.
+const RADAR_MIN = 3, RADAR_MAX = 19, RADAR_GAMMA = 1.15;
+function radarNormalize(value) {
+  const t = (value - RADAR_MIN) / (RADAR_MAX - RADAR_MIN);
+  const clamped = Math.max(0, Math.min(1, t));
+  return Math.pow(clamped, RADAR_GAMMA);
+}
+
 function radarSVG(axes) {
-  const size = 300, cx = size / 2, cy = size / 2, maxR = 100;
+  const size = 340, cx = size / 2, cy = size / 2, maxR = 118;
   const n = axes.length;
   const angleFor = i => -Math.PI / 2 + i * (2 * Math.PI / n);
   const pt = (r, i) => [cx + r * Math.cos(angleFor(i)), cy + r * Math.sin(angleFor(i))];
@@ -634,29 +655,52 @@ function radarSVG(axes) {
     spokes += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#262a33" stroke-width="1"/>`;
   });
 
-  const valuePts = axes.map((a, i) => pt(maxR * Math.min(1, a.value / 20), i).join(",")).join(" ");
+  const valuePts = axes.map((a, i) => pt(maxR * radarNormalize(a.value), i).join(",")).join(" ");
   const shape = `<polygon points="${valuePts}" fill="rgba(74,222,128,0.25)" stroke="#4ade80" stroke-width="2"/>`;
 
   let labels = "";
   axes.forEach((a, i) => {
-    const [x, y] = pt(maxR + 28, i);
-    labels += `<text x="${x}" y="${y}" fill="#8b909c" font-size="11.5" text-anchor="middle" dominant-baseline="middle">${escapeHtml(a.label)}</text>`;
+    const [x, y] = pt(maxR + 30, i);
+    labels += `<text x="${x}" y="${y}" fill="#8b909c" font-size="12" text-anchor="middle" dominant-baseline="middle">${escapeHtml(a.label)}</text>`;
   });
 
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${grid}${spokes}${shape}${labels}</svg>`;
 }
 
-// Catégories composites (approximation maison faute de formules officielles de rôle en base)
+// Catégories composites (approximation maison faute de formules officielles de rôle en base).
+// Chaque entrée est [cle, poids] : les stats vraiment caractéristiques de l'axe pèsent plus
+// lourd que les stats périphériques ou déjà comptabilisées ailleurs (ex: "puissance" compte
+// pour Physique ET Jeu aérien, mais avec un poids réduit sur ce second axe pour ne pas
+// diluer l'impact du jeu de tête / de la détente verticale).
 function buildRadarAxes(gp) {
   return [
-    { label: "Défense", value: avgOf([["tacles"],["marquage"],["anticipation"],["placement"],["agressivite"]], gp) },
-    { label: "Physique", value: avgOf([["endurance"],["equilibre"],["puissance"],["qualite_physique_naturelle"]], gp) },
-    { label: "Vitesse", value: avgOf([["acceleration"],["vitesse"],["agilite"]], gp) },
-    { label: "Vision du jeu", value: avgOf([["vision_du_jeu"],["passes"],["inspiration"]], gp) },
-    { label: "Attaque", value: avgOf([["finition"],["penalty"],["appels_de_balle"],["tir_de_loin"]], gp) },
-    { label: "Technique", value: avgOf([["controle_de_balle"],["dribbles"],["technique"],["centres"],["corners"],["coup_franc"],["touche_longues"]], gp) },
-    { label: "Jeu aérien", value: avgOf([["jeu_de_tete"],["detente_verticale"],["puissance"]], gp) },
-    { label: "Mental", value: avgOf([["agressivite"],["anticipation"],["concentration"],["courage"],["decisions"],["determination"],["jeu_collectif"],["leadership"],["sang_froid"],["volume_de_jeu"]], gp) },
+    { label: "Défense", value: avgOf([
+      ["tacles",1.4],["marquage",1.4],["anticipation",1],["placement",1.2],["agressivite",0.6],
+    ], gp) },
+    { label: "Physique", value: avgOf([
+      ["endurance",1],["equilibre",0.8],["puissance",1],["qualite_physique_naturelle",1.2],
+    ], gp) },
+    { label: "Vitesse", value: avgOf([
+      ["acceleration",1.3],["vitesse",1.3],["agilite",0.8],
+    ], gp) },
+    { label: "Vision du jeu", value: avgOf([
+      ["vision_du_jeu",1.5],["passes",1.2],["inspiration",0.7],
+    ], gp) },
+    { label: "Attaque", value: avgOf([
+      ["finition",1.5],["appels_de_balle",1],["tir_de_loin",1],["penalty",0.4],
+    ], gp) },
+    { label: "Technique", value: avgOf([
+      ["technique",1.6],["controle_de_balle",1.6],["dribbles",1.4],
+      ["centres",0.5],["corners",0.35],["coup_franc",0.35],["touche_longues",0.35],
+    ], gp) },
+    { label: "Jeu aérien", value: avgOf([
+      ["jeu_de_tete",1.7],["detente_verticale",1.5],["puissance",0.5],
+    ], gp) },
+    { label: "Mental", value: avgOf([
+      ["decisions",1.2],["concentration",1.1],["sang_froid",1.1],["anticipation",1],
+      ["determination",1],["jeu_collectif",1],["leadership",0.8],["courage",0.8],
+      ["volume_de_jeu",0.9],["agressivite",0.6],
+    ], gp) },
   ];
 }
 
