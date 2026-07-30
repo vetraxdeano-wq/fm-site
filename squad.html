@@ -68,8 +68,9 @@
   .nat-chip {
     display: inline-flex; align-items: center; justify-content: center;
     background: #14171d; border: 1px solid var(--border);
-    font-size: 16px; padding: 2px 7px; border-radius: 5px; min-width: 28px;
+    padding: 3px 6px; border-radius: 5px; min-width: 28px; min-height: 18px;
   }
+  .flag-icon { width: 20px; height: auto; display: block; border-radius: 2px; }
   .status-chip {
     display: inline-block; background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.35);
     color: var(--gold); font-size: 11px; padding: 2px 7px; border-radius: 5px; font-weight: 600;
@@ -156,44 +157,49 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// Drapeaux : Angleterre / Ecosse / Pays de Galles n'ont pas de code ISO propre,
-// on utilise les sequences d'emoji drapeau regional dediees.
-const GB_SUBFLAGS = {
-  ENG: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
-  SCO: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
-  WAL: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}",
-};
+// Drapeaux : Angleterre / Ecosse / Pays de Galles utilisent les codes de subdivision
+// geres par flagcdn.com (gb-eng, gb-sct, gb-wls), pas de code ISO propre.
+const GB_SUBCODES = { ENG: "gb-eng", SCO: "gb-sct", WAL: "gb-wls" };
 
 // Codes a 3 lettres (style FIFA) -> code ISO 3166-1 alpha-2
 const NAT_CODE_TO_ISO2 = {
-  FRA: "FR", GER: "DE", ALL: "DE", ESP: "ES", ITA: "IT", POR: "PT", NED: "NL",
-  HOL: "NL", BEL: "BE", NIR: "GB", IRL: "IE", SUI: "CH", AUT: "AT", TUR: "TR",
-  GRE: "GR", RUS: "RU", UKR: "UA", POL: "PL", CZE: "CZ", CRO: "HR", SRB: "RS",
-  ROU: "RO", BUL: "BG", HUN: "HU", DEN: "DK", SWE: "SE", NOR: "NO", FIN: "FI",
-  ISL: "IS", BRA: "BR", ARG: "AR", URU: "UY", CHI: "CL", COL: "CO", PER: "PE",
-  ECU: "EC", PAR: "PY", BOL: "BO", VEN: "VE", MEX: "MX", USA: "US", CAN: "CA",
-  JPN: "JP", KOR: "KR", AUS: "AU", MAR: "MA", ALG: "DZ", TUN: "TN", SEN: "SN",
-  CIV: "CI", CMR: "CM", NGA: "NG", GHA: "GH", EGY: "EG", KSA: "SA", QAT: "QA",
-  CHN: "CN", BIH: "BA", SVK: "SK", SVN: "SI", ALB: "AL", MKD: "MK", MNE: "ME",
-  ISR: "IL", GEO: "GE", ARM: "AM", AZE: "AZ", KAZ: "KZ", LUX: "LU", CYP: "CY",
-  MLT: "MT", LTU: "LT", LVA: "LV", EST: "EE", BLR: "BY", MDA: "MD", FRO: "FO",
-  AND: "AD", SMR: "SM", LIE: "LI", GIB: "GB",
+  FRA: "fr", GER: "de", ALL: "de", ESP: "es", ITA: "it", POR: "pt", NED: "nl",
+  HOL: "nl", BEL: "be", NIR: "gb", IRL: "ie", SUI: "ch", AUT: "at", TUR: "tr",
+  GRE: "gr", RUS: "ru", UKR: "ua", POL: "pl", CZE: "cz", CRO: "hr", SRB: "rs",
+  ROU: "ro", BUL: "bg", HUN: "hu", DEN: "dk", SWE: "se", NOR: "no", FIN: "fi",
+  ISL: "is", BRA: "br", ARG: "ar", URU: "uy", CHI: "cl", COL: "co", PER: "pe",
+  ECU: "ec", PAR: "py", BOL: "bo", VEN: "ve", MEX: "mx", USA: "us", CAN: "ca",
+  JPN: "jp", KOR: "kr", AUS: "au", MAR: "ma", ALG: "dz", TUN: "tn", SEN: "sn",
+  CIV: "ci", CMR: "cm", NGA: "ng", GHA: "gh", EGY: "eg", KSA: "sa", QAT: "qa",
+  CHN: "cn", BIH: "ba", SVK: "sk", SVN: "si", ALB: "al", MKD: "mk", MNE: "me",
+  ISR: "il", GEO: "ge", ARM: "am", AZE: "az", KAZ: "kz", LUX: "lu", CYP: "cy",
+  MLT: "mt", LTU: "lt", LVA: "lv", EST: "ee", BLR: "by", MDA: "md", FRO: "fo",
+  AND: "ad", SMR: "sm", LIE: "li", GIB: "gb", GNB: "gw", GAM: "gm", MLI: "ml",
+  BFA: "bf", GAB: "ga", COD: "cd", RSA: "za", ANG: "ao", MOZ: "mz", ZIM: "zw",
+  KEN: "ke", ETH: "et", TAN: "tz", UGA: "ug", CPV: "cv", GUI: "gn", GNE: "gq",
+  TOG: "tg", BEN: "bj", NIG: "ne", TCH: "td", CTA: "cf", CGO: "cg", RWA: "rw",
+  ZAM: "zm", MWI: "mw", NAM: "na", BOT: "bw", SWZ: "sz", LES: "ls", MDG: "mg",
+  IND: "in", PAK: "pk", THA: "th", VIE: "vn", IDN: "id", MAS: "my",
+  SIN: "sg", PHI: "ph", IRN: "ir", IRQ: "iq", SYR: "sy", LIB: "lb", JOR: "jo",
+  UAE: "ae", OMA: "om", KUW: "kw", BHR: "bh", YEM: "ye", AFG: "af", UZB: "uz",
+  KGZ: "kg", TJK: "tj", TKM: "tm", MNG: "mn", NZL: "nz", FIJ: "fj", HAI: "ht",
+  JAM: "jm", TRI: "tt", CRC: "cr", PAN: "pa", HON: "hn", GUA: "gt", NCA: "ni",
+  SLV: "sv", CUB: "cu", DOM: "do", PUR: "pr",
 };
 
-function flagFromIso2(iso2) {
-  return [...iso2.toUpperCase()]
-    .map(c => String.fromCodePoint(0x1F1E6 + (c.charCodeAt(0) - 65)))
-    .join("");
+function flagCodeForNat(code) {
+  if (!code) return null;
+  const c = code.trim().toUpperCase();
+  if (GB_SUBCODES[c]) return GB_SUBCODES[c];
+  if (NAT_CODE_TO_ISO2[c]) return NAT_CODE_TO_ISO2[c];
+  if (/^[A-Z]{2}$/.test(c)) return c.toLowerCase(); // deja un code ISO2
+  return null; // inconnu : on retombera sur le texte brut
 }
 
-function flagForNatCode(code) {
-  if (!code) return "";
-  const c = code.trim().toUpperCase();
-  if (GB_SUBFLAGS[c]) return GB_SUBFLAGS[c];
-  const iso2 = NAT_CODE_TO_ISO2[c];
-  if (iso2) return flagFromIso2(iso2);
-  if (/^[A-Z]{2}$/.test(c)) return flagFromIso2(c); // deja un code ISO2
-  return null; // inconnu : on retombera sur le texte brut
+function flagImg(code, label) {
+  const flagCode = flagCodeForNat(code);
+  if (!flagCode) return escapeHtml(label || code || "-");
+  return `<img class="flag-icon" src="https://flagcdn.com/${flagCode}.svg" alt="${escapeHtml(code)}" loading="lazy">`;
 }
 
 function formatMoneyShort(n) {
@@ -249,9 +255,11 @@ function formatDate(d) {
   return date.toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
 }
 
+let gameCurrentDate = null; // date en jeu, calculee a partir de date_debut + jour_actuel
+
 function isContractSoon(d) {
-  if (!d) return false;
-  const months = (new Date(d) - new Date()) / (1000 * 60 * 60 * 24 * 30);
+  if (!d || !gameCurrentDate) return false;
+  const months = (new Date(d) - gameCurrentDate) / (1000 * 60 * 60 * 24 * 30);
   return months < 6;
 }
 
@@ -265,6 +273,17 @@ async function loadSquad() {
   if (!session?.user) {
     window.location.href = "index.html";
     return;
+  }
+
+  const { data: game, error: gameErr } = await supabaseClient
+    .from("games")
+    .select("date_debut, jour_actuel")
+    .eq("id", gameId)
+    .single();
+
+  if (!gameErr && game) {
+    gameCurrentDate = new Date(game.date_debut);
+    gameCurrentDate.setDate(gameCurrentDate.getDate() + (game.jour_actuel || 0));
   }
 
   const { data: club, error: clubErr } = await supabaseClient
@@ -308,7 +327,7 @@ async function loadSquad() {
   body.innerHTML = players.map(p => `
     <tr>
       <td>${p.statut_special ? `<span class="status-chip">${escapeHtml(p.statut_special)}</span>` : ""}</td>
-      <td><span class="nat-chip" title="${escapeHtml(p.nationalite || '')}">${flagForNatCode(p.nationalite) ?? escapeHtml(p.nationalite || "-")}</span></td>
+      <td><span class="nat-chip" title="${escapeHtml(p.nationalite || '')}">${flagImg(p.nationalite)}</span></td>
       <td>${p.age ?? "-"}</td>
       <td class="player-name">${escapeHtml(p.nom)}</td>
       <td class="postes-cell">${escapeHtml(p.poste_brut || "-")}</td>
