@@ -254,38 +254,104 @@
   }
   .fm-nav-icon { width: 18px; text-align: center; flex-shrink: 0; }
 
-  .fm-content-wrap{
-  flex:1;
-  min-width:0;
-  min-height:0;
-  overflow:auto;
-  padding:12px;
-}
-.fm-content{
-  width:100%;
-  min-height:100%;
-  display:grid;
-  grid-template-columns:2.2fr 1.3fr;
-  gap:12px;
-}
-.fm-col{
-  display:grid;
-  grid-template-rows:repeat(3,minmax(220px,1fr));
-  gap:12px;
-  min-height:0;
-}
-.fm-col .card{
-  margin:0;
-  padding:14px 18px;
-  display:flex;
-  flex-direction:column;
-  min-height:0;
-}
-.fm-col .card>*:not(.fm-card-title){
-  flex:1;
-  overflow:visible;
-}
-@media (max-width: 900px) {
+  .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 16px 24px; }
+  .fm-content {
+    width:100%;
+    height:100%;
+    display:grid;
+    grid-template-columns:68% 32%;
+    gap:16px;
+    align-items:stretch; }
+  .fm-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: 100%; min-height: 0; }
+
+  /* Les 3 cartes de chaque colonne se partagent la hauteur a parts egales
+     (pas de trous), et seul le contenu interne d'une carte scrolle si
+     besoin (ex: classement d'une grande division) — jamais toute la page. */
+  .fm-col .card { flex: 0 0 auto; min-height:220px; margin-bottom:0; padding:14px 18px; display:flex; flex-direction:column; }
+  .fm-col .card .fm-card-title { flex: 0 0 auto; }
+  .fm-col .card > *:not(.fm-card-title) { flex:1; min-height:0; overflow:visible; }
+
+  .fm-card-title {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--gold); margin-bottom: 14px;
+  }
+  .fm-card-title .chev { color: var(--text-dim); font-size: 11px; font-weight: 400; }
+  .fm-empty { color: var(--text-dim); font-size: 13px; padding: 6px 0 2px; line-height: 1.5; }
+
+  .fm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .fm-table th {
+    text-align: left; color: var(--text-dim); font-weight: 600; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.03em; padding: 5px 7px; border-bottom: 1px solid var(--border);
+  }
+  .fm-table td { padding: 7px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .fm-table tr:last-child td { border-bottom: none; }
+  .fm-table tr.me td { background: rgba(251,191,36,0.1); }
+  .fm-table td.clt { color: var(--text-dim); width: 26px; }
+  .fm-table td.num { color: var(--text-dim); text-align: center; width: 30px; }
+
+  .fm-stat-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .fm-stat-row:last-child { border-bottom: none; }
+  .fm-stat-row .label { color: var(--text-dim); }
+  .fm-stat-row .value { font-weight: 700; }
+
+  .fm-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .fm-mini-grid .label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--text-dim); margin-bottom: 3px;
+  }
+  .fm-mini-grid .value { font-size: 13.5px; font-weight: 600; }
+
+  /* Mini graphique d'historique financier (repris dans l'onglet Finance) */
+  .fm-chart-wrap { margin-top: 10px; }
+  .fm-chart-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .fm-chart-header .title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .fm-chart-legend { display: flex; gap: 12px; font-size: 11px; color: var(--text-dim); }
+  .fm-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .fm-chart-legend .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .fm-chart-legend .dot.gain { background: var(--accent); }
+  .fm-chart-legend .dot.perte { background: var(--danger); }
+  .fm-chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .fm-chart-line { vector-effect: non-scaling-stroke; }
+  .fm-chart-area { opacity: 0.9; }
+  .fm-chart-dot { transition: r 0.15s; cursor: default; }
+  .fm-chart-dot:hover { r: 4.5; }
+  .fm-chart-labels {
+    display: flex; justify-content: space-between; margin-top: 4px;
+    font-size: 10px; color: var(--text-dim);
+  }
+
+  /* Boite de reception (messages) */
+  .fm-inbox-list { display: flex; flex-direction: column; gap: 2px; }
+  .fm-inbox-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12.5px;
+  }
+  .fm-inbox-item:last-child { border-bottom: none; }
+  .fm-inbox-icon {
+    width: 28px; height: 28px; border-radius: 8px; background: rgba(251,191,36,0.1);
+    display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0;
+  }
+  .fm-inbox-text { flex: 1; min-width: 0; }
+  .fm-inbox-text .subject { font-weight: 600; color: var(--text); }
+  .fm-inbox-text .preview {
+    color: var(--text-dim); font-size: 11.5px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .fm-inbox-time { font-size: 10.5px; color: var(--text-dim); flex-shrink: 0; }
+  .fm-inbox-empty {
+    text-align: center; color: var(--text-dim); font-size: 12.5px;
+    padding: 26px 10px 10px; line-height: 1.6;
+  }
+  .fm-inbox-empty .big-icon { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.6; }
+
+  @media (max-width: 900px) {
     .fm-header { padding: 10px 14px; }
     .fm-header .back-link { display: none; }
     .fm-body { flex-direction: column; }
@@ -373,7 +439,7 @@
         <div class="fm-col">
           <div class="card">
             <div class="fm-card-title"><span>Classement</span> <span class="chev">▾</span></div>
-            <div id="fmStandings" class="fm-empty" style="overflow:visible">Chargement...</div>
+            <div id="fmStandings" class="fm-empty">Chargement...</div>
           </div>
           <div class="card">
             <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
