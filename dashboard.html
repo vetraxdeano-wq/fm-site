@@ -319,6 +319,8 @@
   .fm-table tr.me td { background: rgba(251,191,36,0.1); }
   .fm-table td.clt { color: var(--text-dim); width: 26px; }
   .fm-table td.num { color: var(--text-dim); text-align: center; width: 30px; }
+  .fm-club-link { cursor: pointer; }
+  .fm-club-link:hover { color: var(--accent); text-decoration: underline; }
 
   /* ---- Base de donnees de joueurs (sous-onglet du dashboard) ---- */
   .fm-players-db {
@@ -340,6 +342,34 @@
   }
   .pdb-field input[type="text"] { width: 190px; }
   .pdb-field input[type="text"]:focus, .pdb-field select:focus { border-color: var(--accent-dim); }
+
+  .pdb-nation-field { position: relative; }
+  .pdb-nation-select { position: relative; }
+  .pdb-nation-trigger {
+    background: #14171d; border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit; outline: none;
+    width: 190px; text-align: left; cursor: pointer; display: flex; align-items: center;
+  }
+  .pdb-nation-trigger:hover { border-color: var(--text-dim); }
+  .pdb-nation-trigger .flag-icon { width: 16px; height: 12px; object-fit: cover; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .pdb-nation-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; width: 240px; z-index: 30;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.45); padding: 8px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .pdb-nation-panel.hidden { display: none; }
+  .pdb-nation-search {
+    background: #0e1015; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 12.5px; font-family: inherit; outline: none;
+  }
+  .pdb-nation-search:focus { border-color: var(--accent-dim); }
+  .pdb-nation-options { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; }
+  .pdb-nation-option {
+    display: flex; align-items: center; padding: 6px 8px; font-size: 12.5px; border-radius: 6px; cursor: pointer;
+  }
+  .pdb-nation-option:hover { background: rgba(251,191,36,0.1); }
+  .pdb-nation-option.active { background: rgba(251,191,36,0.16); color: var(--gold); }
+  .pdb-nation-option .flag-icon { width: 16px; height: 12px; object-fit: cover; border-radius: 2px; margin-right: 7px; vertical-align: middle; flex: 0 0 auto; }
   .pdb-checkbox-field {
     display: flex; align-items: center; gap: 7px; padding-top: 16px; font-size: 13px; user-select: none;
     cursor: pointer;
@@ -369,6 +399,8 @@
   .pdb-table tbody tr:hover td { background: rgba(251,191,36,0.06); }
   .pdb-table .flag-icon { width: 16px; height: 12px; object-fit: cover; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
   .pdb-name-cell { font-weight: 600; }
+  .pdb-club-link { cursor: pointer; }
+  .pdb-club-link:hover { color: var(--accent); text-decoration: underline; }
   .pdb-rep-stars { color: var(--gold); letter-spacing: 1px; }
   .pdb-empty-cell { color: var(--text-dim); }
 
@@ -619,9 +651,25 @@
             <label for="pdbPosteSelect">Poste</label>
             <select id="pdbPosteSelect"><option value="">Tous</option></select>
           </div>
+          <div class="pdb-field pdb-nation-field">
+            <label for="pdbNationTrigger">Nation</label>
+            <div class="pdb-nation-select" id="pdbNationSelectWrap">
+              <button type="button" class="pdb-nation-trigger" id="pdbNationTrigger">Toutes</button>
+              <div class="pdb-nation-panel hidden" id="pdbNationPanel">
+                <input type="text" class="pdb-nation-search" id="pdbNationSearch" placeholder="Rechercher une nation...">
+                <div class="pdb-nation-options" id="pdbNationOptions"></div>
+              </div>
+            </div>
+          </div>
           <div class="pdb-field">
-            <label for="pdbNationSelect">Nation</label>
-            <select id="pdbNationSelect"><option value="">Toutes</option></select>
+            <label for="pdbContractSelect">Contrat</label>
+            <select id="pdbContractSelect">
+              <option value="">Tous</option>
+              <option value="libre">Agents libres</option>
+              <option value="3m">Expire dans -3 mois</option>
+              <option value="6m">Expire dans -6 mois</option>
+              <option value="1y">Expire dans -1 an</option>
+            </select>
           </div>
           <label class="pdb-checkbox-field" for="pdbTransferCheckbox">
             <input type="checkbox" id="pdbTransferCheckbox">
@@ -1199,6 +1247,7 @@ let pdbClubReputation = null;
 let pdbClubReputationById = {};
 let pdbUserClubId = null;
 let pdbFiltersWired = false;
+let pdbNationValue = "";
 
 // Marge de tolerance autour de la reputation du club pour le mode "interesse
 // par transfert". Resserree fortement (etait 10%) : un club a 5000 de
@@ -1353,12 +1402,35 @@ function wirePlayersDbFilters(clubId) {
 
   document.getElementById("pdbSearchInput").addEventListener("input", () => applyPlayersDbFilters(clubId));
   document.getElementById("pdbPosteSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
-  document.getElementById("pdbNationSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
+  document.getElementById("pdbContractSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
   document.getElementById("pdbTransferCheckbox").addEventListener("change", () => applyPlayersDbFilters(clubId));
+
+  document.getElementById("pdbNationTrigger").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleNationPanel();
+  });
+  document.getElementById("pdbNationSearch").addEventListener("input", (e) => {
+    renderNationOptions(pdbAllNationsCache, e.target.value);
+  });
+  document.getElementById("pdbNationOptions").addEventListener("click", (e) => {
+    const opt = e.target.closest(".pdb-nation-option");
+    if (!opt) return;
+    pdbNationValue = opt.dataset.value || "";
+    updateNationTriggerLabel();
+    closeNationPanel();
+    applyPlayersDbFilters(clubId);
+  });
+  document.addEventListener("click", (e) => {
+    const wrap = document.getElementById("pdbNationSelectWrap");
+    if (wrap && !wrap.contains(e.target)) closeNationPanel();
+  });
+
   document.getElementById("pdbResetBtn").addEventListener("click", () => {
     document.getElementById("pdbSearchInput").value = "";
     document.getElementById("pdbPosteSelect").value = "";
-    document.getElementById("pdbNationSelect").value = "";
+    document.getElementById("pdbContractSelect").value = "";
+    pdbNationValue = "";
+    updateNationTriggerLabel();
     document.getElementById("pdbTransferCheckbox").checked = false;
     resetAdvancedFilters();
     updateMoreFiltersButtonLabel();
@@ -1379,12 +1451,69 @@ function wirePlayersDbFilters(clubId) {
   });
 
   document.getElementById("pdbTableBody").addEventListener("click", (e) => {
+    const clubLink = e.target.closest(".pdb-club-link");
+    if (clubLink) {
+      const clubId = clubLink.getAttribute("data-club-id");
+      if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+      return;
+    }
     const row = e.target.closest("tr[data-player]");
     if (!row) return;
     const playerId = row.getAttribute("data-player");
     const playerClubId = row.getAttribute("data-club") || "";
     window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(playerClubId)}&player=${encodeURIComponent(playerId)}`;
   });
+}
+
+// Le nombre de joueurs peut largement depasser la limite par defaut de
+// Supabase/PostgREST (1000 lignes par requete) : ici, la base compte plus de
+// 75 000 joueurs pour une seule partie. On recupere donc TOUT en paginant
+// via .range(), par lots de requetes en parallele pour rester rapide, avant
+// de trier a nouveau cote client par reputation mondiale decroissante
+// (l'ordre de tri initial de l'ancien "order().limit()" n'est plus fiable
+// avec la pagination par plages).
+async function fetchAllGamePlayers(gameId, onProgress) {
+  const PAGE_SIZE = 1000;
+  const CONCURRENCY = 6;
+
+  const { count, error: countError } = await supabaseClient
+    .from("game_players")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", gameId);
+  if (countError) throw countError;
+
+  const total = count || 0;
+  if (total === 0) return [];
+
+  const pageStarts = [];
+  for (let from = 0; from < total; from += PAGE_SIZE) pageStarts.push(from);
+
+  const all = [];
+  for (let i = 0; i < pageStarts.length; i += CONCURRENCY) {
+    const batch = pageStarts.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(batch.map(from =>
+      supabaseClient
+        .from("game_players")
+        .select("*")
+        .eq("game_id", gameId)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+    ));
+    for (const { data, error } of results) {
+      if (error) throw error;
+      all.push(...(data || []));
+    }
+    if (onProgress) onProgress(all.length, total);
+  }
+
+  all.sort((a, b) => {
+    const ra = Number(a.reputation_mondiale), rb = Number(b.reputation_mondiale);
+    const va = Number.isFinite(ra) ? ra : -Infinity;
+    const vb = Number.isFinite(rb) ? rb : -Infinity;
+    return vb - va;
+  });
+
+  return all;
 }
 
 async function loadPlayersDb(clubId) {
@@ -1394,16 +1523,9 @@ async function loadPlayersDb(clubId) {
   countEl.textContent = "Chargement...";
 
   try {
-    // Supabase limite les requetes a 1000 lignes par defaut : si la base
-    // depasse ce volume, augmenter la limite du projet ou passer par une
-    // recherche paginee/filtree cote serveur.
-    const { data: players, error } = await supabaseClient
-      .from("game_players")
-      .select("*")
-      .eq("game_id", gameId)
-      .order("reputation_mondiale", { ascending: false, nullsFirst: false })
-      .limit(2000);
-    if (error) throw error;
+    const players = await fetchAllGamePlayers(gameId, (loaded, total) => {
+      countEl.textContent = `Chargement des joueurs... (${loaded.toLocaleString("fr-FR")}/${total.toLocaleString("fr-FR")})`;
+    });
 
     pdbAllPlayers = players || [];
     // Precalcule une seule fois l'ensemble des postes atomiques de chaque
@@ -1494,23 +1616,84 @@ async function fetchClubReputationsByGameClubId(clubIds) {
   }
 }
 
+let pdbAllNationsCache = [];
+
 function populatePlayersDbFilterOptions() {
   const posteSet = new Set();
   pdbAllPlayers.forEach(p => p._atomicPostes.forEach(a => posteSet.add(a)));
   const postes = [...posteSet].sort(comparePostesAtomic);
-  const nations = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))].sort();
+  pdbAllNationsCache = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))].sort();
 
   const posteSelect = document.getElementById("pdbPosteSelect");
   posteSelect.innerHTML = `<option value="">Tous</option>` + postes.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
 
-  const nationSelect = document.getElementById("pdbNationSelect");
-  nationSelect.innerHTML = `<option value="">Toutes</option>` + nations.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  renderNationOptions(pdbAllNationsCache);
+  updateNationTriggerLabel();
+}
+
+// ---- Dropdown Nation custom (avec drapeaux, reprend nationLabel() deja
+// utilise dans le tableau) : un <select> natif ne peut pas afficher d'image
+// dans ses <option>, d'ou ce petit menu maison.
+function renderNationOptions(nations, filterText = "") {
+  const q = filterText.trim().toLowerCase();
+  const list = q ? nations.filter(n => n.toLowerCase().includes(q)) : nations;
+  const optionsEl = document.getElementById("pdbNationOptions");
+  if (!optionsEl) return;
+  const allActiveClass = pdbNationValue === "" ? " active" : "";
+  optionsEl.innerHTML = `<div class="pdb-nation-option${allActiveClass}" data-value="">Toutes</div>` +
+    list.map(n => `<div class="pdb-nation-option${pdbNationValue === n ? " active" : ""}" data-value="${escapeHtml(n)}">${nationLabel(n)}</div>`).join("");
+}
+
+function updateNationTriggerLabel() {
+  const trigger = document.getElementById("pdbNationTrigger");
+  if (!trigger) return;
+  trigger.innerHTML = pdbNationValue ? nationLabel(pdbNationValue) : "Toutes";
+}
+
+function toggleNationPanel() {
+  const panel = document.getElementById("pdbNationPanel");
+  const willOpen = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden");
+  if (willOpen) {
+    const search = document.getElementById("pdbNationSearch");
+    search.value = "";
+    renderNationOptions(pdbAllNationsCache);
+    search.focus();
+  }
+}
+
+function closeNationPanel() {
+  const panel = document.getElementById("pdbNationPanel");
+  if (panel) panel.classList.add("hidden");
+}
+
+// Statut de contrat, calcule par rapport a la date "en jeu" actuelle
+// (date_debut + jour_actuel), pas la date reelle du navigateur.
+function getPdbContractCutoff(months) {
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel) || new Date();
+  const cutoff = new Date(today);
+  cutoff.setMonth(cutoff.getMonth() + months);
+  return { today, cutoff };
+}
+
+function playerPassesContractFilter(p, contractValue) {
+  if (!contractValue) return true;
+  if (contractValue === "libre") return !p.game_club_id;
+  if (!p.contrat_expire) return false;
+  const expireDate = new Date(`${p.contrat_expire}T00:00:00`);
+  if (isNaN(expireDate.getTime())) return false;
+  const monthsMap = { "3m": 3, "6m": 6, "1y": 12 };
+  const months = monthsMap[contractValue];
+  if (!months) return true;
+  const { today, cutoff } = getPdbContractCutoff(months);
+  return expireDate >= today && expireDate <= cutoff;
 }
 
 function applyPlayersDbFilters(clubId) {
   const q = document.getElementById("pdbSearchInput").value.trim().toLowerCase();
   const poste = document.getElementById("pdbPosteSelect").value;
-  const nation = document.getElementById("pdbNationSelect").value;
+  const nation = pdbNationValue;
+  const contractValue = document.getElementById("pdbContractSelect").value;
   const interestedOnly = document.getElementById("pdbTransferCheckbox").checked;
 
   let filtered = pdbAllPlayers;
@@ -1544,6 +1727,9 @@ function applyPlayersDbFilters(clubId) {
   }
   if (nation) {
     filtered = filtered.filter(p => p.nationalite === nation);
+  }
+  if (contractValue) {
+    filtered = filtered.filter(p => playerPassesContractFilter(p, contractValue));
   }
   if (hasActiveAdvancedFilters()) {
     filtered = filtered.filter(playerPassesAdvancedFilters);
@@ -1587,7 +1773,9 @@ function renderPlayersDbTable(players) {
   }
 
   tbody.innerHTML = players.map(p => {
-    const clubName = p.game_club_id ? (pdbClubNameById[p.game_club_id] || "-") : "Libre";
+    const clubCell = p.game_club_id
+      ? `<span class="pdb-club-link" data-club-id="${p.game_club_id}">${escapeHtml(pdbClubNameById[p.game_club_id] || "-")}</span>`
+      : "Libre";
     const poste = p.poste_brut || "-";
     const age = p.age ?? "-";
     const nation = p.nationalite;
@@ -1614,7 +1802,7 @@ function renderPlayersDbTable(players) {
     return `
       <tr data-player="${p.id}" data-club="${p.game_club_id ?? ""}">
         <td class="pdb-name-cell">${escapeHtml(p.nom || "-")}</td>
-        <td>${escapeHtml(clubName)}</td>
+        <td>${clubCell}</td>
         <td>${escapeHtml(poste)}</td>
         <td>${escapeHtml(String(age))}</td>
         <td>${nationCell}</td>
@@ -2172,7 +2360,7 @@ async function renderStandings(club) {
         ${rivals.map((r, i) => `
           <tr class="${r.game_club_id === club.game_club_id ? "me" : ""}">
             <td class="clt">${r.classement ?? (i + 1)}e</td>
-            <td>${escapeHtml(r.nom)}</td>
+            <td><span class="fm-club-link" data-club-id="${r.game_club_id}">${escapeHtml(r.nom)}</span></td>
             <td class="num">0</td>
             <td class="num">0</td>
             <td class="num">0</td>
@@ -2181,6 +2369,14 @@ async function renderStandings(club) {
       </tbody>
     </table>
   `;
+
+  el.querySelectorAll(".fm-club-link").forEach(linkEl => {
+    linkEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const clubId = linkEl.getAttribute("data-club-id");
+      if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+    });
+  });
 }
 
 async function showMyClub(gameClubId, canChange) {
