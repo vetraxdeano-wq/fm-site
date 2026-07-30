@@ -194,6 +194,97 @@
   .club-name-link:hover { color: var(--accent); text-decoration: underline; }
   .my-club-header .meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
   button.secondary.small { padding: 6px 10px; font-size: 12px; }
+
+  /* ============================================================
+     DASHBOARD EN JEU (une fois le club choisi) - style FM
+     ============================================================ */
+  .fm-header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+    gap: 14px; padding: 16px 22px; border-radius: 12px; margin-bottom: 16px;
+    background: linear-gradient(120deg, #4c1116, #7a1620 55%, #9c2430);
+    border: 1px solid rgba(0,0,0,0.3);
+  }
+  .fm-header .title-block .page-title {
+    font-size: 19px; font-weight: 800; letter-spacing: 0.02em; color: #fff;
+  }
+  .fm-header .title-block .manager-line {
+    font-size: 12px; color: rgba(255,255,255,0.78); margin-top: 3px;
+  }
+  .fm-header .right-block { display: flex; align-items: center; gap: 12px; }
+  .fm-date-badge {
+    background: rgba(0,0,0,0.28); border-radius: 8px; padding: 7px 14px;
+    text-align: right; line-height: 1.35; color: #fff;
+  }
+  .fm-date-badge .day-num { font-size: 14px; font-weight: 800; }
+  .fm-date-badge .season-line { font-size: 11px; color: rgba(255,255,255,0.7); }
+  .fm-continue-btn {
+    background: var(--gold); color: #3a2a00; border: none; padding: 10px 20px;
+    border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer;
+    white-space: nowrap;
+  }
+  .fm-continue-btn:hover { filter: brightness(1.08); }
+  .fm-continue-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .fm-body { display: flex; gap: 16px; align-items: flex-start; }
+
+  .fm-sidebar {
+    width: 208px; flex-shrink: 0; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; padding: 6px 0;
+  }
+  .fm-nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px;
+    color: var(--text-dim); cursor: pointer; border-left: 3px solid transparent; user-select: none;
+  }
+  .fm-nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+  .fm-nav-item.active {
+    background: rgba(251,191,36,0.08); color: var(--gold); border-left-color: var(--gold); font-weight: 700;
+  }
+  .fm-nav-icon { width: 16px; text-align: center; flex-shrink: 0; }
+
+  .fm-content { flex: 1; min-width: 0; display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
+  .fm-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  .fm-card-title {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--gold); margin-bottom: 14px;
+  }
+  .fm-card-title .chev { color: var(--text-dim); font-size: 11px; font-weight: 400; }
+  .fm-empty { color: var(--text-dim); font-size: 13px; padding: 6px 0 2px; line-height: 1.5; }
+
+  .fm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .fm-table th {
+    text-align: left; color: var(--text-dim); font-weight: 600; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.03em; padding: 5px 7px; border-bottom: 1px solid var(--border);
+  }
+  .fm-table td { padding: 7px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .fm-table tr:last-child td { border-bottom: none; }
+  .fm-table tr.me td { background: rgba(251,191,36,0.1); }
+  .fm-table td.clt { color: var(--text-dim); width: 26px; }
+  .fm-table td.num { color: var(--text-dim); text-align: center; width: 30px; }
+
+  .fm-stat-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .fm-stat-row:last-child { border-bottom: none; }
+  .fm-stat-row .label { color: var(--text-dim); }
+  .fm-stat-row .value { font-weight: 700; }
+
+  .fm-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .fm-mini-grid .label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--text-dim); margin-bottom: 3px;
+  }
+  .fm-mini-grid .value { font-size: 13.5px; font-weight: 600; }
+
+  @media (max-width: 900px) {
+    .fm-body { flex-direction: column; }
+    .fm-sidebar { width: 100%; display: flex; overflow-x: auto; padding: 4px; }
+    .fm-nav-item { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+    .fm-nav-item.active { border-left-color: transparent; border-bottom-color: var(--gold); }
+    .fm-content { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -240,11 +331,41 @@
   </div>
 
   <div id="mainDashboard" class="hidden">
-    <div class="card" id="myClubCard"></div>
-    <div class="card">
-      <div class="empty-state">
-        🚧 Dashboard du jeu a venir (effectif, mercato, tactique, calendrier...)<br>
-        La structure de base est en place, on construit les onglets ensuite.
+    <div class="fm-header" id="fmHeader"></div>
+
+    <div class="fm-body">
+      <div class="fm-sidebar" id="fmSidebar"></div>
+
+      <div class="fm-content">
+        <div class="fm-col">
+          <div class="card">
+            <div class="fm-card-title"><span>Prochaine rencontre</span></div>
+            <div id="fmNextMatch" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
+            <div class="fm-card-title"><span>Infos club</span></div>
+            <div id="fmClubInfo" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
+            <div class="fm-card-title"><span>Entraînement</span></div>
+            <div id="fmTraining" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
+            <div class="fm-card-title"><span>Finances</span></div>
+            <div id="fmFinances" class="fm-empty">Chargement...</div>
+          </div>
+        </div>
+
+        <div class="fm-col">
+          <div class="card">
+            <div class="fm-card-title"><span>Classement</span> <span class="chev">▾</span></div>
+            <div id="fmStandings" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
+            <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
+            <div id="fmTeamStats" class="fm-empty">Chargement...</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -677,39 +798,223 @@ async function pickClub(gameClubId, btnEl) {
   }
 }
 
-async function showMyClub(gameClubId, canChange) {
-  const { data: club, error } = await supabaseClient
-    .from("game_club_overview")
-    .select("nom, budget_actuel")
-    .eq("game_club_id", gameClubId)
-    .single();
+// Icones (emoji) pour les onglets du menu vertical. Seuls "Page d'accueil" et
+// "Effectif" sont branches a une vraie page pour l'instant ; les autres
+// affichent un toast "bientot disponible" en attendant d'etre construits.
+const FM_NAV_ITEMS = [
+  { key: "accueil", icon: "🏠", label: "Page d'accueil", href: null },
+  { key: "effectif", icon: "👥", label: "Effectif", href: "squad.html" },
+  { key: "plan", icon: "🗂️", label: "Plan d'effectif", href: null },
+  { key: "tactiques", icon: "♟️", label: "Tactiques", href: null },
+  { key: "entrainement", icon: "🏋️", label: "Entraînement", href: null },
+  { key: "medical", icon: "➕", label: "Centre médical", href: null },
+  { key: "calendrier", icon: "📅", label: "Calendrier", href: null },
+  { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
+  { key: "recrutement", icon: "🔎", label: "Recrutement", href: null },
+  { key: "transferts", icon: "🔁", label: "Transferts", href: null },
+  { key: "infosclub", icon: "🛡️", label: "Infos club", href: null },
+  { key: "finances", icon: "💶", label: "Finances", href: null },
+];
 
-  const card = document.getElementById("myClubCard");
-  if (error || !club) {
-    card.innerHTML = `<div class="empty-state">Impossible de charger ton club.</div>`;
-    return;
-  }
+function renderFmSidebar(gameClubId) {
+  const el = document.getElementById("fmSidebar");
+  el.innerHTML = FM_NAV_ITEMS.map(item => `
+    <div class="fm-nav-item ${item.key === "accueil" ? "active" : ""}" data-key="${item.key}">
+      <span class="fm-nav-icon">${item.icon}</span>
+      <span>${item.label}</span>
+    </div>
+  `).join("");
 
-  card.innerHTML = `
-    <div class="my-club-header">
-      <div>
-        <button class="club-name-link" id="myClubNameBtn">${escapeHtml(club.nom)}</button>
-        <div class="meta">Budget ${formatMoney(club.budget_actuel)}</div>
+  el.querySelectorAll(".fm-nav-item").forEach(row => {
+    const item = FM_NAV_ITEMS.find(i => i.key === row.getAttribute("data-key"));
+    row.addEventListener("click", () => {
+      if (item.key === "accueil") return;
+      if (item.href) {
+        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
+      } else {
+        toast(`${item.label} arrive bientôt !`);
+      }
+    });
+  });
+}
+
+function renderFmHeader(club, pseudo, game) {
+  const el = document.getElementById("fmHeader");
+  const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml(club.nom.toUpperCase())} (ID:${club.game_club_id})`;
+
+  el.innerHTML = `
+    <div class="title-block">
+      <div class="page-title">PAGE D'ACCUEIL</div>
+      <div class="manager-line">${managerLine}</div>
+    </div>
+    <div class="right-block">
+      <div class="fm-date-badge">
+        <div class="day-num">Jour ${game.jour_actuel ?? "-"}</div>
+        <div class="season-line">Saison ${escapeHtml(String(game.saison ?? "-"))}</div>
       </div>
-      ${canChange ? `<button class="secondary" id="changeClubBtn">Changer de club</button>` : ""}
+      <button class="fm-continue-btn" id="fmContinueBtn" ${game.statut === "lobby" ? "disabled" : ""}>
+        CONTINUER
+      </button>
     </div>
   `;
 
-  document.getElementById("myClubNameBtn").addEventListener("click", () => {
-    window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
+  document.getElementById("fmContinueBtn").addEventListener("click", () => {
+    toast("La simulation des journées arrive bientôt 🚧");
   });
+}
+
+function renderClubInfo(club) {
+  const el = document.getElementById("fmClubInfo");
+  el.innerHTML = `
+    <div class="fm-mini-grid">
+      <div class="detail-item">
+        <div class="label">Statut</div>
+        <div class="value">${escapeHtml(club.statut || "-")}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Classement pronostiqué</div>
+        <div class="value">${club.classement ? club.classement + "e" : "-"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Niveau d'entraînement</div>
+        <div class="value">${club.niveau_entrainement ? starsHtml(starsFromScale(club.niveau_entrainement)) : "-"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Centre de formation</div>
+        <div class="value">${club.centre_formation && club.centre_formation > 0 ? starsHtml(starsFromScale(club.centre_formation)) : "Aucun"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Stade</div>
+        <div class="value">${formatInt(club.capacite_stade)} places</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Meilleur joueur</div>
+        <div class="value">${escapeHtml(club.meilleur_joueur_nom || "-")}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderFinances(club) {
+  const el = document.getElementById("fmFinances");
+  el.innerHTML = `
+    <div class="fm-stat-row">
+      <span class="label">Budget disponible</span>
+      <span class="value">${formatMoney(club.budget_actuel)}</span>
+    </div>
+    <div class="fm-empty" style="padding-top:8px;">Détail des salaires et du budget transferts à venir.</div>
+  `;
+}
+
+function renderTeamStats() {
+  // Aucune donnee de saison (matchs joues, buts...) n'est encore reliee au
+  // dashboard : on affiche l'etat honnete d'une pre-saison qui n'a pas commence.
+  const el = document.getElementById("fmTeamStats");
+  el.innerHTML = `
+    <div class="fm-stat-row"><span class="label">Matchs disputés</span><span class="value">0</span></div>
+    <div class="fm-stat-row"><span class="label">Buts inscrits</span><span class="value">0</span></div>
+    <div class="fm-stat-row"><span class="label">Buts encaissés</span><span class="value">0</span></div>
+    <div class="fm-stat-row"><span class="label">Cartons jaunes</span><span class="value">0</span></div>
+    <div class="fm-stat-row"><span class="label">Cartons rouges</span><span class="value">0</span></div>
+  `;
+}
+
+function renderNextMatch() {
+  // Pas encore de calendrier de matchs relie au jeu.
+  const el = document.getElementById("fmNextMatch");
+  el.innerHTML = `Aucun match programmé pour l'instant.`;
+}
+
+function renderTraining() {
+  const el = document.getElementById("fmTraining");
+  el.innerHTML = `Le planning d'entraînement n'est pas encore configuré.`;
+}
+
+async function renderStandings(club) {
+  const el = document.getElementById("fmStandings");
+
+  if (!club.nation || !club.division) {
+    el.innerHTML = `Division inconnue pour ce club.`;
+    return;
+  }
+
+  const { data: rivals, error } = await supabaseClient
+    .from("game_club_overview")
+    .select("game_club_id, nom, classement")
+    .eq("game_id", gameId)
+    .eq("nation", club.nation)
+    .eq("division", club.division)
+    .order("classement", { ascending: true, nullsFirst: false });
+
+  if (error || !rivals || rivals.length === 0) {
+    el.innerHTML = `Impossible de charger le classement de la division.`;
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="fm-table">
+      <thead>
+        <tr><th>Clt</th><th>Équipe</th><th>J.</th><th>Diff</th><th>Pts</th></tr>
+      </thead>
+      <tbody>
+        ${rivals.map((r, i) => `
+          <tr class="${r.game_club_id === club.game_club_id ? "me" : ""}">
+            <td class="clt">${r.classement ?? (i + 1)}e</td>
+            <td>${escapeHtml(r.nom)}</td>
+            <td class="num">0</td>
+            <td class="num">0</td>
+            <td class="num">0</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+async function showMyClub(gameClubId, canChange) {
+  const { data: club, error } = await supabaseClient
+    .from("game_club_overview")
+    .select(`
+      game_club_id, nom, budget_actuel, classement, statut, nation, division,
+      niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne,
+      nb_joueurs, meilleur_joueur_nom
+    `)
+    .eq("game_club_id", gameClubId)
+    .single();
+
+  if (error || !club) {
+    document.getElementById("fmHeader").innerHTML =
+      `<div class="empty-state">Impossible de charger ton club.</div>`;
+    return;
+  }
+
+  const { data: participants } = await supabaseClient
+    .from("game_participants")
+    .select("pseudo, user_id")
+    .eq("game_id", gameId);
+  const me = (participants || []).find(p => p.user_id === userId);
+
+  renderFmHeader(club, me?.pseudo, currentGame);
+  renderFmSidebar(gameClubId);
+  renderNextMatch();
+  renderClubInfo(club);
+  renderTraining();
+  renderFinances(club);
+  renderTeamStats();
+  renderStandings(club);
 
   if (canChange) {
-    document.getElementById("changeClubBtn").addEventListener("click", () => {
+    const changeBtn = document.createElement("button");
+    changeBtn.className = "secondary small";
+    changeBtn.id = "changeClubBtn";
+    changeBtn.textContent = "Changer de club";
+    changeBtn.style.marginTop = "10px";
+    changeBtn.addEventListener("click", () => {
       document.getElementById("clubSelectScreen").classList.remove("hidden");
       document.getElementById("mainDashboard").classList.add("hidden");
       initClubSelection();
     });
+    document.getElementById("fmClubInfo").after(changeBtn);
   }
 }
 
