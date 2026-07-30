@@ -372,6 +372,81 @@
   .pdb-rep-stars { color: var(--gold); letter-spacing: 1px; }
   .pdb-empty-cell { color: var(--text-dim); }
 
+  .pdb-more-filters-btn {
+    background: rgba(251,191,36,0.08); border: 1px solid var(--accent-dim); color: var(--gold);
+    padding: 8px 14px; font-size: 12.5px; border-radius: 8px; align-self: flex-end; font-weight: 600;
+  }
+  .pdb-more-filters-btn:hover { background: rgba(251,191,36,0.16); }
+
+  .pdb-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .pdb-modal-overlay.hidden { display: none; }
+  .pdb-modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    width: 100%; max-width: 720px; max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .pdb-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border); flex: 0 0 auto;
+  }
+  .pdb-modal-header h3 { margin: 0; font-size: 15px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.04em; }
+  .pdb-modal-close {
+    background: transparent; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; padding: 4px 8px;
+  }
+  .pdb-modal-close:hover { color: var(--text); }
+  .pdb-modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; min-height: 0; }
+  .pdb-modal-footer {
+    display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px;
+    border-top: 1px solid var(--border); flex: 0 0 auto;
+  }
+  .pdb-apply-btn {
+    background: var(--accent); border: 1px solid var(--accent); color: #14171d;
+    padding: 8px 18px; font-size: 12.5px; border-radius: 8px; font-weight: 700;
+  }
+  .pdb-apply-btn:hover { filter: brightness(1.08); }
+
+  .pdb-filter-section { margin-bottom: 14px; }
+  .pdb-filter-section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim);
+    font-weight: 700; margin-bottom: 8px;
+  }
+  .pdb-general-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 14px;
+  }
+  .pdb-range-field label, .pdb-select-field label {
+    display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-dim); margin-bottom: 4px;
+  }
+  .pdb-range-field .pdb-range-inputs { display: flex; align-items: center; gap: 5px; }
+  .pdb-range-field input[type="number"], .pdb-select-field select, .pdb-attr-row input[type="number"] {
+    background: #14171d; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 5px 7px; font-size: 12.5px; font-family: inherit; outline: none; width: 100%;
+  }
+  .pdb-range-field .pdb-range-inputs span { color: var(--text-dim); font-size: 11px; flex: 0 0 auto; }
+  .pdb-range-field input[type="number"]:focus, .pdb-select-field select:focus, .pdb-attr-row input[type="number"]:focus {
+    border-color: var(--accent-dim);
+  }
+
+  .pdb-attr-group { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .pdb-attr-group > summary {
+    cursor: pointer; padding: 10px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text); list-style: none; display: flex; justify-content: space-between;
+  }
+  .pdb-attr-group > summary::-webkit-details-marker { display: none; }
+  .pdb-attr-group > summary::after { content: "▾"; color: var(--text-dim); }
+  .pdb-attr-group[open] > summary::after { content: "▴"; }
+  .pdb-attr-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 12px;
+    padding: 4px 14px 14px;
+  }
+  .pdb-attr-row label {
+    display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 3px;
+  }
+  .pdb-attr-row input[type="number"] { width: 60px; }
+
   .fm-stat-row {
     display: flex; justify-content: space-between; align-items: baseline;
     padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
@@ -552,9 +627,24 @@
             <input type="checkbox" id="pdbTransferCheckbox">
             <span>Intéressé par transfert</span>
           </label>
+          <button class="pdb-more-filters-btn" id="pdbMoreFiltersBtn" type="button">+ Ajouter des filtres</button>
           <button class="pdb-reset-btn" id="pdbResetBtn" type="button">Effacer les filtres</button>
         </div>
         <div class="pdb-count" id="pdbCount">Chargement...</div>
+
+        <div class="pdb-modal-overlay hidden" id="pdbFiltersModalOverlay">
+          <div class="pdb-modal">
+            <div class="pdb-modal-header">
+              <h3>Filtres avancés</h3>
+              <button class="pdb-modal-close" id="pdbFiltersModalClose" type="button">✕</button>
+            </div>
+            <div class="pdb-modal-body" id="pdbFiltersModalBody"></div>
+            <div class="pdb-modal-footer">
+              <button class="pdb-reset-btn" id="pdbAdvResetBtn" type="button">Réinitialiser</button>
+              <button class="pdb-apply-btn" id="pdbAdvApplyBtn" type="button">Appliquer</button>
+            </div>
+          </div>
+        </div>
         <div class="pdb-table-wrap">
           <table class="pdb-table">
             <thead>
@@ -1106,13 +1196,14 @@ let pdbLoaded = false;
 let pdbAllPlayers = [];
 let pdbClubNameById = {};
 let pdbClubReputation = null;
+let pdbClubReputationById = {};
 let pdbUserClubId = null;
 let pdbFiltersWired = false;
 
 // Marge de tolerance autour de la reputation du club pour le mode "interesse
-// par transfert". A 10%, un club a 5000 de reputation cible les joueurs
-// entre 4500 et 5500 : au-dela, un transfert est deja peu realiste.
-const PDB_REPUTATION_MARGIN_RATIO = 0.10;
+// par transfert". Resserree fortement (etait 10%) : un club a 5000 de
+// reputation ne cible plus que les joueurs entre ~4850 et ~5150.
+const PDB_REPUTATION_MARGIN_RATIO = 0.03;
 
 const PDB_FOOT_RANK = {
   "très faible": 0, "tres faible": 0,
@@ -1122,6 +1213,123 @@ const PDB_FOOT_RANK = {
   "fort": 4,
   "très fort": 5, "tres fort": 5,
 };
+
+// ---- Postes : la colonne "postes" (jsonb) contient des groupes bruts type
+// "D/AL (DG)" (plusieurs roles x plusieurs cotes combines). On les eclate en
+// postes atomiques ("D (D)", "AL (G)"...) pour que le filtre liste chaque
+// poste une seule fois au lieu de toutes les combinaisons brutes.
+const PDB_ROLE_ORDER = ["GB", "D", "MD", "M", "AL", "MO", "BT"];
+const PDB_SIDE_ORDER = ["D", "G", "C"];
+
+function expandPosteToken(token) {
+  if (!token) return [];
+  const t = String(token).trim();
+  const m = t.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (!m) return [t];
+  const roles = m[1].split("/").map(s => s.trim()).filter(Boolean);
+  const sides = m[2].split("").filter(Boolean);
+  const out = [];
+  roles.forEach(r => sides.forEach(s => out.push(`${r} (${s})`)));
+  return out.length ? out : [t];
+}
+
+function computePlayerAtomicPostes(p) {
+  const raw = Array.isArray(p.postes) && p.postes.length
+    ? p.postes
+    : (p.poste_brut ? p.poste_brut.split(",").map(s => s.trim()) : []);
+  const out = new Set();
+  raw.forEach(token => expandPosteToken(token).forEach(a => out.add(a)));
+  return out;
+}
+
+function parsePosteAtomic(s) {
+  const m = s.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (!m) return { role: s, side: "" };
+  return { role: m[1], side: m[2] };
+}
+
+function comparePostesAtomic(a, b) {
+  const pa = parsePosteAtomic(a), pb = parsePosteAtomic(b);
+  const ra = PDB_ROLE_ORDER.indexOf(pa.role), rb = PDB_ROLE_ORDER.indexOf(pb.role);
+  if (ra !== rb) return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb);
+  const sa = PDB_SIDE_ORDER.indexOf(pa.side), sb = PDB_SIDE_ORDER.indexOf(pb.side);
+  if (sa !== sb) return (sa === -1 ? 999 : sa) - (sb === -1 ? 999 : sb);
+  return a.localeCompare(b);
+}
+
+// ---- Valeur marchande affichee en fourchette plutot qu'en valeur exacte ----
+const PDB_VALEUR_BRACKETS = [
+  25000, 50000, 100000, 250000, 500000, 1000000, 2000000, 3500000, 5000000,
+  7500000, 10000000, 15000000, 20000000, 30000000, 50000000, 75000000,
+  100000000, 150000000,
+];
+
+function formatMoneyShort(n) {
+  if (n >= 1000000) {
+    const v = n / 1000000;
+    return `${Number.isInteger(v) ? v : v.toFixed(1).replace(/\.0$/, "")} M€`;
+  }
+  if (n >= 1000) {
+    const v = n / 1000;
+    return `${Number.isInteger(v) ? v : v.toFixed(1).replace(/\.0$/, "")} K€`;
+  }
+  return `${Math.round(n)} €`;
+}
+
+function formatMoneyRange(n) {
+  const val = Number(n);
+  if (!Number.isFinite(val)) return "-";
+  if (val <= 0) return "Libre / négligeable";
+  for (let i = 0; i < PDB_VALEUR_BRACKETS.length; i++) {
+    if (val <= PDB_VALEUR_BRACKETS[i]) {
+      const lo = i === 0 ? 0 : PDB_VALEUR_BRACKETS[i - 1];
+      return `${formatMoneyShort(lo)} - ${formatMoneyShort(PDB_VALEUR_BRACKETS[i])}`;
+    }
+  }
+  return `${formatMoneyShort(PDB_VALEUR_BRACKETS[PDB_VALEUR_BRACKETS.length - 1])}+`;
+}
+
+// ---- Filtres avances (popup "+ Ajouter des filtres") ----------------------
+const PDB_ATTR_GROUPS = [
+  { title: "Technique", attrs: [
+    ["corners", "Corners"], ["centres", "Centres"], ["controle_de_balle", "Contrôle de balle"],
+    ["coup_franc", "Coup franc"], ["degagement", "Dégagement"], ["dribbles", "Dribbles"],
+    ["finition", "Finition"], ["jeu_de_tete", "Jeu de tête"], ["marquage", "Marquage"],
+    ["passes", "Passes"], ["penalty", "Penalty"], ["prise_de_balle", "Première touche"],
+    ["tacles", "Tacles"], ["technique", "Technique"], ["tir_de_loin", "Tir de loin"],
+    ["touche_longues", "Touches longues"],
+  ]},
+  { title: "Mental", attrs: [
+    ["agressivite", "Agressivité"], ["anticipation", "Anticipation"], ["appels_de_balle", "Appels de balle"],
+    ["concentration", "Concentration"], ["courage", "Courage"], ["decisions", "Décisions"],
+    ["determination", "Détermination"], ["excentricite", "Excentricité"], ["inspiration", "Inspiration"],
+    ["jeu_collectif", "Jeu collectif"], ["leadership", "Leadership"], ["placement", "Placement"],
+    ["sang_froid", "Sang-froid"], ["vision_du_jeu", "Vision du jeu"], ["volume_de_jeu", "Volume de jeu"],
+  ]},
+  { title: "Physique", attrs: [
+    ["acceleration", "Accélération"], ["agilite", "Agilité"], ["detente", "Détente"],
+    ["detente_verticale", "Détente verticale"], ["endurance", "Endurance"], ["equilibre", "Équilibre"],
+    ["puissance", "Puissance"], ["qualite_physique_naturelle", "Qualité physique naturelle"],
+    ["vitesse", "Vitesse"],
+  ]},
+  { title: "Gardien", attrs: [
+    ["attr_1c1", "Un contre un"], ["communication", "Communication"],
+    ["degagement_au_poing", "Dégagement au poing"], ["reflexes", "Réflexes"],
+    ["relance_a_la_main", "Relance à la main"], ["sorties_dans_les_pieds", "Sorties dans les pieds"],
+    ["sorties_dans_surface", "Sorties dans la surface"],
+  ]},
+];
+
+let pdbAdvancedFilters = {
+  ageMin: null, ageMax: null,
+  tailleMin: null, tailleMax: null,
+  repMin: null, repMax: null,
+  valMin: null, valMax: null,
+  personnalite: "",
+  piedFort: "",
+  attrs: {},
+};
+let pdbAdvModalBuilt = false;
 
 async function showFmPlayersDbView(clubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
@@ -1152,6 +1360,21 @@ function wirePlayersDbFilters(clubId) {
     document.getElementById("pdbPosteSelect").value = "";
     document.getElementById("pdbNationSelect").value = "";
     document.getElementById("pdbTransferCheckbox").checked = false;
+    resetAdvancedFilters();
+    updateMoreFiltersButtonLabel();
+    applyPlayersDbFilters(clubId);
+  });
+
+  document.getElementById("pdbMoreFiltersBtn").addEventListener("click", () => openAdvancedFiltersModal());
+  document.getElementById("pdbFiltersModalClose").addEventListener("click", () => closeAdvancedFiltersModal(clubId));
+  document.getElementById("pdbFiltersModalOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "pdbFiltersModalOverlay") closeAdvancedFiltersModal(clubId);
+  });
+  document.getElementById("pdbAdvApplyBtn").addEventListener("click", () => closeAdvancedFiltersModal(clubId));
+  document.getElementById("pdbAdvResetBtn").addEventListener("click", () => {
+    resetAdvancedFilters();
+    populateAdvancedFiltersInputs();
+    updateMoreFiltersButtonLabel();
     applyPlayersDbFilters(clubId);
   });
 
@@ -1183,6 +1406,9 @@ async function loadPlayersDb(clubId) {
     if (error) throw error;
 
     pdbAllPlayers = players || [];
+    // Precalcule une seule fois l'ensemble des postes atomiques de chaque
+    // joueur (evite de re-eclater "postes"/"poste_brut" a chaque filtrage).
+    pdbAllPlayers.forEach(p => { p._atomicPostes = computePlayerAtomicPostes(p); });
 
     const clubIds = [...new Set(pdbAllPlayers.map(p => p.game_club_id).filter(Boolean))];
     pdbClubNameById = {};
@@ -1191,9 +1417,12 @@ async function loadPlayersDb(clubId) {
       (clubRows || []).forEach(c => { pdbClubNameById[c.id] = c.nom; });
     }
 
-    pdbClubReputation = await fetchClubRealReputation(clubId);
+    const allClubIdsForRep = [...new Set([...clubIds, clubId].filter(Boolean))];
+    pdbClubReputationById = await fetchClubReputationsByGameClubId(allClubIdsForRep);
+    pdbClubReputation = pdbClubReputationById[clubId] ?? await fetchClubRealReputation(clubId);
 
     populatePlayersDbFilterOptions();
+    buildAdvancedFiltersModal();
     pdbLoaded = true;
     applyPlayersDbFilters(clubId);
   } catch (e) {
@@ -1236,8 +1465,39 @@ async function fetchClubRealReputation(clubId) {
     : null;
 }
 
+// Recupere en masse la reputation "officielle" (table clubs) de chaque club
+// de jeu passe en parametre, via game_clubs.club_ref -> clubs.reputation.
+// Sert a savoir, pour un joueur donne, si son club actuel est plus reputé
+// que celui du manager (mode "interesse par transfert").
+async function fetchClubReputationsByGameClubId(clubIds) {
+  if (!clubIds.length) return {};
+  try {
+    const { data: gcRows } = await supabaseClient.from("game_clubs").select("id, club_ref").in("id", clubIds);
+    const refByGameClubId = {};
+    const refs = [];
+    (gcRows || []).forEach(r => {
+      if (r.club_ref) { refByGameClubId[r.id] = r.club_ref; refs.push(r.club_ref); }
+    });
+    if (!refs.length) return {};
+    const { data: clubRows } = await supabaseClient.from("clubs").select("id, reputation").in("id", [...new Set(refs)]);
+    const repByRef = {};
+    (clubRows || []).forEach(c => { repByRef[c.id] = Number(c.reputation); });
+    const result = {};
+    Object.keys(refByGameClubId).forEach(gcId => {
+      const rep = repByRef[refByGameClubId[gcId]];
+      if (Number.isFinite(rep)) result[gcId] = rep;
+    });
+    return result;
+  } catch (e) {
+    console.error(e);
+    return {};
+  }
+}
+
 function populatePlayersDbFilterOptions() {
-  const postes = [...new Set(pdbAllPlayers.map(p => p.poste_brut).filter(Boolean))].sort();
+  const posteSet = new Set();
+  pdbAllPlayers.forEach(p => p._atomicPostes.forEach(a => posteSet.add(a)));
+  const postes = [...posteSet].sort(comparePostesAtomic);
   const nations = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))].sort();
 
   const posteSelect = document.getElementById("pdbPosteSelect");
@@ -1257,14 +1517,19 @@ function applyPlayersDbFilters(clubId) {
 
   if (interestedOnly) {
     // Decoche = toute la BDD. Coche = seuls les joueurs dont la reputation
-    // mondiale est proche (+/- 10%) de la reputation reelle du club.
+    // mondiale est tres proche (+/- 3%) de la reputation reelle du club, en
+    // excluant les joueurs dont le club actuel a une reputation superieure
+    // au tien (generalement peu interesses par un transfert vers "moins bien").
     if (pdbClubReputation != null) {
-      const margin = Math.max(pdbClubReputation * PDB_REPUTATION_MARGIN_RATIO, 1);
+      const margin = Math.max(pdbClubReputation * PDB_REPUTATION_MARGIN_RATIO, 50);
       const lo = pdbClubReputation - margin;
       const hi = pdbClubReputation + margin;
       filtered = filtered.filter(p => {
         const r = Number(p.reputation_mondiale);
-        return Number.isFinite(r) && r >= lo && r <= hi;
+        if (!Number.isFinite(r) || r < lo || r > hi) return false;
+        const playerClubRep = p.game_club_id != null ? pdbClubReputationById[p.game_club_id] : null;
+        if (playerClubRep != null && playerClubRep > pdbClubReputation) return false;
+        return true;
       });
     } else {
       filtered = [];
@@ -1275,10 +1540,13 @@ function applyPlayersDbFilters(clubId) {
     filtered = filtered.filter(p => (p.nom || "").toLowerCase().includes(q));
   }
   if (poste) {
-    filtered = filtered.filter(p => p.poste_brut === poste);
+    filtered = filtered.filter(p => p._atomicPostes.has(poste));
   }
   if (nation) {
     filtered = filtered.filter(p => p.nationalite === nation);
+  }
+  if (hasActiveAdvancedFilters()) {
+    filtered = filtered.filter(playerPassesAdvancedFilters);
   }
 
   renderPlayersDbTable(filtered);
@@ -1328,7 +1596,7 @@ function renderPlayersDbTable(players) {
     const piedCell = escapeHtml(dominantFoot(p));
     const rep = Number.isFinite(Number(p.reputation_mondiale)) ? Number(p.reputation_mondiale) : null;
     const repCell = rep != null ? starsHtml(starsFromScale(rep, 10000)) : "-";
-    const valeurCell = escapeHtml(formatMoney(p.valeur_marchande_actuelle));
+    const valeurCell = escapeHtml(formatMoneyRange(p.valeur_marchande_actuelle));
     const contratCell = escapeHtml(formatContractEnd(p.contrat_expire));
     const salaireCell = p.salaire_actuel != null ? `${escapeHtml(formatMoney(p.salaire_actuel))} / mois` : "-";
     const personnaliteCell = escapeHtml(p.personnalite || "-");
@@ -1362,6 +1630,211 @@ function renderPlayersDbTable(players) {
       </tr>
     `;
   }).join("");
+}
+
+// ---- Popup "+ Ajouter des filtres" -----------------------------------
+
+function buildAdvancedFiltersModal() {
+  if (pdbAdvModalBuilt) return;
+  pdbAdvModalBuilt = true;
+
+  const personnalites = [...new Set(pdbAllPlayers.map(p => p.personnalite).filter(Boolean))].sort();
+
+  const generalHtml = `
+    <div class="pdb-filter-section">
+      <div class="pdb-filter-section-title">Général</div>
+      <div class="pdb-general-grid">
+        <div class="pdb-range-field">
+          <label>Âge</label>
+          <div class="pdb-range-inputs">
+            <input type="number" id="pdbAdvAgeMin" min="14" max="45" placeholder="Min">
+            <span>–</span>
+            <input type="number" id="pdbAdvAgeMax" min="14" max="45" placeholder="Max">
+          </div>
+        </div>
+        <div class="pdb-range-field">
+          <label>Taille (cm)</label>
+          <div class="pdb-range-inputs">
+            <input type="number" id="pdbAdvTailleMin" min="150" max="210" placeholder="Min">
+            <span>–</span>
+            <input type="number" id="pdbAdvTailleMax" min="150" max="210" placeholder="Max">
+          </div>
+        </div>
+        <div class="pdb-range-field">
+          <label>Réputation</label>
+          <div class="pdb-range-inputs">
+            <input type="number" id="pdbAdvRepMin" min="0" placeholder="Min">
+            <span>–</span>
+            <input type="number" id="pdbAdvRepMax" min="0" placeholder="Max">
+          </div>
+        </div>
+        <div class="pdb-range-field">
+          <label>Valeur marchande (€)</label>
+          <div class="pdb-range-inputs">
+            <input type="number" id="pdbAdvValMin" min="0" placeholder="Min">
+            <span>–</span>
+            <input type="number" id="pdbAdvValMax" min="0" placeholder="Max">
+          </div>
+        </div>
+        <div class="pdb-select-field">
+          <label>Pied fort</label>
+          <select id="pdbAdvPiedFort">
+            <option value="">Tous</option>
+            <option value="Gauche">Gauche</option>
+            <option value="Droit">Droit</option>
+            <option value="Ambidextre">Ambidextre</option>
+          </select>
+        </div>
+        <div class="pdb-select-field">
+          <label>Personnalité</label>
+          <select id="pdbAdvPersonnalite">
+            <option value="">Toutes</option>
+            ${personnalites.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const groupsHtml = PDB_ATTR_GROUPS.map(g => `
+    <details class="pdb-attr-group">
+      <summary>${escapeHtml(g.title)}</summary>
+      <div class="pdb-attr-grid">
+        ${g.attrs.map(([key, label]) => `
+          <div class="pdb-attr-row">
+            <label for="pdbAdvAttr_${key}">${escapeHtml(label)} (min)</label>
+            <input type="number" id="pdbAdvAttr_${key}" data-attr="${key}" min="1" max="20" placeholder="—">
+          </div>
+        `).join("")}
+      </div>
+    </details>
+  `).join("");
+
+  document.getElementById("pdbFiltersModalBody").innerHTML = generalHtml + groupsHtml;
+
+  // Les attributs se filtrent immediatement (au blur) pour eviter d'avoir a
+  // rouvrir chaque section ; les champs generaux passent par Appliquer/Croix.
+  document.querySelectorAll("#pdbFiltersModalBody [data-attr]").forEach(input => {
+    input.addEventListener("change", () => {
+      const v = input.value === "" ? null : Number(input.value);
+      pdbAdvancedFilters.attrs[input.dataset.attr] = Number.isFinite(v) ? v : null;
+    });
+  });
+}
+
+function populateAdvancedFiltersInputs() {
+  const af = pdbAdvancedFilters;
+  document.getElementById("pdbAdvAgeMin").value = af.ageMin ?? "";
+  document.getElementById("pdbAdvAgeMax").value = af.ageMax ?? "";
+  document.getElementById("pdbAdvTailleMin").value = af.tailleMin ?? "";
+  document.getElementById("pdbAdvTailleMax").value = af.tailleMax ?? "";
+  document.getElementById("pdbAdvRepMin").value = af.repMin ?? "";
+  document.getElementById("pdbAdvRepMax").value = af.repMax ?? "";
+  document.getElementById("pdbAdvValMin").value = af.valMin ?? "";
+  document.getElementById("pdbAdvValMax").value = af.valMax ?? "";
+  document.getElementById("pdbAdvPiedFort").value = af.piedFort ?? "";
+  document.getElementById("pdbAdvPersonnalite").value = af.personnalite ?? "";
+  document.querySelectorAll("#pdbFiltersModalBody [data-attr]").forEach(input => {
+    const v = af.attrs[input.dataset.attr];
+    input.value = v == null ? "" : v;
+  });
+}
+
+function readAdvancedFiltersFromInputs() {
+  const num = (id) => {
+    const v = document.getElementById(id).value;
+    return v === "" ? null : Number(v);
+  };
+  pdbAdvancedFilters.ageMin = num("pdbAdvAgeMin");
+  pdbAdvancedFilters.ageMax = num("pdbAdvAgeMax");
+  pdbAdvancedFilters.tailleMin = num("pdbAdvTailleMin");
+  pdbAdvancedFilters.tailleMax = num("pdbAdvTailleMax");
+  pdbAdvancedFilters.repMin = num("pdbAdvRepMin");
+  pdbAdvancedFilters.repMax = num("pdbAdvRepMax");
+  pdbAdvancedFilters.valMin = num("pdbAdvValMin");
+  pdbAdvancedFilters.valMax = num("pdbAdvValMax");
+  pdbAdvancedFilters.piedFort = document.getElementById("pdbAdvPiedFort").value;
+  pdbAdvancedFilters.personnalite = document.getElementById("pdbAdvPersonnalite").value;
+  // Les attributs (pdbAdvancedFilters.attrs) sont deja tenus a jour en direct.
+}
+
+function resetAdvancedFilters() {
+  pdbAdvancedFilters = {
+    ageMin: null, ageMax: null,
+    tailleMin: null, tailleMax: null,
+    repMin: null, repMax: null,
+    valMin: null, valMax: null,
+    personnalite: "",
+    piedFort: "",
+    attrs: {},
+  };
+}
+
+function hasActiveAdvancedFilters() {
+  const af = pdbAdvancedFilters;
+  if (af.ageMin != null || af.ageMax != null) return true;
+  if (af.tailleMin != null || af.tailleMax != null) return true;
+  if (af.repMin != null || af.repMax != null) return true;
+  if (af.valMin != null || af.valMax != null) return true;
+  if (af.personnalite || af.piedFort) return true;
+  return Object.values(af.attrs).some(v => v != null);
+}
+
+function playerPassesAdvancedFilters(p) {
+  const af = pdbAdvancedFilters;
+  if (af.ageMin != null && !(Number(p.age) >= af.ageMin)) return false;
+  if (af.ageMax != null && !(Number(p.age) <= af.ageMax)) return false;
+  if (af.tailleMin != null && !(Number(p.taille_cm) >= af.tailleMin)) return false;
+  if (af.tailleMax != null && !(Number(p.taille_cm) <= af.tailleMax)) return false;
+  if (af.repMin != null && !(Number(p.reputation_mondiale) >= af.repMin)) return false;
+  if (af.repMax != null && !(Number(p.reputation_mondiale) <= af.repMax)) return false;
+  if (af.valMin != null && !(Number(p.valeur_marchande_actuelle) >= af.valMin)) return false;
+  if (af.valMax != null && !(Number(p.valeur_marchande_actuelle) <= af.valMax)) return false;
+  if (af.personnalite && p.personnalite !== af.personnalite) return false;
+  if (af.piedFort) {
+    const foot = dominantFoot(p);
+    if (!foot.toLowerCase().startsWith(af.piedFort.toLowerCase())) return false;
+  }
+  for (const key in af.attrs) {
+    const min = af.attrs[key];
+    if (min == null) continue;
+    const v = Number(p[key]);
+    if (!Number.isFinite(v) || v < min) return false;
+  }
+  return true;
+}
+
+function openAdvancedFiltersModal() {
+  buildAdvancedFiltersModal();
+  populateAdvancedFiltersInputs();
+  document.getElementById("pdbFiltersModalOverlay").classList.remove("hidden");
+}
+
+function closeAdvancedFiltersModal(clubId) {
+  readAdvancedFiltersFromInputs();
+  document.getElementById("pdbFiltersModalOverlay").classList.add("hidden");
+  updateMoreFiltersButtonLabel();
+  applyPlayersDbFilters(clubId);
+}
+
+function countActiveAdvancedFilters() {
+  const af = pdbAdvancedFilters;
+  let n = 0;
+  if (af.ageMin != null || af.ageMax != null) n++;
+  if (af.tailleMin != null || af.tailleMax != null) n++;
+  if (af.repMin != null || af.repMax != null) n++;
+  if (af.valMin != null || af.valMax != null) n++;
+  if (af.personnalite) n++;
+  if (af.piedFort) n++;
+  n += Object.values(af.attrs).filter(v => v != null).length;
+  return n;
+}
+
+function updateMoreFiltersButtonLabel() {
+  const btn = document.getElementById("pdbMoreFiltersBtn");
+  if (!btn) return;
+  const n = countActiveAdvancedFilters();
+  btn.textContent = n > 0 ? `+ Filtres avancés (${n})` : "+ Ajouter des filtres";
 }
 
 function renderFmHeader(club, pseudo, game, canChange) {
