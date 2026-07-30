@@ -320,6 +320,58 @@
   .fm-table td.clt { color: var(--text-dim); width: 26px; }
   .fm-table td.num { color: var(--text-dim); text-align: center; width: 30px; }
 
+  /* ---- Base de donnees de joueurs (sous-onglet du dashboard) ---- */
+  .fm-players-db {
+    width: 100%; height: 100%; display: flex; flex-direction: column;
+    min-height: 0; gap: 12px;
+  }
+  .pdb-filterbar {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+    flex: 0 0 auto;
+  }
+  .pdb-field { display: flex; flex-direction: column; gap: 4px; }
+  .pdb-field label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim);
+  }
+  .pdb-field input[type="text"], .pdb-field select {
+    background: #14171d; border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  .pdb-field input[type="text"] { width: 190px; }
+  .pdb-field input[type="text"]:focus, .pdb-field select:focus { border-color: var(--accent-dim); }
+  .pdb-checkbox-field {
+    display: flex; align-items: center; gap: 7px; padding-top: 16px; font-size: 13px; user-select: none;
+    cursor: pointer;
+  }
+  .pdb-checkbox-field input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+  .pdb-reset-btn {
+    margin-left: auto; align-self: flex-end; background: transparent; border: 1px solid var(--border);
+    color: var(--text); padding: 8px 14px; font-size: 12.5px; border-radius: 8px;
+  }
+  .pdb-reset-btn:hover { border-color: var(--text-dim); }
+  .pdb-count { font-size: 11.5px; color: var(--text-dim); flex: 0 0 auto; padding: 0 2px; }
+  .pdb-count strong { color: var(--text); }
+  .pdb-hint { font-size: 11px; color: var(--text-dim); }
+
+  .pdb-table-wrap {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    flex: 1; min-height: 0; overflow: auto; padding: 4px 6px;
+  }
+  .pdb-table { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+  .pdb-table thead th {
+    position: sticky; top: 0; background: var(--panel); z-index: 1;
+    text-align: left; color: var(--text-dim); font-weight: 700; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 10px; border-bottom: 1px solid var(--border);
+  }
+  .pdb-table tbody td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .pdb-table tbody tr { cursor: pointer; }
+  .pdb-table tbody tr:hover td { background: rgba(251,191,36,0.06); }
+  .pdb-table .flag-icon { width: 16px; height: 12px; object-fit: cover; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .pdb-name-cell { font-weight: 600; }
+  .pdb-rep-stars { color: var(--gold); letter-spacing: 1px; }
+  .pdb-empty-cell { color: var(--text-dim); }
+
   .fm-stat-row {
     display: flex; justify-content: space-between; align-items: baseline;
     padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
@@ -450,7 +502,7 @@
     <div class="fm-sidebar" id="fmSidebar"></div>
 
     <div class="fm-content-wrap">
-      <div class="fm-content">
+      <div class="fm-content" id="fmHomeView">
         <div class="fm-col">
           <div class="card">
             <div class="fm-card-title"><span>Prochaine rencontre</span></div>
@@ -479,6 +531,48 @@
             <div class="fm-card-title"><span>Boîte de réception</span></div>
             <div id="fmInbox" class="fm-empty">Chargement...</div>
           </div>
+        </div>
+      </div>
+
+      <div class="fm-players-db hidden" id="fmPlayersDbView">
+        <div class="pdb-filterbar">
+          <div class="pdb-field">
+            <label for="pdbSearchInput">Nom</label>
+            <input type="text" id="pdbSearchInput" placeholder="Rechercher un joueur...">
+          </div>
+          <div class="pdb-field">
+            <label for="pdbPosteSelect">Poste</label>
+            <select id="pdbPosteSelect"><option value="">Tous</option></select>
+          </div>
+          <div class="pdb-field">
+            <label for="pdbNationSelect">Nation</label>
+            <select id="pdbNationSelect"><option value="">Toutes</option></select>
+          </div>
+          <label class="pdb-checkbox-field" for="pdbTransferCheckbox">
+            <input type="checkbox" id="pdbTransferCheckbox">
+            <span>Intéressé par transfert</span>
+          </label>
+          <button class="pdb-reset-btn" id="pdbResetBtn" type="button">Effacer les filtres</button>
+        </div>
+        <div class="pdb-count" id="pdbCount">Chargement...</div>
+        <div class="pdb-table-wrap">
+          <table class="pdb-table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Club</th>
+                <th>Poste</th>
+                <th>Âge</th>
+                <th>Nation</th>
+                <th>Taille</th>
+                <th>Pied fort</th>
+                <th>Réputation</th>
+              </tr>
+            </thead>
+            <tbody id="pdbTableBody">
+              <tr><td colspan="8" class="pdb-empty-cell">Chargement...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -963,7 +1057,21 @@ function renderFmSidebar(gameClubId) {
   el.querySelectorAll(".fm-nav-item").forEach(row => {
     const item = FM_NAV_ITEMS.find(i => i.key === row.getAttribute("data-key"));
     row.addEventListener("click", () => {
-      if (item.key === "accueil") return;
+      // Accueil et Base de donnees de joueurs sont de vrais sous-onglets de
+      // cette page (pas de rechargement) : on bascule juste la vue affichee
+      // et on met a jour l'etat actif du menu.
+      if (item.key === "accueil") {
+        el.querySelectorAll(".fm-nav-item").forEach(r => r.classList.remove("active"));
+        row.classList.add("active");
+        showFmHomeView();
+        return;
+      }
+      if (item.key === "basejoueurs") {
+        el.querySelectorAll(".fm-nav-item").forEach(r => r.classList.remove("active"));
+        row.classList.add("active");
+        showFmPlayersDbView(gameClubId);
+        return;
+      }
       if (item.href) {
         window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
       } else {
@@ -971,6 +1079,196 @@ function renderFmSidebar(gameClubId) {
       }
     });
   });
+}
+
+function showFmHomeView() {
+  document.getElementById("fmHomeView").classList.remove("hidden");
+  document.getElementById("fmPlayersDbView").classList.add("hidden");
+  const input = document.getElementById("fmSearchInput");
+  if (input) input.placeholder = "PAGE D'ACCUEIL";
+}
+
+// ---- Base de donnees de joueurs (sous-onglet) ----------------------------
+// Charge une fois tous les joueurs de la partie (game_players), puis filtre
+// cote client (nom, poste, nation, et le mode "interesse par transfert" qui
+// ne montre que les joueurs dont la reputation mondiale est proche de celle
+// du club de l'utilisateur, calculee comme la reputation moyenne de son
+// effectif actuel).
+let pdbLoaded = false;
+let pdbAllPlayers = [];
+let pdbClubNameById = {};
+let pdbClubReputation = null;
+let pdbFiltersWired = false;
+
+async function showFmPlayersDbView(clubId) {
+  document.getElementById("fmHomeView").classList.add("hidden");
+  document.getElementById("fmPlayersDbView").classList.remove("hidden");
+  const input = document.getElementById("fmSearchInput");
+  if (input) input.placeholder = "BASE DE DONNÉES DE JOUEURS";
+
+  wirePlayersDbFilters(clubId);
+
+  if (!pdbLoaded) {
+    await loadPlayersDb(clubId);
+  } else {
+    applyPlayersDbFilters(clubId);
+  }
+}
+
+function wirePlayersDbFilters(clubId) {
+  if (pdbFiltersWired) return;
+  pdbFiltersWired = true;
+
+  document.getElementById("pdbSearchInput").addEventListener("input", () => applyPlayersDbFilters(clubId));
+  document.getElementById("pdbPosteSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
+  document.getElementById("pdbNationSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
+  document.getElementById("pdbTransferCheckbox").addEventListener("change", () => applyPlayersDbFilters(clubId));
+  document.getElementById("pdbResetBtn").addEventListener("click", () => {
+    document.getElementById("pdbSearchInput").value = "";
+    document.getElementById("pdbPosteSelect").value = "";
+    document.getElementById("pdbNationSelect").value = "";
+    document.getElementById("pdbTransferCheckbox").checked = false;
+    applyPlayersDbFilters(clubId);
+  });
+
+  document.getElementById("pdbTableBody").addEventListener("click", (e) => {
+    const row = e.target.closest("tr[data-player]");
+    if (!row) return;
+    const playerId = row.getAttribute("data-player");
+    const playerClubId = row.getAttribute("data-club") || "";
+    window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(playerClubId)}&player=${encodeURIComponent(playerId)}`;
+  });
+}
+
+async function loadPlayersDb(clubId) {
+  const tbody = document.getElementById("pdbTableBody");
+  const countEl = document.getElementById("pdbCount");
+  tbody.innerHTML = `<tr><td colspan="8" class="pdb-empty-cell">Chargement des joueurs...</td></tr>`;
+  countEl.textContent = "Chargement...";
+
+  try {
+    // Supabase limite les requetes a 1000 lignes par defaut : si la base
+    // depasse ce volume, augmenter la limite du projet ou passer par une
+    // recherche paginee/filtree cote serveur.
+    const { data: players, error } = await supabaseClient
+      .from("game_players")
+      .select("*")
+      .eq("game_id", gameId)
+      .order("reputation_mondiale", { ascending: false, nullsFirst: false })
+      .limit(2000);
+    if (error) throw error;
+
+    pdbAllPlayers = players || [];
+
+    const clubIds = [...new Set(pdbAllPlayers.map(p => p.game_club_id).filter(Boolean))];
+    pdbClubNameById = {};
+    if (clubIds.length > 0) {
+      const { data: clubRows } = await supabaseClient.from("game_clubs").select("id, nom").in("id", clubIds);
+      (clubRows || []).forEach(c => { pdbClubNameById[c.id] = c.nom; });
+    }
+
+    // Reputation de reference du club de l'utilisateur = moyenne de la
+    // reputation mondiale de son effectif actuel.
+    const myPlayers = pdbAllPlayers.filter(p => p.game_club_id === clubId && Number.isFinite(Number(p.reputation_mondiale)));
+    pdbClubReputation = myPlayers.length > 0
+      ? myPlayers.reduce((s, p) => s + Number(p.reputation_mondiale), 0) / myPlayers.length
+      : null;
+
+    populatePlayersDbFilterOptions();
+    pdbLoaded = true;
+    applyPlayersDbFilters(clubId);
+  } catch (e) {
+    console.error(e);
+    tbody.innerHTML = `<tr><td colspan="8" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
+    countEl.textContent = "";
+  }
+}
+
+function populatePlayersDbFilterOptions() {
+  const postes = [...new Set(pdbAllPlayers.map(p => p.poste_brut || p.poste).filter(Boolean))].sort();
+  const nations = [...new Set(pdbAllPlayers.map(p => p.nationalite || p.nation).filter(Boolean))].sort();
+
+  const posteSelect = document.getElementById("pdbPosteSelect");
+  posteSelect.innerHTML = `<option value="">Tous</option>` + postes.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+
+  const nationSelect = document.getElementById("pdbNationSelect");
+  nationSelect.innerHTML = `<option value="">Toutes</option>` + nations.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+}
+
+function applyPlayersDbFilters(clubId) {
+  const q = document.getElementById("pdbSearchInput").value.trim().toLowerCase();
+  const poste = document.getElementById("pdbPosteSelect").value;
+  const nation = document.getElementById("pdbNationSelect").value;
+  const interestedOnly = document.getElementById("pdbTransferCheckbox").checked;
+
+  let filtered = pdbAllPlayers;
+
+  if (interestedOnly) {
+    // Decoche = toute la BDD. Coche = seuls les joueurs dont la reputation
+    // mondiale est proche (+/- 35%) de celle du club de l'utilisateur.
+    if (pdbClubReputation != null) {
+      const margin = Math.max(pdbClubReputation * 0.35, 1);
+      const lo = pdbClubReputation - margin;
+      const hi = pdbClubReputation + margin;
+      filtered = filtered.filter(p => {
+        const r = Number(p.reputation_mondiale);
+        return Number.isFinite(r) && r >= lo && r <= hi;
+      });
+    } else {
+      filtered = [];
+    }
+  }
+
+  if (q) {
+    filtered = filtered.filter(p => (p.nom || "").toLowerCase().includes(q));
+  }
+  if (poste) {
+    filtered = filtered.filter(p => (p.poste_brut || p.poste) === poste);
+  }
+  if (nation) {
+    filtered = filtered.filter(p => (p.nationalite || p.nation) === nation);
+  }
+
+  renderPlayersDbTable(filtered);
+
+  const countEl = document.getElementById("pdbCount");
+  const total = pdbAllPlayers.length;
+  countEl.innerHTML = `<strong>${filtered.length}</strong> joueur${filtered.length > 1 ? "s" : ""} trouvé${filtered.length > 1 ? "s" : ""} sur ${total}` +
+    (interestedOnly && pdbClubReputation == null ? ` <span class="pdb-hint">— réputation du club inconnue (aucun joueur dans l'effectif actuel)</span>` : "");
+}
+
+function renderPlayersDbTable(players) {
+  const tbody = document.getElementById("pdbTableBody");
+  if (players.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="pdb-empty-cell">Aucun joueur ne correspond à ces filtres.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = players.map(p => {
+    const clubName = p.game_club_id ? (pdbClubNameById[p.game_club_id] || "-") : "Libre";
+    const poste = p.poste_brut || p.poste || "-";
+    const age = p.age ?? "-";
+    const nation = p.nationalite || p.nation;
+    const nationCell = nation ? nationLabel(nation) : "-";
+    const taille = p.taille_cm || p.taille;
+    const tailleCell = taille ? `${escapeHtml(String(taille))} cm` : "-";
+    const pied = p.pied_fort || p.pied || "-";
+    const rep = Number.isFinite(Number(p.reputation_mondiale)) ? Number(p.reputation_mondiale) : null;
+    const repCell = rep != null ? escapeHtml(String(Math.round(rep * 100) / 100)) : "-";
+
+    return `
+      <tr data-player="${p.id}" data-club="${p.game_club_id ?? ""}">
+        <td class="pdb-name-cell">${escapeHtml(p.nom || "-")}</td>
+        <td>${escapeHtml(clubName)}</td>
+        <td>${escapeHtml(poste)}</td>
+        <td>${escapeHtml(String(age))}</td>
+        <td>${nationCell}</td>
+        <td>${tailleCell}</td>
+        <td>${escapeHtml(String(pied))}</td>
+        <td>${repCell}</td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function renderFmHeader(club, pseudo, game, canChange) {
