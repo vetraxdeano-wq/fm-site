@@ -238,6 +238,36 @@
   }
   .fm-change-club-btn:hover { background: rgba(255,255,255,0.08); }
 
+  /* Titre de la topbar transforme en champ de recherche globale
+     (clubs + joueurs) avec suggestions en dessous */
+  .page-title-wrap { position: relative; }
+  .page-title-input {
+    background: transparent; border: none; outline: none; color: #fff;
+    font-size: 18px; font-weight: 800; letter-spacing: 0.02em; padding: 2px 0;
+    width: 230px; max-width: 40vw; font-family: inherit;
+  }
+  .page-title-input::placeholder {
+    color: rgba(255,255,255,0.92); font-weight: 800; opacity: 1;
+  }
+  .fm-search-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 0; min-width: 300px; max-width: 380px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 200; max-height: 380px; overflow-y: auto;
+  }
+  .fm-search-dropdown.hidden { display: none !important; }
+  .search-group-label {
+    padding: 8px 12px 4px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-dim);
+  }
+  .search-result-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px;
+    color: var(--text); cursor: pointer;
+  }
+  .search-result-item:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
+  .search-result-icon { flex-shrink: 0; font-size: 13px; }
+  .search-result-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .search-empty { padding: 14px 12px; font-size: 12px; color: var(--text-dim); text-align: center; }
+
   .fm-body { flex: 1; display: flex; align-items: stretch; min-height: 0; }
 
   .fm-sidebar {
@@ -953,8 +983,9 @@ function renderFmHeader(club, pseudo, game, canChange) {
   el.innerHTML = `
     <div class="title-block">
       <a href="index.html" class="back-link">← Mes rooms</a>
-      <div>
-        <div class="page-title">PAGE D'ACCUEIL</div>
+      <div class="page-title-wrap" id="fmSearchWrap">
+        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="PAGE D'ACCUEIL" autocomplete="off">
+        <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
         <div class="manager-line">${managerLine}</div>
       </div>
     </div>
@@ -974,6 +1005,119 @@ function renderFmHeader(club, pseudo, game, canChange) {
       initClubSelection();
     });
   }
+
+  initHeaderSearch();
+}
+
+// ===================== RECHERCHE GLOBALE (titre de la topbar) =====================
+// Le titre de la topbar ("PAGE D'ACCUEIL", "EFFECTIF"...) est un champ de
+// recherche : on tape un nom de club ou de joueur, une liste de suggestions
+// s'affiche en dessous et redirige vers la bonne page au clic.
+let searchDebounceTimer = null;
+let headerSearchDocListenerAttached = false;
+
+function initHeaderSearch() {
+  const input = document.getElementById("fmSearchInput");
+  const dropdown = document.getElementById("fmSearchDropdown");
+  if (!input || !dropdown) return;
+
+  input.addEventListener("input", () => {
+    clearTimeout(searchDebounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) {
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      return;
+    }
+    searchDebounceTimer = setTimeout(() => runGlobalSearch(q, dropdown), 250);
+  });
+
+  input.addEventListener("focus", () => {
+    if (input.value.trim().length >= 2 && dropdown.innerHTML) dropdown.classList.remove("hidden");
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      input.blur();
+    }
+  });
+
+  if (!headerSearchDocListenerAttached) {
+    document.addEventListener("click", (e) => {
+      const wrap = document.getElementById("fmSearchWrap");
+      const dd = document.getElementById("fmSearchDropdown");
+      if (wrap && dd && !wrap.contains(e.target)) dd.classList.add("hidden");
+    });
+    headerSearchDocListenerAttached = true;
+  }
+}
+
+async function runGlobalSearch(q, dropdown) {
+  const [{ data: clubs }, { data: players }] = await Promise.all([
+    supabaseClient
+      .from("game_clubs")
+      .select("id, nom")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(6),
+    supabaseClient
+      .from("game_players")
+      .select("id, nom, poste_brut, game_club_id, club:game_clubs(nom)")
+      .eq("game_id", gameId)
+      .ilike("nom", `%${q}%`)
+      .limit(8),
+  ]);
+
+  const hasClubs = clubs && clubs.length > 0;
+  const hasPlayers = players && players.length > 0;
+
+  if (!hasClubs && !hasPlayers) {
+    dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${escapeHtml(q)}"</div>`;
+    dropdown.classList.remove("hidden");
+    return;
+  }
+
+  let html = "";
+  if (hasClubs) {
+    html += `<div class="search-group-label">Clubs</div>`;
+    html += clubs.map(c => `
+      <div class="search-result-item" data-type="club" data-id="${c.id}">
+        <span class="search-result-icon">🛡️</span>
+        <span>${escapeHtml(c.nom)}</span>
+      </div>
+    `).join("");
+  }
+  if (hasPlayers) {
+    html += `<div class="search-group-label">Joueurs</div>`;
+    html += players.map(p => `
+      <div class="search-result-item" data-type="player" data-id="${p.id}" data-club="${p.game_club_id ?? ""}">
+        <span class="search-result-icon">🧍</span>
+        <span>
+          <div>${escapeHtml(p.nom)}</div>
+          <div class="search-result-sub">${escapeHtml(p.poste_brut || "-")}${p.club?.nom ? " · " + escapeHtml(p.club.nom) : ""}</div>
+        </span>
+      </div>
+    `).join("");
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove("hidden");
+
+  dropdown.querySelectorAll(".search-result-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const type = item.getAttribute("data-type");
+      const id = item.getAttribute("data-id");
+      if (type === "club") {
+        window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
+      } else {
+        const clubId = item.getAttribute("data-club");
+        window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}&player=${encodeURIComponent(id)}`;
+      }
+    });
+  });
 }
 
 // Vrai historique des mouvements financiers, base sur la table game_events
