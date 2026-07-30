@@ -90,29 +90,98 @@
   .toast.error { border-color: var(--danger); color: var(--danger); }
   .hidden { display: none !important; }
 
-  .select-row { display: flex; gap: 10px; flex-wrap: wrap; }
-  select {
+  /* Ecran de selection de club, style FM */
+  .select-layout { display: flex; gap: 16px; align-items: flex-start; }
+
+  .select-sidebar {
+    width: 300px; flex-shrink: 0; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; overflow: visible;
+  }
+  .sidebar-header {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); font-weight: 700;
+  }
+  .league-picker { padding: 12px; position: relative; border-bottom: 1px solid var(--border); }
+  .league-btn {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
     background: #0d0f13; border: 1px solid var(--border); color: var(--text);
-    padding: 9px 12px; border-radius: 8px; font-size: 14px; min-width: 200px;
+    padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    text-align: left;
   }
-  select:disabled { opacity: 0.5; }
-  .club-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .club-table th {
-    text-align: left; color: var(--text-dim); font-weight: 500; font-size: 11px;
-    text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
+  .league-btn:hover { border-color: var(--text-dim); }
+  .league-btn .chevron { color: var(--text-dim); font-size: 11px; }
+
+  .league-menu {
+    position: absolute; top: calc(100% + 6px); left: 12px; right: 12px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    max-height: 340px; overflow-y: auto; z-index: 40;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
   }
-  .club-table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  .club-table tr:last-child td { border-bottom: none; }
-  .club-name { font-weight: 600; }
-  .club-taken { color: var(--text-dim); font-size: 11px; }
+  .nation-item { position: relative; }
+  .nation-row {
+    padding: 9px 12px; font-size: 13px; display: flex;
+    justify-content: space-between; align-items: center; cursor: default;
+  }
+  .nation-row:hover { background: rgba(255,255,255,0.05); }
+  .nation-row .arrow { color: var(--text-dim); font-size: 11px; }
+
+  .division-submenu {
+    display: none; position: absolute; left: 100%; top: 0; min-width: 230px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    max-height: 340px; overflow-y: auto; box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  }
+  .nation-item:hover .division-submenu { display: block; }
+  .division-row {
+    padding: 9px 12px; font-size: 13px; display: flex; justify-content: space-between;
+    gap: 10px; cursor: pointer; color: var(--text);
+  }
+  .division-row:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
+  .division-row .count { color: var(--text-dim); font-size: 11px; }
+  .menu-loading { padding: 12px; font-size: 12px; color: var(--text-dim); }
+
+  .club-list { max-height: 520px; overflow-y: auto; }
+  .club-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+    border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13px;
+  }
+  .club-row:last-child { border-bottom: none; }
+  .club-row:hover { background: rgba(255,255,255,0.03); }
+  .club-row.active { background: rgba(251,191,36,0.08); }
+  .club-row .dot {
+    width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--text-dim); flex-shrink: 0;
+  }
+  .club-row.active .dot { border-color: var(--gold); background: var(--gold); }
+  .club-row .row-name { flex: 1; }
+  .club-row .taken-tag { font-size: 10px; color: var(--text-dim); }
+
+  .select-main {
+    flex: 1; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 22px; min-height: 320px;
+  }
+  .select-main .hint { text-align: center; color: var(--text-dim); padding: 90px 20px; font-size: 14px; }
+  .club-detail-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border);
+  }
+  .club-detail-header .name { font-size: 20px; font-weight: 800; }
+  .club-detail-header .sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; margin-bottom: 22px; }
+  .detail-item .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-dim); margin-bottom: 3px;
+  }
+  .detail-item .value { font-size: 14px; font-weight: 600; }
+  .club-actions { display: flex; gap: 10px; }
   .pick-btn {
     background: var(--accent); color: #06210f; border: none;
-    padding: 7px 14px; border-radius: 8px; font-weight: 600;
-    font-size: 12px; cursor: pointer; white-space: nowrap;
+    padding: 10px 18px; border-radius: 8px; font-weight: 700;
+    font-size: 13px; cursor: pointer; white-space: nowrap;
   }
   .pick-btn:hover { filter: brightness(1.08); }
   .pick-btn:disabled { opacity: 0.4; cursor: default; background: var(--border); color: var(--text-dim); }
+  .club-taken-note { font-size: 12px; color: var(--text-dim); align-self: center; }
+
   .my-club-header { display: flex; justify-content: space-between; align-items: center; }
   .my-club-header .name { font-weight: 700; font-size: 16px; }
   .club-name-link {
@@ -139,28 +208,23 @@
 
 <div class="wrap">
   <div id="clubSelectScreen" class="hidden">
-    <div class="card">
-      <h2>Choisir un club</h2>
-      <div class="select-row">
-        <select id="nationSelect">
-          <option value="">Nation...</option>
-        </select>
-        <select id="divisionSelect" disabled>
-          <option value="">Division...</option>
-        </select>
+    <div class="select-layout">
+      <div class="select-sidebar">
+        <div class="sidebar-header">Choisissez une équipe à entraîner</div>
+        <div class="league-picker">
+          <button class="league-btn" id="leagueBtn" type="button">
+            <span id="leagueBtnLabel">Choisir une ligue</span>
+            <span class="chevron">▾</span>
+          </button>
+          <div class="league-menu hidden" id="leagueMenu"></div>
+        </div>
+        <div class="club-list" id="clubList">
+          <div class="menu-loading">Choisis une ligue pour voir ses clubs.</div>
+        </div>
       </div>
-    </div>
-    <div class="card" id="clubListCard" style="display:none;">
-      <h2>Clubs disponibles</h2>
-      <table class="club-table">
-        <thead>
-          <tr>
-            <th>Club</th><th>Budget</th><th>Meilleur joueur</th><th></th>
-          </tr>
-        </thead>
-        <tbody id="clubListBody"></tbody>
-      </table>
-      <div id="clubListEmpty" class="empty-state hidden">Aucun club dans cette division.</div>
+      <div class="select-main" id="selectMain">
+        <div class="hint">Sélectionne un club dans la liste à gauche pour voir ses infos.</div>
+      </div>
     </div>
   </div>
 
@@ -269,12 +333,16 @@ async function loadDashboard() {
 // ============================================================
 // SELECTION DE CLUB
 // ============================================================
-async function initClubSelection() {
-  const nationSelect = document.getElementById("nationSelect");
-  const divisionSelect = document.getElementById("divisionSelect");
+let divisionsCache = {};   // nation -> [{division, nb_clubs}]
+let currentClubs = [];     // clubs de la ligue actuellement chargee
+let selectedGameClubId = null;
 
-  if (nationSelect.dataset.loaded) return; // deja initialise
-  nationSelect.dataset.loaded = "1";
+async function initClubSelection() {
+  const leagueBtn = document.getElementById("leagueBtn");
+  const leagueMenu = document.getElementById("leagueMenu");
+
+  if (leagueBtn.dataset.loaded) return; // deja initialise
+  leagueBtn.dataset.loaded = "1";
 
   const { data: nations, error } = await supabaseClient
     .from("distinct_nations")
@@ -285,46 +353,72 @@ async function initClubSelection() {
     return;
   }
 
-  nationSelect.innerHTML = '<option value="">Nation...</option>' +
-    (nations || []).map(n => `<option value="${escapeHtml(n.nation)}">${escapeHtml(n.nation)}</option>`).join("");
+  leagueMenu.innerHTML = (nations || []).map(n => `
+    <div class="nation-item" data-nation="${escapeHtml(n.nation)}">
+      <div class="nation-row">
+        <span>${escapeHtml(n.nation)}</span>
+        <span class="arrow">▸</span>
+      </div>
+      <div class="division-submenu"></div>
+    </div>
+  `).join("");
 
-  nationSelect.addEventListener("change", async () => {
-    const nation = nationSelect.value;
-    divisionSelect.innerHTML = '<option value="">Division...</option>';
-    document.getElementById("clubListCard").style.display = "none";
+  leagueMenu.querySelectorAll(".nation-item").forEach(item => {
+    const nation = item.getAttribute("data-nation");
+    const submenu = item.querySelector(".division-submenu");
 
-    if (!nation) { divisionSelect.disabled = true; return; }
+    item.addEventListener("mouseenter", async () => {
+      if (divisionsCache[nation]) return; // deja charge
+      submenu.innerHTML = `<div class="menu-loading">Chargement...</div>`;
 
-    const { data: divisions, error: divErr } = await supabaseClient
-      .rpc("divisions_for_nation", { p_nation: nation });
+      const { data: divisions, error: divErr } = await supabaseClient
+        .rpc("divisions_for_nation", { p_nation: nation });
 
-    if (divErr) {
-      toast("Erreur chargement des divisions : " + divErr.message, true);
-      return;
-    }
+      if (divErr) {
+        submenu.innerHTML = `<div class="menu-loading">Erreur de chargement</div>`;
+        return;
+      }
 
-    divisionSelect.disabled = false;
-    divisionSelect.innerHTML = '<option value="">Division...</option>' +
-      (divisions || []).map(d => `<option value="${escapeHtml(d.division)}">${escapeHtml(d.division)} (${d.nb_clubs})</option>`).join("");
+      divisionsCache[nation] = divisions || [];
+      submenu.innerHTML = (divisions || []).map(d => `
+        <div class="division-row" data-nation="${escapeHtml(nation)}" data-division="${escapeHtml(d.division)}">
+          <span>${escapeHtml(d.division)}</span>
+          <span class="count">${d.nb_clubs}</span>
+        </div>
+      `).join("");
+
+      submenu.querySelectorAll(".division-row").forEach(row => {
+        row.addEventListener("click", () => {
+          const n = row.getAttribute("data-nation");
+          const d = row.getAttribute("data-division");
+          document.getElementById("leagueBtnLabel").textContent = `${n} — ${d}`;
+          leagueMenu.classList.add("hidden");
+          loadClubs(n, d);
+        });
+      });
+    });
   });
 
-  divisionSelect.addEventListener("change", () => {
-    if (!divisionSelect.value) return;
-    loadClubList(nationSelect.value, divisionSelect.value);
+  leagueBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    leagueMenu.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!leagueMenu.contains(e.target) && e.target !== leagueBtn) {
+      leagueMenu.classList.add("hidden");
+    }
   });
 }
 
-async function loadClubList(nation, division) {
-  const card = document.getElementById("clubListCard");
-  const body = document.getElementById("clubListBody");
-  const emptyEl = document.getElementById("clubListEmpty");
-  card.style.display = "block";
-  body.innerHTML = "";
-  emptyEl.classList.add("hidden");
+async function loadClubs(nation, division) {
+  const listEl = document.getElementById("clubList");
+  listEl.innerHTML = `<div class="menu-loading">Chargement...</div>`;
+  resetSelectMain();
 
   const { data: clubs, error } = await supabaseClient
     .from("game_club_overview")
-    .select("game_club_id, nom, budget_actuel, meilleur_joueur_nom, user_id")
+    .select("game_club_id, nom, budget_actuel, classement, statut, niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne, niveau_pct, nb_joueurs, meilleur_joueur_nom, user_id")
     .eq("game_id", gameId)
     .eq("nation", nation)
     .eq("division", division)
@@ -335,29 +429,115 @@ async function loadClubList(nation, division) {
     return;
   }
 
-  if (!clubs || clubs.length === 0) {
-    emptyEl.classList.remove("hidden");
+  currentClubs = clubs || [];
+
+  if (currentClubs.length === 0) {
+    listEl.innerHTML = `<div class="menu-loading">Aucun club dans cette division.</div>`;
     return;
   }
 
-  body.innerHTML = clubs.map(c => {
+  listEl.innerHTML = currentClubs.map(c => {
     const taken = c.user_id && c.user_id !== userId;
     return `
-      <tr>
-        <td class="club-name">${escapeHtml(c.nom)}</td>
-        <td>${formatMoney(c.budget_actuel)}</td>
-        <td>${escapeHtml(c.meilleur_joueur_nom || "-")}</td>
-        <td>
-          ${taken
-            ? `<span class="club-taken">Deja pris</span>`
-            : `<button class="pick-btn" data-pick="${c.game_club_id}">Choisir</button>`}
-        </td>
-      </tr>`;
+      <div class="club-row" data-club="${c.game_club_id}">
+        <span class="dot"></span>
+        <span class="row-name">${escapeHtml(c.nom)}</span>
+        ${taken ? `<span class="taken-tag">Pris</span>` : ""}
+      </div>`;
   }).join("");
 
-  body.querySelectorAll("[data-pick]").forEach(btn => {
-    btn.addEventListener("click", () => pickClub(parseInt(btn.getAttribute("data-pick"), 10), btn));
+  listEl.querySelectorAll(".club-row").forEach(row => {
+    row.addEventListener("click", () => selectClubRow(parseInt(row.getAttribute("data-club"), 10)));
   });
+}
+
+function resetSelectMain() {
+  selectedGameClubId = null;
+  document.getElementById("selectMain").innerHTML =
+    `<div class="hint">Sélectionne un club dans la liste à gauche pour voir ses infos.</div>`;
+}
+
+function formatPct(n) {
+  if (n === null || n === undefined) return "-";
+  return Number(n).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";
+}
+
+function formatInt(n) {
+  if (n === null || n === undefined) return "-";
+  return new Intl.NumberFormat("fr-FR").format(n);
+}
+
+function selectClubRow(gameClubId) {
+  selectedGameClubId = gameClubId;
+  document.querySelectorAll(".club-row").forEach(row => {
+    row.classList.toggle("active", parseInt(row.getAttribute("data-club"), 10) === gameClubId);
+  });
+
+  const c = currentClubs.find(cl => cl.game_club_id === gameClubId);
+  if (!c) return;
+
+  const taken = c.user_id && c.user_id !== userId;
+  const mine = c.user_id && c.user_id === userId;
+
+  document.getElementById("selectMain").innerHTML = `
+    <div class="club-detail-header">
+      <div>
+        <div class="name">${escapeHtml(c.nom)}</div>
+        <div class="sub">${c.classement ? `Classement pronostiqué : ${c.classement}e` : ""}</div>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="label">Budget</div>
+        <div class="value">${formatMoney(c.budget_actuel)}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Statut</div>
+        <div class="value">${escapeHtml(c.statut || "-")}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Niveau d'entraînement</div>
+        <div class="value">${c.niveau_entrainement ? c.niveau_entrainement + "/20" : "-"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Centre de formation</div>
+        <div class="value">${c.centre_formation && c.centre_formation > 0 ? c.centre_formation + "/20" : "Aucun"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Stade</div>
+        <div class="value">${formatInt(c.capacite_stade)} places</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Affluence moyenne</div>
+        <div class="value">${formatInt(c.affluence_moyenne)}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Niveau du club</div>
+        <div class="value">${formatPct(c.niveau_pct)}</div>
+      </div>
+      <div class="detail-item">
+        <div class="label">Meilleur joueur</div>
+        <div class="value">${escapeHtml(c.meilleur_joueur_nom || "-")} <span style="color:var(--text-dim); font-weight:400;">(${c.nb_joueurs} joueurs)</span></div>
+      </div>
+    </div>
+    <div class="club-actions">
+      <button class="secondary" id="viewSquadBtn">Infos effectif</button>
+      ${mine
+        ? `<span class="club-taken-note">C'est déjà ton club</span>`
+        : taken
+          ? `<span class="club-taken-note">Déjà pris par un autre participant</span>`
+          : `<button class="pick-btn" id="pickClubBtn">Choisir ce club</button>`}
+    </div>
+  `;
+
+  document.getElementById("viewSquadBtn").addEventListener("click", () => {
+    window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
+  });
+
+  const pickBtn = document.getElementById("pickClubBtn");
+  if (pickBtn) {
+    pickBtn.addEventListener("click", () => pickClub(gameClubId, pickBtn));
+  }
 }
 
 async function pickClub(gameClubId, btnEl) {
@@ -376,7 +556,7 @@ async function pickClub(gameClubId, btnEl) {
     console.error(e);
     toast("Erreur : " + e.message, true);
     btnEl.disabled = false;
-    btnEl.textContent = "Choisir";
+    btnEl.textContent = "Choisir ce club";
   }
 }
 
