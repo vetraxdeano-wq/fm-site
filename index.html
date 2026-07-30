@@ -76,6 +76,12 @@
   }
   .host-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
   .participant-count { font-size: 12px; color: var(--text-dim); }
+  .pseudo-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .pseudo-chip {
+    background: #14171d; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 3px 9px; border-radius: 999px; font-size: 12px;
+  }
+  .start-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.4; }
   .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px 0; }
   .hidden { display: none !important; }
   .toast {
@@ -323,7 +329,7 @@ document.getElementById("createRoomBtn").addEventListener("click", async () => {
 
     const { error: memberErr } = await supabaseClient
       .from("game_participants")
-      .insert({ game_id: game.id, user_id: userId, is_host: true });
+      .insert({ game_id: game.id, user_id: userId, is_host: true, pseudo: userPseudo });
 
     if (memberErr) throw memberErr;
 
@@ -372,7 +378,7 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
     if (!existing) {
       const { error: memberErr } = await supabaseClient
         .from("game_participants")
-        .insert({ game_id: game.id, user_id: userId, is_host: false });
+        .insert({ game_id: game.id, user_id: userId, is_host: false, pseudo: userPseudo });
 
       if (memberErr) throw memberErr;
     }
@@ -440,17 +446,18 @@ async function loadRooms() {
       return;
     }
 
-    const hostGameIds = memberships.filter(m => m.is_host).map(m => m.game_id);
-    let countsByGame = {};
-    if (hostGameIds.length > 0) {
-      const { data: allParticipants } = await supabaseClient
-        .from("game_participants")
-        .select("game_id")
-        .in("game_id", hostGameIds);
-      (allParticipants || []).forEach(p => {
-        countsByGame[p.game_id] = (countsByGame[p.game_id] || 0) + 1;
-      });
-    }
+    // Recupere TOUS les participants (avec pseudo) de toutes mes rooms en une requete
+    const allGameIds = memberships.map(m => m.game_id);
+    const { data: allParticipants } = await supabaseClient
+      .from("game_participants")
+      .select("game_id, pseudo, is_host")
+      .in("game_id", allGameIds);
+
+    const participantsByGame = {};
+    (allParticipants || []).forEach(p => {
+      if (!participantsByGame[p.game_id]) participantsByGame[p.game_id] = [];
+      participantsByGame[p.game_id].push(p);
+    });
 
     container.innerHTML = "";
     memberships.forEach(m => {
@@ -460,8 +467,11 @@ async function loadRooms() {
       const div = document.createElement("div");
       div.className = "room-item";
 
-      const count = countsByGame[g.id];
+      const participants = participantsByGame[g.id] || [];
       const canStart = m.is_host && g.statut === "lobby";
+      const pseudosHtml = participants
+        .map(p => `<span class="pseudo-chip">${p.is_host ? "👑 " : ""}${escapeHtml(p.pseudo || "?")}</span>`)
+        .join("");
 
       div.innerHTML = `
         <div class="room-item-top">
@@ -471,12 +481,12 @@ async function loadRooms() {
           </div>
           <div class="code-badge">${escapeHtml(g.code_invitation)}</div>
         </div>
-        ${canStart ? `
-          <div class="host-actions">
-            <button class="gold" data-start="${g.id}">Demarrer la partie</button>
-            <span class="participant-count">${count || 1} joueur(s) inscrit(s)</span>
-          </div>
-        ` : ""}
+        <div class="pseudo-list">${pseudosHtml}</div>
+        <div class="host-actions">
+          <button class="secondary" data-goto="${g.id}">Acceder a la partie</button>
+          ${canStart ? `<button class="gold" data-start="${g.id}">Demarrer la partie</button>` : ""}
+        </div>
+        ${canStart ? `<div class="start-hint">Demarre le decompte des jours (mercato, matchs...) pour tout le monde. A faire une fois que tous les joueurs attendus ont rejoint — impossible d'ajouter quelqu'un apres.</div>` : ""}
       `;
 
       container.appendChild(div);
@@ -484,6 +494,11 @@ async function loadRooms() {
 
     container.querySelectorAll("[data-start]").forEach(btn => {
       btn.addEventListener("click", () => startGame(btn.getAttribute("data-start"), btn));
+    });
+    container.querySelectorAll("[data-goto]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        window.location.href = `dashboard.html?game=${btn.getAttribute("data-goto")}`;
+      });
     });
   } catch (e) {
     console.error(e);
