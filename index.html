@@ -54,6 +54,8 @@
   button:disabled { opacity: 0.5; cursor: default; }
   button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
   button.gold { background: var(--gold); color: #3a2a00; }
+  button.danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+  button.danger:hover { background: var(--danger); color: #fff; }
   .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
   .tab-btn {
     flex: 1; background: #0d0f13; border: 1px solid var(--border); color: var(--text-dim);
@@ -428,6 +430,35 @@ async function startGame(gameId, btnEl) {
 }
 
 // ============================================================
+// SUPPRIMER UNE ROOM (host uniquement)
+// ============================================================
+async function deleteGame(gameId, gameName, btnEl) {
+  const sure = confirm(
+    `Supprimer definitivement "${gameName}" ?\n\n` +
+    `Ca supprime aussi tous les clubs/joueurs/staff copies pour cette partie, ` +
+    `le calendrier, les evenements et les participants. Impossible a annuler.`
+  );
+  if (!sure) return;
+
+  btnEl.disabled = true;
+  try {
+    const { error } = await supabaseClient
+      .from("games")
+      .delete()
+      .eq("id", gameId);
+
+    if (error) throw error;
+
+    toast(`Room "${gameName}" supprimee`);
+    loadRooms();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur lors de la suppression : " + e.message, true);
+    btnEl.disabled = false;
+  }
+}
+
+// ============================================================
 // LISTER MES ROOMS
 // ============================================================
 async function loadRooms() {
@@ -485,6 +516,7 @@ async function loadRooms() {
         <div class="host-actions">
           <button class="secondary" data-goto="${g.id}">Acceder a la partie</button>
           ${canStart ? `<button class="gold" data-start="${g.id}">Demarrer la partie</button>` : ""}
+          ${m.is_host ? `<button class="danger" data-delete="${g.id}">Supprimer</button>` : ""}
         </div>
         ${canStart ? `<div class="start-hint">Demarre le decompte des jours (mercato, matchs...) pour tout le monde. A faire une fois que tous les joueurs attendus ont rejoint — impossible d'ajouter quelqu'un apres.</div>` : ""}
       `;
@@ -494,6 +526,11 @@ async function loadRooms() {
 
     container.querySelectorAll("[data-start]").forEach(btn => {
       btn.addEventListener("click", () => startGame(btn.getAttribute("data-start"), btn));
+    });
+    container.querySelectorAll("[data-delete]").forEach(btn => {
+      const id = btn.getAttribute("data-delete");
+      const g = memberships.find(m => m.games && m.games.id === id)?.games;
+      btn.addEventListener("click", () => deleteGame(id, g?.nom || "cette partie", btn));
     });
     container.querySelectorAll("[data-goto]").forEach(btn => {
       btn.addEventListener("click", () => {
