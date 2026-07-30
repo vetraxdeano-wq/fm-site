@@ -231,13 +231,12 @@
   }
   .fm-date-badge .day-num { font-size: 13px; font-weight: 800; white-space: nowrap; }
   .fm-date-badge .season-line { font-size: 11px; color: rgba(255,255,255,0.7); }
-  .fm-continue-btn {
-    background: var(--gold); color: #3a2a00; border: none; padding: 10px 20px;
-    border-radius: 8px; font-weight: 800; font-size: 13px; cursor: pointer;
+  .fm-change-club-btn {
+    background: transparent; color: rgba(255,255,255,0.85); border: 1px solid rgba(255,255,255,0.3);
+    padding: 9px 16px; border-radius: 8px; font-weight: 700; font-size: 12.5px; cursor: pointer;
     white-space: nowrap;
   }
-  .fm-continue-btn:hover { filter: brightness(1.08); }
-  .fm-continue-btn:disabled { opacity: 0.5; cursor: default; }
+  .fm-change-club-btn:hover { background: rgba(255,255,255,0.08); }
 
   .fm-body { flex: 1; display: flex; align-items: stretch; min-height: 0; }
 
@@ -292,6 +291,50 @@
     color: var(--text-dim); margin-bottom: 3px;
   }
   .fm-mini-grid .value { font-size: 13.5px; font-weight: 600; }
+
+  /* Mini graphique d'historique financier (repris dans l'onglet Finance) */
+  .fm-chart-wrap { margin-top: 10px; }
+  .fm-chart-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .fm-chart-header .title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .fm-chart-legend { display: flex; gap: 12px; font-size: 11px; color: var(--text-dim); }
+  .fm-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .fm-chart-legend .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .fm-chart-legend .dot.gain { background: var(--accent); }
+  .fm-chart-legend .dot.perte { background: var(--danger); }
+  .fm-chart-svg { width: 100%; height: auto; display: block; }
+  .fm-chart-bar { transition: opacity 0.15s; }
+  .fm-chart-bar:hover { opacity: 0.75; }
+  .fm-chart-labels {
+    display: flex; justify-content: space-between; margin-top: 4px;
+    font-size: 10px; color: var(--text-dim);
+  }
+
+  /* Boite de reception (messages) */
+  .fm-inbox-list { display: flex; flex-direction: column; gap: 2px; }
+  .fm-inbox-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12.5px;
+  }
+  .fm-inbox-item:last-child { border-bottom: none; }
+  .fm-inbox-icon {
+    width: 28px; height: 28px; border-radius: 8px; background: rgba(251,191,36,0.1);
+    display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0;
+  }
+  .fm-inbox-text { flex: 1; min-width: 0; }
+  .fm-inbox-text .subject { font-weight: 600; color: var(--text); }
+  .fm-inbox-text .preview {
+    color: var(--text-dim); font-size: 11.5px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .fm-inbox-time { font-size: 10.5px; color: var(--text-dim); flex-shrink: 0; }
+  .fm-inbox-empty {
+    text-align: center; color: var(--text-dim); font-size: 12.5px;
+    padding: 26px 10px 10px; line-height: 1.6;
+  }
+  .fm-inbox-empty .big-icon { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.6; }
 
   @media (max-width: 900px) {
     .fm-header { padding: 10px 14px; }
@@ -366,10 +409,6 @@
             <div id="fmNextMatch" class="fm-empty">Chargement...</div>
           </div>
           <div class="card">
-            <div class="fm-card-title"><span>Infos club</span></div>
-            <div id="fmClubInfo" class="fm-empty">Chargement...</div>
-          </div>
-          <div class="card">
             <div class="fm-card-title"><span>Entraînement</span></div>
             <div id="fmTraining" class="fm-empty">Chargement...</div>
           </div>
@@ -387,6 +426,10 @@
           <div class="card">
             <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
             <div id="fmTeamStats" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
+            <div class="fm-card-title"><span>Boîte de réception</span></div>
+            <div id="fmInbox" class="fm-empty">Chargement...</div>
           </div>
         </div>
       </div>
@@ -857,6 +900,7 @@ const FM_NAV_ITEMS = [
   { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: null },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: null },
   { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
+  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
 ];
 
 function renderFmSidebar(gameClubId) {
@@ -881,7 +925,7 @@ function renderFmSidebar(gameClubId) {
   });
 }
 
-function renderFmHeader(club, pseudo, game) {
+function renderFmHeader(club, pseudo, game, canChange) {
   const el = document.getElementById("fmHeader");
   const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml(club.nom.toUpperCase())} (ID:${club.game_club_id})`;
 
@@ -901,44 +945,74 @@ function renderFmHeader(club, pseudo, game) {
         <div class="day-num">${dateLabel}</div>
         <div class="season-line">Saison ${escapeHtml(String(game.saison ?? "-"))}</div>
       </div>
-      <button class="fm-continue-btn" id="fmContinueBtn" ${game.statut === "lobby" ? "disabled" : ""}>
-        CONTINUER
-      </button>
+      ${canChange ? `<button class="fm-change-club-btn" id="changeClubBtn">Changer de club</button>` : ""}
     </div>
   `;
 
-  document.getElementById("fmContinueBtn").addEventListener("click", () => {
-    toast("La simulation des journées arrive bientôt 🚧");
+  if (canChange) {
+    document.getElementById("changeClubBtn").addEventListener("click", () => {
+      document.getElementById("clubSelectScreen").classList.remove("hidden");
+      document.getElementById("mainDashboard").classList.add("hidden");
+      initClubSelection();
+    });
+  }
+}
+
+// Petit generateur pseudo-aleatoire (seed) pour produire un historique de
+// mouvements financiers stable tant qu'aucune vraie table de transactions
+// (recettes/depenses par journee) n'existe cote base de donnees.
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Historique factice des 6 dernieres periodes (gains en vert, pertes en
+// rouge), genere a partir de l'ID du club pour rester stable a l'ecran.
+// A remplacer par une vraie requete (ex: table game_finance_history) des
+// que le suivi jour par jour des mouvements financiers sera en place.
+function buildFinanceHistory(club) {
+  const rand = mulberry32((club.game_club_id || 1) * 7919 + Math.round((club.budget_actuel || 0) % 1000));
+  const periods = ["S-5", "S-4", "S-3", "S-2", "S-1", "S"];
+  return periods.map(label => {
+    const amplitude = Math.max(20000, Math.round((club.budget_actuel || 500000) * 0.08));
+    const value = Math.round((rand() - 0.45) * amplitude);
+    return { label, value };
   });
 }
 
-function renderClubInfo(club) {
-  const el = document.getElementById("fmClubInfo");
-  el.innerHTML = `
-    <div class="fm-mini-grid">
-      <div class="detail-item">
-        <div class="label">Statut</div>
-        <div class="value">${escapeHtml(club.statut || "-")}</div>
+function renderFinanceChart(history) {
+  const maxAbs = Math.max(1, ...history.map(h => Math.abs(h.value)));
+  const w = 400, h = 110, midY = h / 2;
+  const barW = (w / history.length) * 0.5;
+  const gap = w / history.length;
+
+  const bars = history.map((pt, i) => {
+    const barH = (Math.abs(pt.value) / maxAbs) * (h / 2 - 8);
+    const x = i * gap + (gap - barW) / 2;
+    const y = pt.value >= 0 ? midY - barH : midY;
+    const color = pt.value >= 0 ? "var(--accent)" : "var(--danger)";
+    return `<rect class="fm-chart-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="2" fill="${color}"><title>${pt.label} : ${pt.value >= 0 ? "+" : ""}${formatMoney(pt.value)}</title></rect>`;
+  }).join("");
+
+  return `
+    <div class="fm-chart-wrap">
+      <div class="fm-chart-header">
+        <span class="title">Historique des mouvements</span>
+        <span class="fm-chart-legend">
+          <span><span class="dot gain"></span>Gains</span>
+          <span><span class="dot perte"></span>Pertes</span>
+        </span>
       </div>
-      <div class="detail-item">
-        <div class="label">Classement pronostiqué</div>
-        <div class="value">${club.classement ? club.classement + "e" : "-"}</div>
-      </div>
-      <div class="detail-item">
-        <div class="label">Niveau d'entraînement</div>
-        <div class="value">${club.niveau_entrainement ? starsHtml(starsFromScale(club.niveau_entrainement)) : "-"}</div>
-      </div>
-      <div class="detail-item">
-        <div class="label">Centre de formation</div>
-        <div class="value">${club.centre_formation && club.centre_formation > 0 ? starsHtml(starsFromScale(club.centre_formation)) : "Aucun"}</div>
-      </div>
-      <div class="detail-item">
-        <div class="label">Stade</div>
-        <div class="value">${formatInt(club.capacite_stade)} places</div>
-      </div>
-      <div class="detail-item">
-        <div class="label">Meilleur joueur</div>
-        <div class="value">${escapeHtml(club.meilleur_joueur_nom || "-")}</div>
+      <svg class="fm-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <line x1="0" y1="${midY}" x2="${w}" y2="${midY}" stroke="var(--border)" stroke-width="1" />
+        ${bars}
+      </svg>
+      <div class="fm-chart-labels">
+        ${history.map(pt => `<span>${pt.label}</span>`).join("")}
       </div>
     </div>
   `;
@@ -946,12 +1020,28 @@ function renderClubInfo(club) {
 
 function renderFinances(club) {
   const el = document.getElementById("fmFinances");
+  const history = buildFinanceHistory(club);
   el.innerHTML = `
     <div class="fm-stat-row">
       <span class="label">Budget disponible</span>
       <span class="value">${formatMoney(club.budget_actuel)}</span>
     </div>
-    <div class="fm-empty" style="padding-top:8px;">Détail des salaires et du budget transferts à venir.</div>
+    ${renderFinanceChart(history)}
+    <div class="fm-empty" style="padding-top:10px;">Détail des salaires et du budget transferts à venir dans l'onglet Finance.</div>
+  `;
+}
+
+// Boite de reception : pas encore de vraie messagerie cote base de donnees,
+// on affiche un etat vide informatif en attendant les premiers messages
+// (offres de transfert, rapports du staff, notifications de club...).
+function renderInbox() {
+  const el = document.getElementById("fmInbox");
+  el.innerHTML = `
+    <div class="fm-inbox-empty">
+      <span class="big-icon">📭</span>
+      Aucun message pour l'instant.<br>
+      Les offres de transfert, rapports du staff et notifications de club arriveront ici.
+    </div>
   `;
 }
 
@@ -1043,28 +1133,14 @@ async function showMyClub(gameClubId, canChange) {
     .eq("game_id", gameId);
   const me = (participants || []).find(p => p.user_id === userId);
 
-  renderFmHeader(club, me?.pseudo, currentGame);
+  renderFmHeader(club, me?.pseudo, currentGame, canChange);
   renderFmSidebar(gameClubId);
   renderNextMatch();
-  renderClubInfo(club);
   renderTraining();
   renderFinances(club);
   renderTeamStats();
   renderStandings(club);
-
-  if (canChange) {
-    const changeBtn = document.createElement("button");
-    changeBtn.className = "secondary small";
-    changeBtn.id = "changeClubBtn";
-    changeBtn.textContent = "Changer de club";
-    changeBtn.style.marginTop = "10px";
-    changeBtn.addEventListener("click", () => {
-      document.getElementById("clubSelectScreen").classList.remove("hidden");
-      document.getElementById("mainDashboard").classList.add("hidden");
-      initClubSelection();
-    });
-    document.getElementById("fmClubInfo").after(changeBtn);
-  }
+  renderInbox();
 }
 
 async function startGame(participantCount) {
