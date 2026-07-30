@@ -401,6 +401,17 @@
   .pdb-name-cell { font-weight: 600; }
   .pdb-club-link { cursor: pointer; }
   .pdb-club-link:hover { color: var(--accent); text-decoration: underline; }
+  .pdb-pagination {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    padding: 14px 0 4px;
+  }
+  .pdb-pagination button {
+    background: #14171d; border: 1px solid var(--border); color: var(--text);
+    padding: 7px 14px; border-radius: 8px; font-size: 12.5px;
+  }
+  .pdb-pagination button:hover:not(:disabled) { border-color: var(--text-dim); }
+  .pdb-pagination button:disabled { opacity: 0.35; cursor: default; }
+  .pdb-page-info { font-size: 12.5px; color: var(--text-dim); }
   .pdb-rep-stars { color: var(--gold); letter-spacing: 1px; }
   .pdb-empty-cell { color: var(--text-dim); }
 
@@ -718,6 +729,7 @@
             </tbody>
           </table>
         </div>
+        <div class="pdb-pagination" id="pdbPagination"></div>
       </div>
     </div>
   </div>
@@ -1249,6 +1261,22 @@ let pdbUserClubId = null;
 let pdbFiltersWired = false;
 let pdbNationValue = "";
 
+// Chargement progressif : on affiche une premiere vague de joueurs tout de
+// suite, puis le reste continue de charger en arriere-plan sans bloquer la
+// page. pdbLoadingComplete indique si tout est arrive.
+let pdbLoadingComplete = false;
+let pdbTotalPlayers = 0;
+let pdbKnownClubIds = new Set();
+let pdbKnownRepClubIds = new Set();
+
+// Pagination cote client de la table : on ne rend jamais plus de
+// PDB_PAGE_SIZE lignes a la fois dans le DOM, meme si des dizaines de
+// milliers de joueurs correspondent aux filtres (sinon la page gele
+// completement au moment du rendu).
+const PDB_PAGE_SIZE = 100;
+let pdbCurrentPage = 1;
+let pdbLastFiltered = [];
+
 // Marge de tolerance autour de la reputation du club pour le mode "interesse
 // par transfert". Resserree fortement (etait 10%) : un club a 5000 de
 // reputation ne cible plus que les joueurs entre ~4850 et ~5150.
@@ -1325,8 +1353,13 @@ function formatMoneyShort(n) {
   return `${Math.round(n)} €`;
 }
 
+// Valeur sentinelle utilisee en base pour marquer un joueur "pas a vendre"
+// (pas une vraie valeur marchande a afficher en fourchette).
+const PDB_NOT_FOR_SALE_VALUE = 349868667;
+
 function formatMoneyRange(n) {
   const val = Number(n);
+  if (val === PDB_NOT_FOR_SALE_VALUE) return "Pas à vendre";
   if (!Number.isFinite(val)) return "-";
   if (val <= 0) return "Libre / négligeable";
   for (let i = 0; i < PDB_VALEUR_BRACKETS.length; i++) {
@@ -1467,54 +1500,79 @@ function wirePlayersDbFilters(clubId) {
 
 // Le nombre de joueurs peut largement depasser la limite par defaut de
 // Supabase/PostgREST (1000 lignes par requete) : ici, la base compte plus de
-// 75 000 joueurs pour une seule partie. On recupere donc TOUT en paginant
-// via .range(), par lots de requetes en parallele pour rester rapide, avant
-// de trier a nouveau cote client par reputation mondiale decroissante
-// (l'ordre de tri initial de l'ancien "order().limit()" n'est plus fiable
-// avec la pagination par plages).
-async function fetchAllGamePlayers(gameId, onProgress) {
-  const PAGE_SIZE = 1000;
-  const CONCURRENCY = 6;
+// 75 000 joueurs pour une seule partie. Recupere les pages demandees
+// (pageStarts, par lots de PAGE_SIZE) via .range(), en parallele par
+// paquets de `concurrency` requetes. Si onBatch est fourni, il est appele
+// (et attendu) apres chaque paquet, avec les joueurs de ce paquet seulement
+// — ca permet a l'appelant de mettre a jour l'affichage au fur et a mesure
+// sans attendre la fin du chargement complet.
+const PDB_FETCH_PAGE_SIZE = 1000;
 
-  const { count, error: countError } = await supabaseClient
-    .from("game_players")
-    .select("id", { count: "exact", head: true })
-    .eq("game_id", gameId);
-  if (countError) throw countError;
-
-  const total = count || 0;
-  if (total === 0) return [];
-
-  const pageStarts = [];
-  for (let from = 0; from < total; from += PAGE_SIZE) pageStarts.push(from);
-
-  const all = [];
-  for (let i = 0; i < pageStarts.length; i += CONCURRENCY) {
-    const batch = pageStarts.slice(i, i + CONCURRENCY);
+async function fetchGamePlayersPages(pageStarts, concurrency, onBatch) {
+  const collected = [];
+  for (let i = 0; i < pageStarts.length; i += concurrency) {
+    const batch = pageStarts.slice(i, i + concurrency);
     const results = await Promise.all(batch.map(from =>
       supabaseClient
         .from("game_players")
         .select("*")
         .eq("game_id", gameId)
         .order("id", { ascending: true })
-        .range(from, from + PAGE_SIZE - 1)
+        .range(from, from + PDB_FETCH_PAGE_SIZE - 1)
     ));
+    const batchPlayers = [];
     for (const { data, error } of results) {
       if (error) throw error;
-      all.push(...(data || []));
+      batchPlayers.push(...(data || []));
     }
-    if (onProgress) onProgress(all.length, total);
+    collected.push(...batchPlayers);
+    if (onBatch) await onBatch(batchPlayers);
   }
+  return collected;
+}
 
-  all.sort((a, b) => {
+function sortPdbPlayersByReputation(players) {
+  players.sort((a, b) => {
     const ra = Number(a.reputation_mondiale), rb = Number(b.reputation_mondiale);
     const va = Number.isFinite(ra) ? ra : -Infinity;
     const vb = Number.isFinite(rb) ? rb : -Infinity;
     return vb - va;
   });
-
-  return all;
 }
+
+// Recupere les noms de club et reputations "officielles" (table clubs) des
+// nouveaux clubs apparus dans un lot de joueurs, sans re-interroger ceux
+// deja connus des lots precedents.
+async function refreshPdbClubLookups(newPlayers, userClubId) {
+  const newClubIds = [...new Set(newPlayers.map(p => p.game_club_id).filter(Boolean))]
+    .filter(id => !pdbKnownClubIds.has(id));
+  if (newClubIds.length > 0) {
+    newClubIds.forEach(id => pdbKnownClubIds.add(id));
+    const { data: clubRows } = await supabaseClient.from("game_clubs").select("id, nom").in("id", newClubIds);
+    (clubRows || []).forEach(c => { pdbClubNameById[c.id] = c.nom; });
+  }
+
+  const repIdsNeeded = [...new Set([...newClubIds, userClubId].filter(Boolean))]
+    .filter(id => !pdbKnownRepClubIds.has(id));
+  if (repIdsNeeded.length > 0) {
+    repIdsNeeded.forEach(id => pdbKnownRepClubIds.add(id));
+    const repMap = await fetchClubReputationsByGameClubId(repIdsNeeded);
+    Object.assign(pdbClubReputationById, repMap);
+  }
+
+  if (pdbClubReputation == null && userClubId) {
+    pdbClubReputation = pdbClubReputationById[userClubId] ?? await fetchClubRealReputation(userClubId);
+  }
+}
+
+// Charge la BDD de joueurs en deux temps : une premiere vague (quelques
+// milliers de joueurs) affichee tout de suite pour ne pas faire attendre
+// l'utilisateur, puis le reste continue de charger en arriere-plan par
+// lots. La table reste utilisable (filtres, pagination) pendant ce temps ;
+// chaque lot ne fait qu'ajouter des joueurs et rafraichir l'affichage —
+// jamais geler la page en rendant 80 000 lignes d'un coup.
+const PDB_FIRST_WAVE_SIZE = 2000;
+const PDB_FETCH_CONCURRENCY = 6;
 
 async function loadPlayersDb(clubId) {
   const tbody = document.getElementById("pdbTableBody");
@@ -1522,35 +1580,80 @@ async function loadPlayersDb(clubId) {
   tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Chargement des joueurs...</td></tr>`;
   countEl.textContent = "Chargement...";
 
+  pdbAllPlayers = [];
+  pdbClubNameById = {};
+  pdbClubReputationById = {};
+  pdbClubReputation = null;
+  pdbKnownClubIds = new Set();
+  pdbKnownRepClubIds = new Set();
+  pdbLoadingComplete = false;
+
   try {
-    const players = await fetchAllGamePlayers(gameId, (loaded, total) => {
-      countEl.textContent = `Chargement des joueurs... (${loaded.toLocaleString("fr-FR")}/${total.toLocaleString("fr-FR")})`;
-    });
+    const { count, error: countError } = await supabaseClient
+      .from("game_players")
+      .select("id", { count: "exact", head: true })
+      .eq("game_id", gameId);
+    if (countError) throw countError;
+    pdbTotalPlayers = count || 0;
 
-    pdbAllPlayers = players || [];
-    // Precalcule une seule fois l'ensemble des postes atomiques de chaque
-    // joueur (evite de re-eclater "postes"/"poste_brut" a chaque filtrage).
-    pdbAllPlayers.forEach(p => { p._atomicPostes = computePlayerAtomicPostes(p); });
-
-    const clubIds = [...new Set(pdbAllPlayers.map(p => p.game_club_id).filter(Boolean))];
-    pdbClubNameById = {};
-    if (clubIds.length > 0) {
-      const { data: clubRows } = await supabaseClient.from("game_clubs").select("id, nom").in("id", clubIds);
-      (clubRows || []).forEach(c => { pdbClubNameById[c.id] = c.nom; });
+    if (pdbTotalPlayers === 0) {
+      pdbLoaded = true;
+      pdbLoadingComplete = true;
+      populatePlayersDbFilterOptions();
+      buildAdvancedFiltersModal();
+      applyPlayersDbFilters(clubId);
+      return;
     }
 
-    const allClubIdsForRep = [...new Set([...clubIds, clubId].filter(Boolean))];
-    pdbClubReputationById = await fetchClubReputationsByGameClubId(allClubIdsForRep);
-    pdbClubReputation = pdbClubReputationById[clubId] ?? await fetchClubRealReputation(clubId);
+    // 1) Premiere vague rapide.
+    const firstWaveStarts = [];
+    for (let from = 0; from < Math.min(PDB_FIRST_WAVE_SIZE, pdbTotalPlayers); from += PDB_FETCH_PAGE_SIZE) {
+      firstWaveStarts.push(from);
+    }
+    const firstWave = await fetchGamePlayersPages(firstWaveStarts, PDB_FETCH_CONCURRENCY);
+    firstWave.forEach(p => { p._atomicPostes = computePlayerAtomicPostes(p); });
+    sortPdbPlayersByReputation(firstWave);
+    pdbAllPlayers = firstWave;
 
+    await refreshPdbClubLookups(firstWave, clubId);
+    pdbLoaded = true;
     populatePlayersDbFilterOptions();
     buildAdvancedFiltersModal();
-    pdbLoaded = true;
     applyPlayersDbFilters(clubId);
+
+    // 2) Reste des joueurs, en arriere-plan, par lots.
+    const remainingStarts = [];
+    for (let from = firstWave.length; from < pdbTotalPlayers; from += PDB_FETCH_PAGE_SIZE) {
+      remainingStarts.push(from);
+    }
+
+    if (remainingStarts.length > 0) {
+      await fetchGamePlayersPages(remainingStarts, PDB_FETCH_CONCURRENCY, async (batchPlayers) => {
+        batchPlayers.forEach(p => { p._atomicPostes = computePlayerAtomicPostes(p); });
+        pdbAllPlayers.push(...batchPlayers);
+        await refreshPdbClubLookups(batchPlayers, clubId);
+        populatePlayersDbFilterOptions();
+        applyPlayersDbFilters(clubId, { resetPage: false });
+      });
+    }
+
+    sortPdbPlayersByReputation(pdbAllPlayers);
+    pdbLoadingComplete = true;
+    // Reconstruit la liste des personnalites (peut s'etre completee depuis
+    // la premiere vague) avant le rendu final.
+    pdbAdvModalBuilt = false;
+    buildAdvancedFiltersModal();
+    applyPlayersDbFilters(clubId, { resetPage: false });
   } catch (e) {
     console.error(e);
-    tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
-    countEl.textContent = "";
+    if (!pdbAllPlayers.length) {
+      tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
+      countEl.textContent = "";
+    } else {
+      pdbLoadingComplete = true;
+      toast("Erreur pendant le chargement en arrière-plan : " + e.message, true);
+      applyPlayersDbFilters(clubId, { resetPage: false });
+    }
   }
 }
 
@@ -1625,7 +1728,9 @@ function populatePlayersDbFilterOptions() {
   pdbAllNationsCache = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))].sort();
 
   const posteSelect = document.getElementById("pdbPosteSelect");
+  const currentPoste = posteSelect.value;
   posteSelect.innerHTML = `<option value="">Tous</option>` + postes.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  posteSelect.value = currentPoste;
 
   renderNationOptions(pdbAllNationsCache);
   updateNationTriggerLabel();
@@ -1689,7 +1794,7 @@ function playerPassesContractFilter(p, contractValue) {
   return expireDate >= today && expireDate <= cutoff;
 }
 
-function applyPlayersDbFilters(clubId) {
+function applyPlayersDbFilters(clubId, opts = {}) {
   const q = document.getElementById("pdbSearchInput").value.trim().toLowerCase();
   const poste = document.getElementById("pdbPosteSelect").value;
   const nation = pdbNationValue;
@@ -1735,12 +1840,18 @@ function applyPlayersDbFilters(clubId) {
     filtered = filtered.filter(playerPassesAdvancedFilters);
   }
 
+  pdbLastFiltered = filtered;
+  if (opts.resetPage !== false) pdbCurrentPage = 1;
   renderPlayersDbTable(filtered);
 
   const countEl = document.getElementById("pdbCount");
   const total = pdbAllPlayers.length;
+  const loadingHint = !pdbLoadingComplete
+    ? ` <span class="pdb-hint">— chargement en arrière-plan (${total.toLocaleString("fr-FR")}/${pdbTotalPlayers.toLocaleString("fr-FR")})</span>`
+    : "";
   countEl.innerHTML = `<strong>${filtered.length}</strong> joueur${filtered.length > 1 ? "s" : ""} trouvé${filtered.length > 1 ? "s" : ""} sur ${total}` +
-    (interestedOnly && pdbClubReputation == null ? ` <span class="pdb-hint">— réputation du club introuvable</span>` : "");
+    (interestedOnly && pdbClubReputation == null ? ` <span class="pdb-hint">— réputation du club introuvable</span>` : "") +
+    loadingHint;
 }
 
 // Determine le pied fort a partir des notes textuelles pied_gauche/pied_droit
@@ -1769,10 +1880,20 @@ function renderPlayersDbTable(players) {
   const tbody = document.getElementById("pdbTableBody");
   if (players.length === 0) {
     tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Aucun joueur ne correspond à ces filtres.</td></tr>`;
+    renderPdbPagination(0, 1);
     return;
   }
 
-  tbody.innerHTML = players.map(p => {
+  // Pagination cote client : on ne rend jamais que PDB_PAGE_SIZE lignes a la
+  // fois, meme si des dizaines de milliers de joueurs correspondent aux
+  // filtres — sinon construire 80 000 <tr> d'un coup gele completement la page.
+  const totalPages = Math.max(1, Math.ceil(players.length / PDB_PAGE_SIZE));
+  if (pdbCurrentPage > totalPages) pdbCurrentPage = totalPages;
+  if (pdbCurrentPage < 1) pdbCurrentPage = 1;
+  const startIdx = (pdbCurrentPage - 1) * PDB_PAGE_SIZE;
+  const pageItems = players.slice(startIdx, startIdx + PDB_PAGE_SIZE);
+
+  tbody.innerHTML = pageItems.map(p => {
     const clubCell = p.game_club_id
       ? `<span class="pdb-club-link" data-club-id="${p.game_club_id}">${escapeHtml(pdbClubNameById[p.game_club_id] || "-")}</span>`
       : "Libre";
@@ -1818,6 +1939,35 @@ function renderPlayersDbTable(players) {
       </tr>
     `;
   }).join("");
+
+  renderPdbPagination(players.length, totalPages);
+}
+
+function renderPdbPagination(totalCount, totalPages) {
+  const el = document.getElementById("pdbPagination");
+  if (!el) return;
+  if (totalCount === 0) { el.innerHTML = ""; return; }
+
+  el.innerHTML = `
+    <button type="button" id="pdbPagePrev" ${pdbCurrentPage <= 1 ? "disabled" : ""}>‹ Précédent</button>
+    <span class="pdb-page-info">Page ${pdbCurrentPage} / ${totalPages}</span>
+    <button type="button" id="pdbPageNext" ${pdbCurrentPage >= totalPages ? "disabled" : ""}>Suivant ›</button>
+  `;
+
+  const prevBtn = document.getElementById("pdbPagePrev");
+  const nextBtn = document.getElementById("pdbPageNext");
+  if (prevBtn) prevBtn.addEventListener("click", () => {
+    if (pdbCurrentPage <= 1) return;
+    pdbCurrentPage--;
+    renderPlayersDbTable(pdbLastFiltered);
+    document.querySelector(".pdb-table-wrap")?.scrollTo?.({ top: 0 });
+  });
+  if (nextBtn) nextBtn.addEventListener("click", () => {
+    if (pdbCurrentPage >= totalPages) return;
+    pdbCurrentPage++;
+    renderPlayersDbTable(pdbLastFiltered);
+    document.querySelector(".pdb-table-wrap")?.scrollTo?.({ top: 0 });
+  });
 }
 
 // ---- Popup "+ Ajouter des filtres" -----------------------------------
