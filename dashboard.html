@@ -683,7 +683,7 @@
             </select>
           </div>
           <label class="pdb-checkbox-field" for="pdbTransferCheckbox">
-            <input type="checkbox" id="pdbTransferCheckbox">
+            <input type="checkbox" id="pdbTransferCheckbox" checked>
             <span>Intéressé par transfert</span>
           </label>
           <button class="pdb-more-filters-btn" id="pdbMoreFiltersBtn" type="button">+ Ajouter des filtres</button>
@@ -1289,6 +1289,10 @@ const PDB_REPUTATION_MARGIN_RATIO = 0.03;
 // fort que l'effectif actuel ne serait pas interesse par le transfert.
 const PDB_CA_MARGIN_RATIO = 0.15;
 
+// Au-dela de ce nombre d'annees de contrat restant, un joueur vient
+// generalement de signer/prolonger et n'est pas interesse par un transfert.
+const PDB_LONG_CONTRACT_YEARS = 5;
+
 const PDB_FOOT_RANK = {
   "très faible": 0, "tres faible": 0,
   "faible": 1,
@@ -1509,14 +1513,17 @@ function wirePlayersDbFilters(clubId) {
 // Supabase/PostgREST (1000 lignes par requete) : ici, la base compte plus de
 // 75 000 joueurs pour une seule partie. Recupere les pages demandees
 // (pageStarts, par lots de PAGE_SIZE) via .range(), en parallele par
-// paquets de `concurrency` requetes. Si onBatch est fourni, il est appele
-// (et attendu) apres chaque paquet, avec les joueurs de ce paquet seulement
-// — ca permet a l'appelant de mettre a jour l'affichage au fur et a mesure
-// sans attendre la fin du chargement complet.
+// paquets de `concurrency` requetes. Si onBatch est fourni, il est declenche
+// a la reception de chaque paquet MAIS PAS attendu avant d'enchainer sur le
+// paquet suivant : ca evite que les requetes reseau annexes (noms de club,
+// reputation) ou le rendu de l'UI ralentissent le telechargement des pages
+// suivantes. Toutes les executions d'onBatch sont malgre tout garanties
+// terminees avant que la fonction ne retourne.
 const PDB_FETCH_PAGE_SIZE = 1000;
 
 async function fetchGamePlayersPages(pageStarts, concurrency, onBatch) {
   const collected = [];
+  const pendingBatchWork = [];
   for (let i = 0; i < pageStarts.length; i += concurrency) {
     const batch = pageStarts.slice(i, i + concurrency);
     const results = await Promise.all(batch.map(from =>
@@ -1533,8 +1540,11 @@ async function fetchGamePlayersPages(pageStarts, concurrency, onBatch) {
       batchPlayers.push(...(data || []));
     }
     collected.push(...batchPlayers);
-    if (onBatch) await onBatch(batchPlayers);
+    if (onBatch) {
+      pendingBatchWork.push(Promise.resolve().then(() => onBatch(batchPlayers)).catch(err => console.error(err)));
+    }
   }
+  if (pendingBatchWork.length) await Promise.all(pendingBatchWork);
   return collected;
 }
 
@@ -1579,7 +1589,10 @@ async function refreshPdbClubLookups(newPlayers, userClubId) {
 // chaque lot ne fait qu'ajouter des joueurs et rafraichir l'affichage —
 // jamais geler la page en rendant 80 000 lignes d'un coup.
 const PDB_FIRST_WAVE_SIZE = 2000;
-const PDB_FETCH_CONCURRENCY = 6;
+// Nombre de requetes de page lancees en parallele. Augmente (etait 6) car le
+// fetch reseau n'est plus ralenti par l'attente du traitement de chaque lot
+// (voir fetchGamePlayersPages) : on peut se permettre plus de requetes en vol.
+const PDB_FETCH_CONCURRENCY = 12;
 
 async function loadPlayersDb(clubId) {
   const tbody = document.getElementById("pdbTableBody");
@@ -1793,8 +1806,12 @@ function closeNationPanel() {
 
 // Statut de contrat, calcule par rapport a la date "en jeu" actuelle
 // (date_debut + jour_actuel), pas la date reelle du navigateur.
+function getPdbGameToday() {
+  return computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel) || new Date();
+}
+
 function getPdbContractCutoff(months) {
-  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel) || new Date();
+  const today = getPdbGameToday();
   const cutoff = new Date(today);
   cutoff.setMonth(cutoff.getMonth() + months);
   return { today, cutoff };
@@ -1832,7 +1849,10 @@ function applyPlayersDbFilters(clubId, opts = {}) {
     //   niveau de ton effectif : un joueur bien plus fort que ton equipe
     //   actuelle ne serait pas interesse par la rejoindre ;
     // - on exclut aussi les joueurs dont le club actuel est plus repute que
-    //   le tien (generalement peu interesses par un transfert "vers moins bien").
+    //   le tien (generalement peu interesses par un transfert "vers moins bien") ;
+    // - on exclut les joueurs avec plus de 5 ans de contrat restant : ca
+    //   signifie generalement qu'ils viennent de signer/prolonger et ne
+    //   sont pas interesses par un transfert, quels que soient reputation/CA.
     if (pdbClubReputation != null) {
       const repMargin = Math.max(pdbClubReputation * PDB_REPUTATION_MARGIN_RATIO, 50);
       const repCeiling = pdbClubReputation + repMargin;
@@ -1842,6 +1862,9 @@ function applyPlayersDbFilters(clubId, opts = {}) {
         ? squadAvgCA + Math.max(squadAvgCA * PDB_CA_MARGIN_RATIO, 5)
         : null;
 
+      const longContractCutoff = getPdbGameToday();
+      longContractCutoff.setFullYear(longContractCutoff.getFullYear() + PDB_LONG_CONTRACT_YEARS);
+
       filtered = filtered.filter(p => {
         const r = Number(p.reputation_mondiale);
         if (!Number.isFinite(r) || r > repCeiling) return false;
@@ -1850,6 +1873,10 @@ function applyPlayersDbFilters(clubId, opts = {}) {
         if (caCeiling != null) {
           const ca = Number(p.niveau_actuel);
           if (Number.isFinite(ca) && ca > caCeiling) return false;
+        }
+        if (p.contrat_expire) {
+          const expireDate = new Date(`${p.contrat_expire}T00:00:00`);
+          if (!isNaN(expireDate.getTime()) && expireDate > longContractCutoff) return false;
         }
         return true;
       });
