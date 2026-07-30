@@ -1056,20 +1056,46 @@ function initHeaderSearch() {
 }
 
 async function runGlobalSearch(q, dropdown) {
-  const [{ data: clubs }, { data: players }] = await Promise.all([
-    supabaseClient
-      .from("game_clubs")
-      .select("id, nom")
-      .eq("game_id", gameId)
-      .ilike("nom", `%${q}%`)
-      .limit(6),
-    supabaseClient
-      .from("game_players")
-      .select("id, nom, poste_brut, game_club_id, club:game_clubs(nom)")
-      .eq("game_id", gameId)
-      .ilike("nom", `%${q}%`)
-      .limit(8),
+  // Recherche par mots : chaque mot doit apparaitre dans le nom (peu importe
+  // l'ordre), ce qui permet de trouver "Adrien Rabiot" meme tape dans un
+  // autre ordre, ou "Saka" tout seul. Les joueurs sont classes par reputation
+  // mondiale pour faire remonter les plus connus en premier plutot que des
+  // correspondances anecdotiques.
+  const words = q.trim().split(/\s+/).filter(Boolean);
+
+  let clubQuery = supabaseClient.from("game_clubs").select("id, nom").eq("game_id", gameId);
+  words.forEach(w => { clubQuery = clubQuery.ilike("nom", `%${w}%`); });
+
+  let playerQuery = supabaseClient
+    .from("game_players")
+    .select("id, nom, poste_brut, game_club_id, reputation_mondiale")
+    .eq("game_id", gameId);
+  words.forEach(w => { playerQuery = playerQuery.ilike("nom", `%${w}%`); });
+
+  const [
+    { data: clubs },
+    { data: players, error: playersError },
+  ] = await Promise.all([
+    clubQuery.order("nom", { ascending: true }).limit(6),
+    playerQuery.order("reputation_mondiale", { ascending: false, nullsFirst: false }).limit(8),
   ]);
+  if (playersError) console.error(playersError);
+
+  // Noms de club recuperes a part (plutot qu'une jointure imbriquee
+  // club:game_clubs(nom)) : cette jointure est fragile si la relation FK
+  // n'est pas explicite cote Supabase et faisait echouer silencieusement
+  // toute la recherche joueurs (aucun resultat, meme pour un nom existant).
+  let clubNameById = {};
+  if (players && players.length > 0) {
+    const clubIds = [...new Set(players.map(p => p.game_club_id).filter(Boolean))];
+    if (clubIds.length > 0) {
+      const { data: clubRows } = await supabaseClient
+        .from("game_clubs")
+        .select("id, nom")
+        .in("id", clubIds);
+      (clubRows || []).forEach(c => { clubNameById[c.id] = c.nom; });
+    }
+  }
 
   const hasClubs = clubs && clubs.length > 0;
   const hasPlayers = players && players.length > 0;
@@ -1097,7 +1123,7 @@ async function runGlobalSearch(q, dropdown) {
         <span class="search-result-icon">🧍</span>
         <span>
           <div>${escapeHtml(p.nom)}</div>
-          <div class="search-result-sub">${escapeHtml(p.poste_brut || "-")}${p.club?.nom ? " · " + escapeHtml(p.club.nom) : ""}</div>
+          <div class="search-result-sub">${escapeHtml(p.poste_brut || "-")}${clubNameById[p.game_club_id] ? " · " + escapeHtml(clubNameById[p.game_club_id]) : ""}</div>
         </span>
       </div>
     `).join("");
