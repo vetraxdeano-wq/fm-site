@@ -946,7 +946,7 @@ const FM_NAV_ITEMS = [
   { key: "tactique", icon: "♟️", label: "Tactique", href: null },
   { key: "datacenter", icon: "📊", label: "Data Center", href: null },
   { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: null },
-  { key: "infosclub", icon: "🛡️", label: "Infos club", href: null },
+  { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
   { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
   { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
 ];
@@ -1111,7 +1111,7 @@ async function runGlobalSearch(q, dropdown) {
       const type = item.getAttribute("data-type");
       const id = item.getAttribute("data-id");
       if (type === "club") {
-        window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
+        window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
       } else {
         const clubId = item.getAttribute("data-club");
         window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}&player=${encodeURIComponent(id)}`;
