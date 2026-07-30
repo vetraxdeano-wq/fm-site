@@ -127,7 +127,7 @@
     justify-content: space-between; align-items: center; cursor: pointer; color: var(--text);
   }
   .nation-row .flag-label { display: flex; align-items: center; gap: 8px; }
-  .flag-icon { font-size: 16px; line-height: 1; }
+  .flag-icon { width: 20px; height: auto; border-radius: 2px; display: inline-block; vertical-align: middle; margin-right: 8px; }
   .nation-row:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
   .division-row {
     padding: 9px 12px; font-size: 13px; display: flex; justify-content: space-between;
@@ -282,34 +282,38 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// Drapeaux : Angleterre / Ecosse / Pays de Galles n'ont pas de code ISO propre,
-// on utilise les sequences d'emoji drapeau regional dediees.
-const GB_SUBFLAGS = {
-  "angleterre": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
-  "ecosse": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
-  "pays de galles": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}",
+// Drapeaux : Angleterre / Ecosse / Pays de Galles utilisent les codes de subdivision
+// geres par flagcdn.com (gb-eng, gb-sct, gb-wls), pas de code ISO propre.
+const GB_SUBCODES = {
+  "angleterre": "gb-eng",
+  "ecosse": "gb-sct",
+  "pays de galles": "gb-wls",
 };
 
 // Nom de nation (tel qu'en base, en francais) -> code ISO 3166-1 alpha-2
 const NATION_NAME_TO_ISO2 = {
-  "france": "FR", "allemagne": "DE", "espagne": "ES", "italie": "IT",
-  "portugal": "PT", "pays-bas": "NL", "belgique": "BE", "irlande": "IE",
-  "irlande du nord": "GB", "suisse": "CH", "autriche": "AT", "turquie": "TR",
-  "grece": "GR", "russie": "RU", "ukraine": "UA", "pologne": "PL",
-  "republique tcheque": "CZ", "croatie": "HR", "serbie": "RS", "roumanie": "RO",
-  "bulgarie": "BG", "hongrie": "HU", "danemark": "DK", "suede": "SE",
-  "norvege": "NO", "finlande": "FI", "islande": "IS", "bresil": "BR",
-  "argentine": "AR", "uruguay": "UY", "chili": "CL", "colombie": "CO",
-  "perou": "PE", "equateur": "EC", "paraguay": "PY", "bolivie": "BO",
-  "venezuela": "VE", "mexique": "MX", "etats-unis": "US", "canada": "CA",
-  "japon": "JP", "coree du sud": "KR", "australie": "AU", "maroc": "MA",
-  "algerie": "DZ", "tunisie": "TN", "senegal": "SN", "cote d'ivoire": "CI",
-  "cameroun": "CM", "nigeria": "NG", "ghana": "GH", "egypte": "EG",
-  "arabie saoudite": "SA", "qatar": "QA", "chine": "CN", "bosnie-herzegovine": "BA",
-  "slovaquie": "SK", "slovenie": "SI", "albanie": "AL", "macedoine du nord": "MK",
-  "montenegro": "ME", "israel": "IL", "luxembourg": "LU", "chypre": "CY",
-  "malte": "MT", "lituanie": "LT", "lettonie": "LV", "estonie": "EE",
-  "bielorussie": "BY", "moldavie": "MD",
+  "france": "fr", "allemagne": "de", "espagne": "es", "italie": "it",
+  "portugal": "pt", "pays-bas": "nl", "belgique": "be", "irlande": "ie",
+  "irlande du nord": "gb", "suisse": "ch", "autriche": "at", "turquie": "tr",
+  "grece": "gr", "russie": "ru", "ukraine": "ua", "pologne": "pl",
+  "republique tcheque": "cz", "rep. tcheque": "cz", "croatie": "hr", "serbie": "rs",
+  "roumanie": "ro", "bulgarie": "bg", "hongrie": "hu", "danemark": "dk",
+  "suede": "se", "norvege": "no", "finlande": "fi", "islande": "is",
+  "bresil": "br", "argentine": "ar", "uruguay": "uy", "chili": "cl",
+  "colombie": "co", "perou": "pe", "equateur": "ec", "paraguay": "py",
+  "bolivie": "bo", "venezuela": "ve", "mexique": "mx", "etats-unis": "us",
+  "canada": "ca", "japon": "jp", "coree du sud": "kr", "australie": "au",
+  "nouvelle-zelande": "nz", "maroc": "ma", "algerie": "dz", "tunisie": "tn",
+  "senegal": "sn", "cote d'ivoire": "ci", "cameroun": "cm", "nigeria": "ng",
+  "ghana": "gh", "egypte": "eg", "arabie saoudite": "sa", "qatar": "qa",
+  "chine": "cn", "bosnie-herzegovine": "ba", "slovaquie": "sk", "slovenie": "si",
+  "albanie": "al", "macedoine du nord": "mk", "montenegro": "me", "israel": "il",
+  "luxembourg": "lu", "chypre": "cy", "malte": "mt", "lituanie": "lt",
+  "lettonie": "lv", "estonie": "ee", "bielorussie": "by", "moldavie": "md",
+  "kosovo": "xk", "georgie": "ge", "armenie": "am", "azerbaidjan": "az",
+  "kazakhstan": "kz", "andorre": "ad", "saint-marin": "sm", "feroe": "fo",
+  "afrique du sud": "za", "indonesie": "id", "thailande": "th", "vietnam": "vn",
+  "singapour": "sg", "iran": "ir", "irak": "iq", "inde": "in",
 };
 
 function normalizeNationKey(name) {
@@ -318,23 +322,18 @@ function normalizeNationKey(name) {
     .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // enleve les accents
 }
 
-function flagFromIso2(iso2) {
-  return [...iso2.toUpperCase()]
-    .map(c => String.fromCodePoint(0x1F1E6 + (c.charCodeAt(0) - 65)))
-    .join("");
-}
-
-function flagForNation(name) {
+function flagCodeForNation(name) {
   const key = normalizeNationKey(name);
-  if (GB_SUBFLAGS[key]) return GB_SUBFLAGS[key];
-  const iso2 = NATION_NAME_TO_ISO2[key];
-  if (iso2) return flagFromIso2(iso2);
-  return null; // inconnu : pas de drapeau affiche
+  if (GB_SUBCODES[key]) return GB_SUBCODES[key];
+  return NATION_NAME_TO_ISO2[key] || null;
 }
 
 function nationLabel(name) {
-  const flag = flagForNation(name);
-  return `${flag ? `<span class="flag-icon">${flag}</span> ` : ""}${escapeHtml(name)}`;
+  const flagCode = flagCodeForNation(name);
+  const img = flagCode
+    ? `<img class="flag-icon" src="https://flagcdn.com/${flagCode}.svg" alt="" loading="lazy">`
+    : "";
+  return `${img}${escapeHtml(name)}`;
 }
 
 function formatMoney(n) {
