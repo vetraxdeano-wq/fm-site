@@ -171,7 +171,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const EMAIL_DOMAIN = "fmweb.local"; // domaine bidon pour transformer pseudo -> email
 
-let supabase = null;
+let supabaseClient = null;
 let userId = null;
 let userPseudo = null;
 
@@ -186,7 +186,7 @@ try {
   if (!window.supabase) {
     throw new Error("La librairie Supabase (CDN) ne s'est pas chargee.");
   }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 } catch (e) {
   showFatalError(e);
 }
@@ -248,7 +248,7 @@ document.getElementById("authSubmitBtn").addEventListener("click", async () => {
 
   try {
     if (authMode === "register") {
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
         options: { data: { pseudo } }
@@ -269,7 +269,7 @@ document.getElementById("authSubmitBtn").addEventListener("click", async () => {
       }
       onAuthSuccess(data.user);
     } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) {
         toast("Pseudo ou mot de passe incorrect", true);
         return;
@@ -285,7 +285,7 @@ document.getElementById("authSubmitBtn").addEventListener("click", async () => {
 });
 
 document.getElementById("logoutBtn").addEventListener("click", async () => {
-  await supabase.auth.signOut();
+  await supabaseClient.auth.signOut();
   userId = null;
   userPseudo = null;
   document.getElementById("authScreen").classList.remove("hidden");
@@ -313,7 +313,7 @@ document.getElementById("createRoomBtn").addEventListener("click", async () => {
 
   try {
     const code = generateRoomCode();
-    const { data: game, error: gameErr } = await supabase
+    const { data: game, error: gameErr } = await supabaseClient
       .from("games")
       .insert({ nom: name, code_invitation: code, created_by: userId })
       .select()
@@ -321,7 +321,7 @@ document.getElementById("createRoomBtn").addEventListener("click", async () => {
 
     if (gameErr) throw gameErr;
 
-    const { error: memberErr } = await supabase
+    const { error: memberErr } = await supabaseClient
       .from("game_participants")
       .insert({ game_id: game.id, user_id: userId, is_host: true });
 
@@ -349,7 +349,7 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
   btn.disabled = true;
 
   try {
-    const { data: game, error: gameErr } = await supabase
+    const { data: game, error: gameErr } = await supabaseClient
       .from("games")
       .select()
       .eq("code_invitation", code)
@@ -362,7 +362,7 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
       return;
     }
 
-    const { data: existing } = await supabase
+    const { data: existing } = await supabaseClient
       .from("game_participants")
       .select("id")
       .eq("game_id", game.id)
@@ -370,7 +370,7 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
       .maybeSingle();
 
     if (!existing) {
-      const { error: memberErr } = await supabase
+      const { error: memberErr } = await supabaseClient
         .from("game_participants")
         .insert({ game_id: game.id, user_id: userId, is_host: false });
 
@@ -394,7 +394,7 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
 async function startGame(gameId, btnEl) {
   btnEl.disabled = true;
   try {
-    const { count } = await supabase
+    const { count } = await supabaseClient
       .from("game_participants")
       .select("id", { count: "exact", head: true })
       .eq("game_id", gameId);
@@ -405,7 +405,7 @@ async function startGame(gameId, btnEl) {
       return;
     }
 
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from("games")
       .update({ statut: "mercato" })
       .eq("id", gameId);
@@ -428,7 +428,7 @@ async function loadRooms() {
   const container = document.getElementById("roomsList");
 
   try {
-    const { data: memberships, error } = await supabase
+    const { data: memberships, error } = await supabaseClient
       .from("game_participants")
       .select("game_id, is_host, games(id, nom, code_invitation, statut, jour_actuel, saison)")
       .eq("user_id", userId);
@@ -443,7 +443,7 @@ async function loadRooms() {
     const hostGameIds = memberships.filter(m => m.is_host).map(m => m.game_id);
     let countsByGame = {};
     if (hostGameIds.length > 0) {
-      const { data: allParticipants } = await supabase
+      const { data: allParticipants } = await supabaseClient
         .from("game_participants")
         .select("game_id")
         .in("game_id", hostGameIds);
@@ -495,9 +495,9 @@ async function loadRooms() {
 // INIT : verifie si une session existe deja
 // ============================================================
 (async () => {
-  if (!supabase) return;
+  if (!supabaseClient) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabaseClient.auth.getSession();
     if (session?.user) {
       onAuthSuccess(session.user);
     }
