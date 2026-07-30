@@ -567,10 +567,16 @@
                 <th>Taille</th>
                 <th>Pied fort</th>
                 <th>Réputation</th>
+                <th>Valeur marchande</th>
+                <th>Fin de contrat</th>
+                <th>Salaire</th>
+                <th>Personnalité</th>
+                <th>Niveau</th>
+                <th>Potentiel</th>
               </tr>
             </thead>
             <tbody id="pdbTableBody">
-              <tr><td colspan="8" class="pdb-empty-cell">Chargement...</td></tr>
+              <tr><td colspan="14" class="pdb-empty-cell">Chargement...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1092,13 +1098,30 @@ function showFmHomeView() {
 // Charge une fois tous les joueurs de la partie (game_players), puis filtre
 // cote client (nom, poste, nation, et le mode "interesse par transfert" qui
 // ne montre que les joueurs dont la reputation mondiale est proche de celle
-// du club de l'utilisateur, calculee comme la reputation moyenne de son
-// effectif actuel).
+// du club de l'utilisateur). La reputation de reference du club est la vraie
+// stat "reputation" stockee sur la fiche club (table clubs, via game_clubs.
+// club_ref) — pas une moyenne calculee. Niveau (CA) et Potentiel (PA) restent
+// masques pour tous les joueurs, sauf ceux de son propre effectif.
 let pdbLoaded = false;
 let pdbAllPlayers = [];
 let pdbClubNameById = {};
 let pdbClubReputation = null;
+let pdbUserClubId = null;
 let pdbFiltersWired = false;
+
+// Marge de tolerance autour de la reputation du club pour le mode "interesse
+// par transfert". A 10%, un club a 5000 de reputation cible les joueurs
+// entre 4500 et 5500 : au-dela, un transfert est deja peu realiste.
+const PDB_REPUTATION_MARGIN_RATIO = 0.10;
+
+const PDB_FOOT_RANK = {
+  "très faible": 0, "tres faible": 0,
+  "faible": 1,
+  "acceptable": 2,
+  "assez fort": 3,
+  "fort": 4,
+  "très fort": 5, "tres fort": 5,
+};
 
 async function showFmPlayersDbView(clubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
@@ -1106,6 +1129,7 @@ async function showFmPlayersDbView(clubId) {
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BASE DE DONNÉES DE JOUEURS";
 
+  pdbUserClubId = clubId;
   wirePlayersDbFilters(clubId);
 
   if (!pdbLoaded) {
@@ -1143,7 +1167,7 @@ function wirePlayersDbFilters(clubId) {
 async function loadPlayersDb(clubId) {
   const tbody = document.getElementById("pdbTableBody");
   const countEl = document.getElementById("pdbCount");
-  tbody.innerHTML = `<tr><td colspan="8" class="pdb-empty-cell">Chargement des joueurs...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Chargement des joueurs...</td></tr>`;
   countEl.textContent = "Chargement...";
 
   try {
@@ -1167,26 +1191,54 @@ async function loadPlayersDb(clubId) {
       (clubRows || []).forEach(c => { pdbClubNameById[c.id] = c.nom; });
     }
 
-    // Reputation de reference du club de l'utilisateur = moyenne de la
-    // reputation mondiale de son effectif actuel.
-    const myPlayers = pdbAllPlayers.filter(p => p.game_club_id === clubId && Number.isFinite(Number(p.reputation_mondiale)));
-    pdbClubReputation = myPlayers.length > 0
-      ? myPlayers.reduce((s, p) => s + Number(p.reputation_mondiale), 0) / myPlayers.length
-      : null;
+    pdbClubReputation = await fetchClubRealReputation(clubId);
 
     populatePlayersDbFilterOptions();
     pdbLoaded = true;
     applyPlayersDbFilters(clubId);
   } catch (e) {
     console.error(e);
-    tbody.innerHTML = `<tr><td colspan="8" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
     countEl.textContent = "";
   }
 }
 
+// La reputation "officielle" d'un club vient de la table clubs (donnee de
+// base, colonne reputation), reliee via game_clubs.club_ref. A defaut (club
+// sans reference valide), on retombe sur la moyenne de reputation_mondiale
+// de l'effectif actuel comme approximation.
+async function fetchClubRealReputation(clubId) {
+  if (!clubId) return null;
+  try {
+    const { data: gameClub } = await supabaseClient
+      .from("game_clubs")
+      .select("club_ref")
+      .eq("id", clubId)
+      .maybeSingle();
+
+    if (gameClub?.club_ref) {
+      const { data: clubRow } = await supabaseClient
+        .from("clubs")
+        .select("reputation")
+        .eq("id", gameClub.club_ref)
+        .maybeSingle();
+      if (clubRow && Number.isFinite(Number(clubRow.reputation))) {
+        return Number(clubRow.reputation);
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  const myPlayers = pdbAllPlayers.filter(p => p.game_club_id === clubId && Number.isFinite(Number(p.reputation_mondiale)));
+  return myPlayers.length > 0
+    ? myPlayers.reduce((s, p) => s + Number(p.reputation_mondiale), 0) / myPlayers.length
+    : null;
+}
+
 function populatePlayersDbFilterOptions() {
-  const postes = [...new Set(pdbAllPlayers.map(p => p.poste_brut || p.poste).filter(Boolean))].sort();
-  const nations = [...new Set(pdbAllPlayers.map(p => p.nationalite || p.nation).filter(Boolean))].sort();
+  const postes = [...new Set(pdbAllPlayers.map(p => p.poste_brut).filter(Boolean))].sort();
+  const nations = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))].sort();
 
   const posteSelect = document.getElementById("pdbPosteSelect");
   posteSelect.innerHTML = `<option value="">Tous</option>` + postes.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
@@ -1205,9 +1257,9 @@ function applyPlayersDbFilters(clubId) {
 
   if (interestedOnly) {
     // Decoche = toute la BDD. Coche = seuls les joueurs dont la reputation
-    // mondiale est proche (+/- 35%) de celle du club de l'utilisateur.
+    // mondiale est proche (+/- 10%) de la reputation reelle du club.
     if (pdbClubReputation != null) {
-      const margin = Math.max(pdbClubReputation * 0.35, 1);
+      const margin = Math.max(pdbClubReputation * PDB_REPUTATION_MARGIN_RATIO, 1);
       const lo = pdbClubReputation - margin;
       const hi = pdbClubReputation + margin;
       filtered = filtered.filter(p => {
@@ -1223,10 +1275,10 @@ function applyPlayersDbFilters(clubId) {
     filtered = filtered.filter(p => (p.nom || "").toLowerCase().includes(q));
   }
   if (poste) {
-    filtered = filtered.filter(p => (p.poste_brut || p.poste) === poste);
+    filtered = filtered.filter(p => p.poste_brut === poste);
   }
   if (nation) {
-    filtered = filtered.filter(p => (p.nationalite || p.nation) === nation);
+    filtered = filtered.filter(p => p.nationalite === nation);
   }
 
   renderPlayersDbTable(filtered);
@@ -1234,27 +1286,62 @@ function applyPlayersDbFilters(clubId) {
   const countEl = document.getElementById("pdbCount");
   const total = pdbAllPlayers.length;
   countEl.innerHTML = `<strong>${filtered.length}</strong> joueur${filtered.length > 1 ? "s" : ""} trouvé${filtered.length > 1 ? "s" : ""} sur ${total}` +
-    (interestedOnly && pdbClubReputation == null ? ` <span class="pdb-hint">— réputation du club inconnue (aucun joueur dans l'effectif actuel)</span>` : "");
+    (interestedOnly && pdbClubReputation == null ? ` <span class="pdb-hint">— réputation du club introuvable</span>` : "");
+}
+
+// Determine le pied fort a partir des notes textuelles pied_gauche/pied_droit
+// (ex: "Faible", "Assez fort", "Très fort"...).
+function dominantFoot(p) {
+  const g = (p.pied_gauche || "").toLowerCase();
+  const d = (p.pied_droit || "").toLowerCase();
+  const rg = PDB_FOOT_RANK[g] ?? null;
+  const rd = PDB_FOOT_RANK[d] ?? null;
+  if (rg == null && rd == null) return "-";
+  if (rg == null) return `Droit (${p.pied_droit})`;
+  if (rd == null) return `Gauche (${p.pied_gauche})`;
+  if (rd > rg) return `Droit (${p.pied_droit})`;
+  if (rg > rd) return `Gauche (${p.pied_gauche})`;
+  return `Ambidextre (${p.pied_droit})`;
+}
+
+function formatContractEnd(dateStr) {
+  if (!dateStr) return "-";
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(d.getTime())) return "-";
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
 }
 
 function renderPlayersDbTable(players) {
   const tbody = document.getElementById("pdbTableBody");
   if (players.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="pdb-empty-cell">Aucun joueur ne correspond à ces filtres.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Aucun joueur ne correspond à ces filtres.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = players.map(p => {
     const clubName = p.game_club_id ? (pdbClubNameById[p.game_club_id] || "-") : "Libre";
-    const poste = p.poste_brut || p.poste || "-";
+    const poste = p.poste_brut || "-";
     const age = p.age ?? "-";
-    const nation = p.nationalite || p.nation;
+    const nation = p.nationalite;
     const nationCell = nation ? nationLabel(nation) : "-";
-    const taille = p.taille_cm || p.taille;
-    const tailleCell = taille ? `${escapeHtml(String(taille))} cm` : "-";
-    const pied = p.pied_fort || p.pied || "-";
+    const tailleCell = p.taille_cm ? `${escapeHtml(String(p.taille_cm))} cm` : "-";
+    const piedCell = escapeHtml(dominantFoot(p));
     const rep = Number.isFinite(Number(p.reputation_mondiale)) ? Number(p.reputation_mondiale) : null;
-    const repCell = rep != null ? escapeHtml(String(Math.round(rep * 100) / 100)) : "-";
+    const repCell = rep != null ? starsHtml(starsFromScale(rep, 10000)) : "-";
+    const valeurCell = escapeHtml(formatMoney(p.valeur_marchande_actuelle));
+    const contratCell = escapeHtml(formatContractEnd(p.contrat_expire));
+    const salaireCell = p.salaire_actuel != null ? `${escapeHtml(formatMoney(p.salaire_actuel))} / mois` : "-";
+    const personnaliteCell = escapeHtml(p.personnalite || "-");
+
+    // Niveau (CA) et Potentiel (PA) : caches sauf pour les joueurs de son
+    // propre effectif, comme deja pratique sur la fiche joueur.
+    const isMine = pdbUserClubId != null && p.game_club_id === pdbUserClubId;
+    const niveauCell = isMine
+      ? (Number.isFinite(Number(p.niveau_actuel)) ? starsHtml(starsFromScale(p.niveau_actuel, 200)) : "-")
+      : `<span class="pdb-hint" title="Caché pour les joueurs hors de votre effectif">🔒</span>`;
+    const potentielCell = isMine
+      ? (Number.isFinite(Number(p.potentiel)) ? starsHtml(starsFromScale(p.potentiel, 200)) : "-")
+      : `<span class="pdb-hint" title="Caché pour les joueurs hors de votre effectif">🔒</span>`;
 
     return `
       <tr data-player="${p.id}" data-club="${p.game_club_id ?? ""}">
@@ -1264,8 +1351,14 @@ function renderPlayersDbTable(players) {
         <td>${escapeHtml(String(age))}</td>
         <td>${nationCell}</td>
         <td>${tailleCell}</td>
-        <td>${escapeHtml(String(pied))}</td>
+        <td>${piedCell}</td>
         <td>${repCell}</td>
+        <td>${valeurCell}</td>
+        <td>${contratCell}</td>
+        <td>${salaireCell}</td>
+        <td>${personnaliteCell}</td>
+        <td>${niveauCell}</td>
+        <td>${potentielCell}</td>
       </tr>
     `;
   }).join("");
