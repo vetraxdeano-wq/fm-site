@@ -126,6 +126,8 @@
     padding: 9px 12px; font-size: 13px; display: flex;
     justify-content: space-between; align-items: center; cursor: pointer; color: var(--text);
   }
+  .nation-row .flag-label { display: flex; align-items: center; gap: 8px; }
+  .flag-icon { font-size: 16px; line-height: 1; }
   .nation-row:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
   .division-row {
     padding: 9px 12px; font-size: 13px; display: flex; justify-content: space-between;
@@ -280,6 +282,61 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// Drapeaux : Angleterre / Ecosse / Pays de Galles n'ont pas de code ISO propre,
+// on utilise les sequences d'emoji drapeau regional dediees.
+const GB_SUBFLAGS = {
+  "angleterre": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
+  "ecosse": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+  "pays de galles": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}",
+};
+
+// Nom de nation (tel qu'en base, en francais) -> code ISO 3166-1 alpha-2
+const NATION_NAME_TO_ISO2 = {
+  "france": "FR", "allemagne": "DE", "espagne": "ES", "italie": "IT",
+  "portugal": "PT", "pays-bas": "NL", "belgique": "BE", "irlande": "IE",
+  "irlande du nord": "GB", "suisse": "CH", "autriche": "AT", "turquie": "TR",
+  "grece": "GR", "russie": "RU", "ukraine": "UA", "pologne": "PL",
+  "republique tcheque": "CZ", "croatie": "HR", "serbie": "RS", "roumanie": "RO",
+  "bulgarie": "BG", "hongrie": "HU", "danemark": "DK", "suede": "SE",
+  "norvege": "NO", "finlande": "FI", "islande": "IS", "bresil": "BR",
+  "argentine": "AR", "uruguay": "UY", "chili": "CL", "colombie": "CO",
+  "perou": "PE", "equateur": "EC", "paraguay": "PY", "bolivie": "BO",
+  "venezuela": "VE", "mexique": "MX", "etats-unis": "US", "canada": "CA",
+  "japon": "JP", "coree du sud": "KR", "australie": "AU", "maroc": "MA",
+  "algerie": "DZ", "tunisie": "TN", "senegal": "SN", "cote d'ivoire": "CI",
+  "cameroun": "CM", "nigeria": "NG", "ghana": "GH", "egypte": "EG",
+  "arabie saoudite": "SA", "qatar": "QA", "chine": "CN", "bosnie-herzegovine": "BA",
+  "slovaquie": "SK", "slovenie": "SI", "albanie": "AL", "macedoine du nord": "MK",
+  "montenegro": "ME", "israel": "IL", "luxembourg": "LU", "chypre": "CY",
+  "malte": "MT", "lituanie": "LT", "lettonie": "LV", "estonie": "EE",
+  "bielorussie": "BY", "moldavie": "MD",
+};
+
+function normalizeNationKey(name) {
+  return (name || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // enleve les accents
+}
+
+function flagFromIso2(iso2) {
+  return [...iso2.toUpperCase()]
+    .map(c => String.fromCodePoint(0x1F1E6 + (c.charCodeAt(0) - 65)))
+    .join("");
+}
+
+function flagForNation(name) {
+  const key = normalizeNationKey(name);
+  if (GB_SUBFLAGS[key]) return GB_SUBFLAGS[key];
+  const iso2 = NATION_NAME_TO_ISO2[key];
+  if (iso2) return flagFromIso2(iso2);
+  return null; // inconnu : pas de drapeau affiche
+}
+
+function nationLabel(name) {
+  const flag = flagForNation(name);
+  return `${flag ? `<span class="flag-icon">${flag}</span> ` : ""}${escapeHtml(name)}`;
+}
+
 function formatMoney(n) {
   if (n === null || n === undefined) return "-";
   return new Intl.NumberFormat("fr-FR").format(n) + " €";
@@ -368,7 +425,7 @@ async function initClubSelection() {
 
   nationMenu.innerHTML = (nations || []).map(n => `
     <div class="nation-row" data-nation="${escapeHtml(n.nation)}">
-      <span>${escapeHtml(n.nation)}</span>
+      <span class="flag-label">${nationLabel(n.nation)}</span>
     </div>
   `).join("");
 
@@ -406,7 +463,7 @@ async function initClubSelection() {
 function selectNation(nation) {
   selectedNation = nation;
   selectedDivision = null;
-  document.getElementById("nationBtnLabel").textContent = nation;
+  document.getElementById("nationBtnLabel").innerHTML = nationLabel(nation);
 
   const divisionBtn = document.getElementById("divisionBtn");
   const divisionMenu = document.getElementById("divisionMenu");
