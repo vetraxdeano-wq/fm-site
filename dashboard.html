@@ -1479,6 +1479,19 @@ const PDB_REPUTATION_MARGIN_RATIO = 0.03;
 // fort que l'effectif actuel ne serait pas interesse par le transfert.
 const PDB_CA_MARGIN_RATIO = 0.15;
 
+// La moyenne de CA de l'effectif ne doit refleter que le "vrai" niveau du
+// club, pas etre tiree vers le bas par les jeunes de centre de formation
+// (CA tres bas, pas encore representatifs) ou les joueurs en fin de
+// carriere gardes comme depanneurs. On ne prend donc en compte que les
+// joueurs dans une tranche d'age "coeur de carriere", et seulement les
+// meilleurs d'entre eux (equivalent d'un groupe elargi/effectif pro plutot
+// que toute l'academie) : sinon un club huppe avec une grosse academie (PSG,
+// City...) se retrouve avec une moyenne artificiellement basse et rate des
+// joueurs mondialement connus qui devraient normalement etre "interesses".
+const PDB_CA_REFERENCE_AGE_MIN = 21;
+const PDB_CA_REFERENCE_AGE_MAX = 32;
+const PDB_CA_REFERENCE_TOP_N = 20;
+
 // Au-dela de ce nombre d'annees de contrat restant, un joueur vient
 // generalement de signer/prolonger et n'est pas interesse par un transfert.
 const PDB_LONG_CONTRACT_YEARS = 5;
@@ -2101,11 +2114,40 @@ async function loadPlayersDb(clubId) {
 // (mode "interesse par transfert"). Recalculee a chaque appel de filtre :
 // avec le chargement progressif, l'effectif peut se completer au fil des
 // lots recus.
+//
+// On calcule cette moyenne sur les meilleurs joueurs (top N) de la tranche
+// d'age "coeur de carriere" (21-32 ans) plutot que sur l'effectif entier :
+// un gros club avec une academie fournie (jeunes a CA tres bas, pas encore
+// representatifs de leur niveau) ou des reservistes en fin de carriere
+// ferait sinon chuter artificiellement la moyenne, et donc le plafond de
+// niveau des joueurs "interesses" — ce qui exclurait a tort des stars
+// mondiales qui devraient normalement vouloir rejoindre un tel club.
+// Repli progressif si la tranche d'age est trop peu fournie (petit club,
+// effectif tres jeune...) pour ne jamais retourner null inutilement.
 function getPdbUserSquadAverageCA() {
   if (!pdbUserClubId) return null;
-  const mine = pdbAllPlayers.filter(p => p.game_club_id === pdbUserClubId && Number.isFinite(Number(p.niveau_actuel)));
-  if (!mine.length) return null;
-  return mine.reduce((s, p) => s + Number(p.niveau_actuel), 0) / mine.length;
+
+  const hasCA = p => p.game_club_id === pdbUserClubId && Number.isFinite(Number(p.niveau_actuel));
+  const inPrimeAgeBand = p => {
+    const age = Number(p.age);
+    return Number.isFinite(age) && age >= PDB_CA_REFERENCE_AGE_MIN && age <= PDB_CA_REFERENCE_AGE_MAX;
+  };
+  const averageOfTop = (players, topN) => {
+    if (!players.length) return null;
+    const sorted = [...players].sort((a, b) => Number(b.niveau_actuel) - Number(a.niveau_actuel));
+    const top = topN ? sorted.slice(0, topN) : sorted;
+    return top.reduce((s, p) => s + Number(p.niveau_actuel), 0) / top.length;
+  };
+
+  const primeAge = pdbAllPlayers.filter(p => hasCA(p) && inPrimeAgeBand(p));
+  if (primeAge.length) return averageOfTop(primeAge, PDB_CA_REFERENCE_TOP_N);
+
+  // Effectif trop jeune/trop age pour avoir du monde dans la tranche de
+  // reference : on retombe sur les meilleurs joueurs de tout l'effectif.
+  const all = pdbAllPlayers.filter(hasCA);
+  if (all.length) return averageOfTop(all, PDB_CA_REFERENCE_TOP_N);
+
+  return null;
 }
 
 // La reputation "officielle" d'un club vient de la table clubs (donnee de
