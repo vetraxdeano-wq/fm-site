@@ -1193,20 +1193,21 @@ async function pickClub(gameClubId, btnEl) {
 // affichent un toast "bientot disponible" en attendant d'etre construits.
 const FM_NAV_ITEMS = [
   { key: "accueil", icon: "🏠", label: "Accueil", href: null },
+  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
   { key: "effectif", icon: "👥", label: "Effectif", href: "squad.html" },
-  { key: "staff", icon: "🧑‍💼", label: "Staff", href: null },
+  { key: "staff", icon: "💼", label: "Staff", href: null },
   { key: "tactique", icon: "♟️", label: "Tactique", href: null },
   { key: "datacenter", icon: "📊", label: "Data Center", href: null },
   { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: null },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
   { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
-  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
 ];
 
 function renderFmSidebar(gameClubId) {
   const el = document.getElementById("fmSidebar");
+  const wantsPlayersDb = params.get("view") === "bdd";
   el.innerHTML = FM_NAV_ITEMS.map(item => `
-    <div class="fm-nav-item ${item.key === "accueil" ? "active" : ""}" data-key="${item.key}">
+    <div class="fm-nav-item ${item.key === (wantsPlayersDb ? "basejoueurs" : "accueil") ? "active" : ""}" data-key="${item.key}">
       <span class="fm-nav-icon">${item.icon}</span>
       <span>${item.label}</span>
     </div>
@@ -2716,6 +2717,13 @@ async function showMyClub(gameClubId, canChange) {
   renderTeamStats();
   renderStandings(club);
   renderInbox();
+
+  // Arrivee depuis un lien "Base de donnees de joueurs" d'une autre page
+  // (club.html, squad.html, fiche.html...) : on ouvre directement cet
+  // onglet plutot que l'accueil.
+  if (params.get("view") === "bdd") {
+    showFmPlayersDbView(gameClubId);
+  }
 }
 
 async function startGame(participantCount) {
