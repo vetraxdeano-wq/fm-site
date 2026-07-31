@@ -714,12 +714,12 @@
   .staff-subtab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .staff-subtab-panel.hidden { display: none; }
   .staff-columns {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: stretch;
-    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start;
   }
   @media (max-width: 1100px) {
-    .staff-columns { grid-template-columns: 1fr; flex: none; }
+    .staff-columns { grid-template-columns: 1fr; }
   }
+  #staffEffectifPanel { overflow-y: auto; }
   .staff-col-title {
     display: flex; align-items: center; justify-content: space-between;
     font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
@@ -762,7 +762,7 @@
      voir qui compose le secteur) ---- */
   .staff-column {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    padding: 14px 16px; display: flex; flex-direction: column; min-height: 0; height: 100%;
+    padding: 14px 16px; display: flex; flex-direction: column;
   }
   .staff-col-recap { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; flex: 0 0 auto; }
   .staff-recap-count {
@@ -794,7 +794,7 @@
     transition: border-color 0.15s, background 0.15s;
   }
   .staff-col-expand-btn:hover { border-color: var(--gold); background: rgba(251,191,36,0.08); }
-  .staff-col-members { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
+  .staff-col-members { padding-right: 2px; }
   .staff-sector-list { max-height: 60vh; overflow-y: auto; }
   .staff-role-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .staff-role-chip {
