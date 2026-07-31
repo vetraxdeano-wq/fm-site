@@ -1138,21 +1138,20 @@ async function fetchLeagueStaffStats(gid) {
   const { data: clubs, error: clubsErr } = await supabaseClient
     .from("game_clubs").select("id").eq("game_id", gid);
   if (clubsErr) console.error("fetchLeagueStaffStats: erreur chargement game_clubs", clubsErr);
-  let clubIds = (clubs || []).map(c => c.id);
 
   const { data: gameStaffRows, error: gsErr } = await supabaseClient
     .from("game_staff")
     .select("id, staff_ref, poste, game_club_id")
     .eq("game_id", gid);
   if (gsErr) console.error("fetchLeagueStaffStats: erreur chargement game_staff", gsErr);
-  if (gsErr || !gameStaffRows) return { numClubs: clubIds.length || 1, depts: {} };
+  if (gsErr || !gameStaffRows) return { numClubs: 1, depts: {} };
 
-  // Filet de securite : si la requete game_clubs n'a rien renvoye (erreur
-  // silencieuse, RLS...), on reconstruit au moins la liste des clubs a
-  // partir du staff deja recupere, pour ne pas perdre tout le classement.
-  if (clubIds.length === 0) {
-    clubIds = [...new Set(gameStaffRows.map(r => r.game_club_id).filter(v => v != null))];
-  }
+  // Liste des clubs de la ligue : union de game_clubs (si la requete a
+  // fonctionne) et des clubs presents dans le staff deja recupere, pour que
+  // le classement se calcule meme si l'une des deux requetes est incomplete.
+  const clubIdSet = new Set((clubs || []).map(c => c.id));
+  gameStaffRows.forEach(r => { if (r.game_club_id != null) clubIdSet.add(r.game_club_id); });
+  const clubIds = [...clubIdSet];
   const numClubs = clubIds.length || 1;
 
   const refs = [...new Set(gameStaffRows.map(r => r.staff_ref).filter(Boolean))];
@@ -1216,6 +1215,7 @@ async function fetchLeagueStaffStats(gid) {
     d.numClubsRanked = scored.length;
   });
 
+  console.debug("[staff league stats]", { numClubs, clubIds, depts });
   return { numClubs, depts };
 }
 
@@ -1325,11 +1325,13 @@ function renderStaffColRecap(dept, members, locked, clubId) {
   const rank = league?.rankByClub?.[clubId];
   const totalRanked = league?.numClubsRanked;
 
-  let rankHtml = "";
+  let rankHtml;
   if (rank != null && totalRanked) {
     const tier = rank <= Math.ceil(totalRanked / 3) ? "pos" : (rank > Math.ceil(totalRanked * 2 / 3) ? "neg" : "");
     const ord = rank === 1 ? "ᵉʳ" : "ᵉ";
     rankHtml = `<span class="staff-recap-rank ${tier}">${rank}${ord} / ${totalRanked} clubs</span>`;
+  } else {
+    rankHtml = `<span class="staff-recap-rank">Classement indisponible</span>`;
   }
   const countHtml = `<div class="staff-recap-count"><span>Effectif : <b>${members.length}</b></span>${rankHtml}</div>`;
 
