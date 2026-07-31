@@ -653,6 +653,74 @@
   }
   .fm-inbox-empty .big-icon { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.6; }
 
+  /* ---- Staff (sous-onglet) : 3 colonnes departement + fiches membres ---- */
+  .fm-staff-view { width: 100%; }
+  .staff-columns {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start;
+  }
+  @media (max-width: 1100px) {
+    .staff-columns { grid-template-columns: 1fr; }
+  }
+  .staff-col-title {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--gold); margin-bottom: 12px;
+  }
+  .staff-col-title .count {
+    background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius: 999px;
+    padding: 2px 9px; font-size: 11px; font-weight: 700; text-transform: none; letter-spacing: 0;
+  }
+  .staff-member-card {
+    display: flex; align-items: center; gap: 12px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+    cursor: pointer; transition: border-color 0.15s, transform 0.1s;
+  }
+  .staff-member-card:hover { border-color: var(--gold); transform: translateY(-1px); }
+  .staff-avatar {
+    width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 800; color: #1a1300;
+  }
+  .staff-member-info { flex: 1; min-width: 0; }
+  .staff-member-name { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .staff-member-role { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .staff-member-meta {
+    display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .staff-member-meta .flag-icon { width: 14px; height: auto; margin-right: 0; }
+  .staff-attr-chip {
+    display: inline-flex; align-items: center; gap: 3px; background: rgba(255,255,255,0.05);
+    border-radius: 6px; padding: 1px 6px; font-size: 10.5px; color: var(--text-dim);
+  }
+  .staff-attr-chip b { color: var(--text); font-weight: 700; }
+  .staff-member-side { text-align: right; flex-shrink: 0; font-size: 11px; color: var(--text-dim); }
+  .staff-member-side .salaire { color: var(--text); font-weight: 700; font-size: 12px; }
+  .staff-col-empty { color: var(--text-dim); font-size: 12.5px; padding: 6px 0 14px; }
+
+  .staff-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .staff-modal-overlay.hidden { display: none !important; }
+  .staff-modal {
+    width: 100%; max-width: 460px; max-height: 86vh; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px;
+  }
+  .staff-modal-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .staff-modal-close {
+    margin-left: auto; background: none; border: none; color: var(--text-dim); font-size: 18px;
+    cursor: pointer; line-height: 1; padding: 4px;
+  }
+  .staff-modal-close:hover { color: var(--text); }
+  .staff-modal-avatar {
+    width: 56px; height: 56px; border-radius: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #1a1300;
+  }
+  .staff-modal-name { font-size: 17px; font-weight: 800; }
+  .staff-modal-role { font-size: 12.5px; color: var(--gold); font-weight: 700; margin-top: 2px; }
+  .staff-modal-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+
   /* ---- Boite de reception (sous-onglet, vue liste + detail) ---- */
   .fm-inbox-view {
     width: 100%; height: 100%; display: flex; gap: 16px; min-height: 0;
@@ -934,6 +1002,10 @@
         <div class="pdb-pagination" id="pdbPagination"></div>
       </div>
 
+      <div class="fm-staff-view hidden" id="fmStaffView">
+        <div class="staff-columns" id="staffColumns"></div>
+      </div>
+
       <div class="fm-inbox-view hidden" id="fmInboxView">
         <div class="fm-inbox-list-pane">
           <div class="fm-inbox-list-header">Boîte de réception</div>
@@ -956,6 +1028,10 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="staff-modal-overlay hidden" id="staffModalOverlay">
+  <div class="staff-modal" id="staffModalContent"></div>
+</div>
 
 <script>
 const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
@@ -989,6 +1065,81 @@ const GB_SUBCODES = {
   "ecosse": "gb-sct",
   "pays de galles": "gb-wls",
 };
+
+// La base stocke les nationalites sous forme de code FM a 3 lettres (ex: "FRA",
+// "ENG", "GER"...) et non le nom complet. On convertit d'abord ce code vers le
+// nom francais complet, qui est ensuite utilise partout (affichage, drapeau,
+// regroupement par continent, recherche dans le filtre).
+const FM_NATION_CODE_TO_NAME = {
+  AFG: "Afghanistan", AIA: "Anguilla", ALB: "Albanie", ALG: "Algérie",
+  AND: "Andorre", ANG: "Angola", ARG: "Argentine", ARM: "Arménie",
+  ARU: "Aruba", ASA: "Samoa américaines", ATG: "Antigua-et-Barbuda",
+  AUS: "Australie", AUT: "Autriche", AZE: "Azerbaïdjan", BAH: "Bahamas",
+  BAN: "Bangladesh", BDI: "Burundi", BEL: "Belgique", BEN: "Bénin",
+  BER: "Bermudes", BFA: "Burkina Faso", BHU: "Bhoutan",
+  BIH: "Bosnie-Herzégovine", BLM: "Saint-Barthélemy", BLR: "Biélorussie",
+  BLZ: "Belize", BOE: "Bonaire", BOL: "Bolivie", BRA: "Brésil",
+  BRB: "Barbade", BUL: "Bulgarie", CAN: "Canada", CAY: "Îles Caïmans",
+  CGO: "Congo", CHA: "Tchad", CHI: "Chili", CHN: "Chine",
+  CIV: "Côte d'Ivoire", CMR: "Cameroun", COD: "RD Congo", COL: "Colombie",
+  COM: "Comores", CPV: "Cap-Vert", CRC: "Costa Rica", CRO: "Croatie",
+  CTA: "République centrafricaine", CUB: "Cuba", CUW: "Curaçao",
+  CYP: "Chypre", CZE: "République tchèque", DEN: "Danemark",
+  DJI: "Djibouti", DMA: "Dominique", DOM: "République dominicaine",
+  ECU: "Équateur", EGY: "Égypte", ENG: "Angleterre",
+  EQG: "Guinée équatoriale", ERI: "Érythrée", ESP: "Espagne",
+  EST: "Estonie", ETH: "Éthiopie", FIJ: "Fidji", FIN: "Finlande",
+  FRA: "France", FRO: "Îles Féroé", GAB: "Gabon", GAM: "Gambie",
+  GEO: "Géorgie", GER: "Allemagne", GHA: "Ghana", GIB: "Gibraltar",
+  GLP: "Guadeloupe", GNB: "Guinée-Bissau", GRE: "Grèce", GRN: "Grenade",
+  GUA: "Guatemala", GUF: "Guyane française", GUI: "Guinée", GUM: "Guam",
+  GUY: "Guyana", HAI: "Haïti", HKG: "Hong Kong", HON: "Honduras",
+  HUN: "Hongrie", IDN: "Indonésie", IND: "Inde", IRL: "République d'Irlande",
+  IRN: "Iran", IRQ: "Irak", ISL: "Islande", ISR: "Israël", ITA: "Italie",
+  JAM: "Jamaïque", JOR: "Jordanie", JPN: "Japon", KAZ: "Kazakhstan",
+  KEN: "Kenya", KGZ: "Kirghizistan", KOR: "Corée du Sud", KOS: "Kosovo",
+  KSA: "Arabie saoudite", LAO: "Laos", LBR: "Liberia", LBY: "Libye",
+  LCA: "Sainte-Lucie", LES: "Lesotho", LIB: "Liban", LIE: "Liechtenstein",
+  LTU: "Lituanie", LUX: "Luxembourg", LVA: "Lettonie", MAC: "Macao",
+  MAD: "Madagascar", MAR: "Maroc", MAS: "Malaisie", MAY: "Mayotte",
+  MDA: "Moldavie", MDV: "Maldives", MEX: "Mexique",
+  MKD: "Macédoine du Nord", MLI: "Mali", MLT: "Malte", MNE: "Monténégro",
+  MNG: "Mongolie", MON: "Monaco", MOZ: "Mozambique", MRI: "Maurice",
+  MSR: "Montserrat", MTN: "Mauritanie", MTQ: "Martinique", MWI: "Malawi",
+  MYA: "Birmanie", NAM: "Namibie", NCA: "Nicaragua",
+  NCL: "Nouvelle-Calédonie", NED: "Pays-Bas", NGA: "Nigeria", NIG: "Niger",
+  NIR: "Irlande du Nord", NOR: "Norvège", NZL: "Nouvelle-Zélande",
+  OMA: "Oman", PAK: "Pakistan", PAN: "Panama", PAR: "Paraguay",
+  PER: "Pérou", PHI: "Philippines", PLE: "Palestine",
+  PNG: "Papouasie-Nouvelle-Guinée", POL: "Pologne", POR: "Portugal",
+  PRK: "Corée du Nord", PUR: "Porto Rico", QAT: "Qatar", REU: "Réunion",
+  ROU: "Roumanie", RSA: "Afrique du Sud", RUS: "Russie", RWA: "Rwanda",
+  SCO: "Écosse", SEN: "Sénégal", SEY: "Seychelles", SGP: "Singapour",
+  SKN: "Saint-Christophe-et-Niévès", SLE: "Sierra Leone", SLV: "Salvador",
+  SMA: "Samoa", SMN: "Saint-Martin", SMR: "Saint-Marin", SOM: "Somalie",
+  SRB: "Serbie", SRI: "Sri Lanka", SSD: "Soudan du Sud",
+  STP: "Sao Tomé-et-Principe", SUD: "Soudan", SUI: "Suisse",
+  SUR: "Suriname", SVK: "Slovaquie", SVN: "Slovénie", SWE: "Suède",
+  SWZ: "Eswatini", SYR: "Syrie", TAH: "Tahiti", TAN: "Tanzanie",
+  TGA: "Tonga", THA: "Thaïlande", TJK: "Tadjikistan",
+  TLS: "Timor oriental", TOG: "Togo", TPE: "Taïwan",
+  TRI: "Trinité-et-Tobago", TUN: "Tunisie", TUR: "Turquie",
+  UAE: "Émirats arabes unis", UGA: "Ouganda", UKR: "Ukraine",
+  URU: "Uruguay", USA: "États-Unis", UZB: "Ouzbékistan", VAN: "Vanuatu",
+  VEN: "Venezuela", VGB: "Îles Vierges britanniques", VIE: "Vietnam",
+  VIN: "Saint-Vincent-et-les-Grenadines",
+  VIR: "Îles Vierges américaines", WAL: "Pays de Galles", YEM: "Yémen",
+  ZAM: "Zambie", ZAN: "Zanzibar", ZIM: "Zimbabwe",
+};
+
+// Convertit un code FM 3 lettres (ex: "FRA") vers le nom complet francais
+// (ex: "France"). Si la valeur n'est pas un code connu (deja un nom complet,
+// ou valeur inattendue), on la renvoie telle quelle.
+function nationDisplayName(value) {
+  if (!value) return value;
+  const code = value.trim().toUpperCase();
+  return FM_NATION_CODE_TO_NAME[code] || value;
+}
 
 // Nom de nation (tel qu'en base, en francais) -> code ISO 3166-1 alpha-2
 const NATION_NAME_TO_ISO2 = {
@@ -1084,21 +1235,22 @@ function normalizeNationKey(name) {
 }
 
 function flagCodeForNation(name) {
-  const key = normalizeNationKey(name);
+  const key = normalizeNationKey(nationDisplayName(name));
   if (GB_SUBCODES[key]) return GB_SUBCODES[key];
   return NATION_NAME_TO_ISO2[key] || null;
 }
 
 function continentForNation(name) {
-  return NATION_KEY_TO_CONTINENT[normalizeNationKey(name)] || null;
+  return NATION_KEY_TO_CONTINENT[normalizeNationKey(nationDisplayName(name))] || null;
 }
 
 function nationLabel(name) {
+  const fullName = nationDisplayName(name);
   const flagCode = flagCodeForNation(name);
   const img = flagCode
     ? `<img class="flag-icon" src="https://flagcdn.com/${flagCode}.svg" alt="" loading="lazy">`
     : "";
-  return `${img}${escapeHtml(name)}`;
+  return `${img}${escapeHtml(fullName)}`;
 }
 
 function formatMoney(n) {
@@ -1515,6 +1667,12 @@ function renderFmSidebar(gameClubId) {
         showFmInboxView();
         return;
       }
+      if (item.key === "staff") {
+        el.querySelectorAll(".fm-nav-item").forEach(r => r.classList.remove("active"));
+        row.classList.add("active");
+        showFmStaffView(gameClubId);
+        return;
+      }
       if (item.href) {
         window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
       } else {
@@ -1527,9 +1685,232 @@ function renderFmSidebar(gameClubId) {
 function showFmHomeView() {
   document.getElementById("fmHomeView").classList.remove("hidden");
   document.getElementById("fmPlayersDbView").classList.add("hidden");
+  document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "PAGE D'ACCUEIL";
+}
+
+// ---- Staff (sous-onglet) --------------------------------------------------
+// Regroupement (approximatif) des intitules de poste staff en 3 departements :
+// coaching/preparation, recrutement, medical/sciences du sport. Base sur les
+// intitules reellement presents dans la table `staff` (import FM).
+const STAFF_DEPARTMENTS = {
+  coaching: {
+    label: "Équipe de préparateurs", icon: "🧑‍🏫",
+    postes: [
+      "entraîneur", "entraîneur adjoint", "entraîneur des gardiens",
+      "entraîneuse", "entraîneuse adjointe", "entraîneuse des gardiens",
+      "préparateur physique", "préparatrice physique",
+      "préparateur aux coups de pied arrêtés", "analyste des performances",
+      "préparateur", "préparatrice",
+    ],
+  },
+  recrutement: {
+    label: "Recrutement", icon: "🔎",
+    postes: [
+      "recruteur", "recruteuse", "analyste du recrutement", "directeur sportif",
+      "directrice sportive", "directeur technique", "directrice technique",
+      "responsable de la formation jeunes", "responsable des prêts",
+    ],
+  },
+  medical: {
+    label: "Médical", icon: "🩺",
+    postes: [
+      "kiné", "chercheur en sciences du sport", "chercheuse en sciences du sport",
+    ],
+  },
+};
+const STAFF_POSTE_TO_DEPT = {};
+Object.entries(STAFF_DEPARTMENTS).forEach(([dept, info]) => {
+  info.postes.forEach(p => { STAFF_POSTE_TO_DEPT[p] = dept; });
+});
+function staffDepartmentFor(poste) {
+  return STAFF_POSTE_TO_DEPT[(poste || "").trim().toLowerCase()] || "autres";
+}
+
+// Attributs pertinents affiches sur chaque fiche selon le departement (cles
+// de la table `staff`, deja recuperees via la jointure staff_ref -> staff.id).
+const STAFF_DEPT_ATTRS = {
+  coaching: [
+    ["niveau_tactique", "Tactique"], ["niveau_attaque", "Attaque"], ["niveau_defense", "Défense"],
+  ],
+  recrutement: [
+    ["eval_joueurs", "Éval. joueurs"], ["eval_potentiel", "Éval. potentiel"], ["formation_jeunes", "Formation jeunes"],
+  ],
+  medical: [
+    ["determination", "Détermination"], ["professionnalisme", "Professionnalisme"],
+  ],
+  autres: [
+    ["determination", "Détermination"],
+  ],
+};
+
+function initialsFromName(nom) {
+  const words = (nom || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+function colorFromName(nom) {
+  let hash = 0;
+  for (let i = 0; i < (nom || "").length; i++) hash = nom.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 62%, 46%)`;
+}
+
+let staffViewLoadedForClub = null;
+let staffViewMembers = [];
+let staffViewIsOwnClub = true;
+
+async function fetchClubStaffMembers(clubId) {
+  const { data: gameStaffRows, error: gsErr } = await supabaseClient
+    .from("game_staff")
+    .select("id, staff_ref, nom, poste, salaire_actuel, contrat_expire")
+    .eq("game_id", gameId)
+    .eq("game_club_id", clubId);
+  if (gsErr) { console.error(gsErr); return []; }
+  if (!gameStaffRows || gameStaffRows.length === 0) return [];
+
+  const refs = [...new Set(gameStaffRows.map(r => r.staff_ref).filter(Boolean))];
+  let staffByRef = {};
+  if (refs.length > 0) {
+    const { data: staffRows, error: sErr } = await supabaseClient
+      .from("staff")
+      .select("id, nationalite, age, personnalite, eval_joueurs, eval_potentiel, formation_jeunes, niveau_tactique, niveau_defense, niveau_attaque, determination, professionnalisme, qualification_preparateur")
+      .in("id", refs);
+    if (sErr) console.error(sErr);
+    (staffRows || []).forEach(s => { staffByRef[s.id] = s; });
+  }
+
+  return gameStaffRows.map(r => ({ ...r, ...(staffByRef[r.staff_ref] || {}) }));
+}
+
+function renderStaffAttrChips(member, dept, locked) {
+  const attrs = STAFF_DEPT_ATTRS[dept] || [];
+  return attrs.map(([key, label]) => {
+    const val = member[key];
+    if (locked) return `<span class="staff-attr-chip">${label}: 🔒</span>`;
+    if (!Number.isFinite(Number(val))) return "";
+    return `<span class="staff-attr-chip">${label}: <b>${escapeHtml(String(val))}</b>/20</span>`;
+  }).join("");
+}
+
+function staffMemberCardHtml(member, dept, locked) {
+  const nation = member.nationalite ? nationLabel(member.nationalite) : "";
+  const age = Number.isFinite(Number(member.age)) ? `${member.age} ans` : "";
+  return `
+    <div class="staff-member-card" data-staff-id="${member.id}">
+      <div class="staff-avatar" style="background:${colorFromName(member.nom)};">${initialsFromName(member.nom)}</div>
+      <div class="staff-member-info">
+        <div class="staff-member-name">${escapeHtml(member.nom || "-")}</div>
+        <div class="staff-member-role">${escapeHtml(member.poste || "-")}</div>
+        <div class="staff-member-meta">
+          ${nation ? `<span>${nation}</span>` : ""}
+          ${age ? `<span>· ${age}</span>` : ""}
+        </div>
+        <div class="staff-member-meta">${renderStaffAttrChips(member, dept, locked)}</div>
+      </div>
+      <div class="staff-member-side">
+        <div class="salaire">${member.salaire_actuel != null ? formatMoney(member.salaire_actuel) + " / mois" : "-"}</div>
+        <div>${formatContractEnd(member.contrat_expire)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStaffColumns() {
+  const el = document.getElementById("staffColumns");
+  if (!el) return;
+  const locked = !staffViewIsOwnClub;
+
+  const autresMembers = staffViewMembers.filter(m => staffDepartmentFor(m.poste) === "autres");
+  const depts = { ...STAFF_DEPARTMENTS };
+  if (autresMembers.length > 0) depts.autres = { label: "Autres", icon: "📋" };
+
+  el.innerHTML = Object.entries(depts).map(([dept, info]) => {
+    const members = staffViewMembers
+      .filter(m => staffDepartmentFor(m.poste) === dept)
+      .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
+    return `
+      <div class="staff-column">
+        <div class="staff-col-title">
+          <span>${info.icon} ${info.label}</span>
+          <span class="count">${members.length}</span>
+        </div>
+        ${members.length > 0
+          ? members.map(m => staffMemberCardHtml(m, dept, locked)).join("")
+          : `<div class="staff-col-empty">Aucun membre à ce poste.</div>`}
+      </div>
+    `;
+  }).join("");
+
+  el.querySelectorAll(".staff-member-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const id = card.getAttribute("data-staff-id");
+      const member = staffViewMembers.find(m => String(m.id) === String(id));
+      if (member) openStaffModal(member, locked);
+    });
+  });
+}
+
+function openStaffModal(member, locked) {
+  const overlay = document.getElementById("staffModalOverlay");
+  const content = document.getElementById("staffModalContent");
+  const dept = staffDepartmentFor(member.poste);
+  const nation = member.nationalite ? nationLabel(member.nationalite) : "-";
+  const attrs = STAFF_DEPT_ATTRS[dept] || [];
+
+  const attrRows = attrs.map(([key, label]) => {
+    const val = member[key];
+    const display = locked ? "🔒" : (Number.isFinite(Number(val)) ? `${val}/20` : "-");
+    return `<div class="stat-row"><span class="label">${label}</span><span class="value">${display}</span></div>`;
+  }).join("");
+
+  content.innerHTML = `
+    <div class="staff-modal-header">
+      <div class="staff-modal-avatar" style="background:${colorFromName(member.nom)};">${initialsFromName(member.nom)}</div>
+      <div>
+        <div class="staff-modal-name">${escapeHtml(member.nom || "-")}</div>
+        <div class="staff-modal-role">${escapeHtml(member.poste || "-")}</div>
+        <div class="staff-modal-sub">${nation}${Number.isFinite(Number(member.age)) ? " · " + member.age + " ans" : ""}</div>
+      </div>
+      <button class="staff-modal-close" id="staffModalCloseBtn">✕</button>
+    </div>
+    <div class="stat-row"><span class="label">Fin de contrat</span><span class="value">${formatContractEnd(member.contrat_expire)}</span></div>
+    <div class="stat-row"><span class="label">Salaire</span><span class="value">${member.salaire_actuel != null ? formatMoney(member.salaire_actuel) + " / mois" : "-"}</span></div>
+    ${member.qualification_preparateur && member.qualification_preparateur !== "-" ? `<div class="stat-row"><span class="label">Qualification</span><span class="value">${escapeHtml(member.qualification_preparateur)}</span></div>` : ""}
+    ${attrRows}
+  `;
+
+  overlay.classList.remove("hidden");
+  document.getElementById("staffModalCloseBtn").addEventListener("click", closeStaffModal);
+}
+function closeStaffModal() {
+  document.getElementById("staffModalOverlay").classList.add("hidden");
+}
+document.getElementById("staffModalOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "staffModalOverlay") closeStaffModal();
+});
+
+async function showFmStaffView(clubId) {
+  document.getElementById("fmHomeView").classList.add("hidden");
+  document.getElementById("fmPlayersDbView").classList.add("hidden");
+  document.getElementById("fmStaffView").classList.remove("hidden");
+  document.getElementById("fmInboxView").classList.add("hidden");
+  const input = document.getElementById("fmSearchInput");
+  if (input) input.placeholder = "STAFF";
+
+  staffViewIsOwnClub = true; // le sous-onglet du dashboard ne montre que son propre staff
+  if (staffViewLoadedForClub === clubId) {
+    renderStaffColumns();
+    return;
+  }
+  const el = document.getElementById("staffColumns");
+  el.innerHTML = `<div class="fm-empty">Chargement...</div>`;
+  staffViewMembers = await fetchClubStaffMembers(clubId);
+  staffViewLoadedForClub = clubId;
+  renderStaffColumns();
 }
 
 // ---- Base de donnees de joueurs (sous-onglet) ----------------------------
@@ -1577,7 +1958,7 @@ const PDB_SORT_COLUMNS = {
   club: p => (p.game_club_id ? (pdbClubNameById[p.game_club_id] || "") : "").toLowerCase(),
   poste: p => (p.poste_brut || "").toLowerCase(),
   age: p => Number(p.age),
-  nation: p => (p.nationalite || "").toLowerCase(),
+  nation: p => nationDisplayName(p.nationalite || "").toLowerCase(),
   taille: p => Number(p.taille_cm),
   pied: p => dominantFoot(p).toLowerCase(),
   reputation: p => Number(p.reputation_mondiale),
@@ -1975,6 +2356,7 @@ function restorePdbFiltersFromCache() {
 async function showFmPlayersDbView(clubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
   document.getElementById("fmPlayersDbView").classList.remove("hidden");
+  document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BASE DE DONNÉES";
@@ -2473,7 +2855,8 @@ function populatePlayersDbFilterOptions() {
   const posteSet = new Set();
   pdbAllPlayers.forEach(p => p._atomicPostes.forEach(a => posteSet.add(a)));
   const postes = [...posteSet].sort(comparePostesAtomic);
-  pdbAllNationsCache = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))].sort();
+  pdbAllNationsCache = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))]
+    .sort((a, b) => nationDisplayName(a).localeCompare(nationDisplayName(b), "fr"));
 
   const posteSelect = document.getElementById("pdbPosteSelect");
   const currentPoste = posteSelect.value;
@@ -2489,7 +2872,7 @@ function populatePlayersDbFilterOptions() {
 // dans ses <option>, d'ou ce petit menu maison.
 function renderNationOptions(nations, filterText = "") {
   const q = filterText.trim().toLowerCase();
-  const list = q ? nations.filter(n => n.toLowerCase().includes(q)) : nations;
+  const list = q ? nations.filter(n => nationDisplayName(n).toLowerCase().includes(q)) : nations;
   const optionsEl = document.getElementById("pdbNationOptions");
   if (!optionsEl) return;
   const allActiveClass = pdbNationValue === "" ? " active" : "";
@@ -3669,6 +4052,7 @@ async function selectFmInboxMessage(msgId) {
 function showFmInboxView() {
   document.getElementById("fmHomeView").classList.add("hidden");
   document.getElementById("fmPlayersDbView").classList.add("hidden");
+  document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.remove("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BOÎTE DE RÉCEPTION";
