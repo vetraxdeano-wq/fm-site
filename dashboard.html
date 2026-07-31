@@ -399,6 +399,8 @@
   .pdb-table tbody tr:hover td { background: rgba(251,191,36,0.06); }
   .pdb-table .flag-icon { width: 16px; height: 12px; object-fit: cover; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
   .pdb-name-cell { font-weight: 600; }
+  .pdb-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .pdb-sortable:hover { color: var(--accent); }
   .pdb-club-link { cursor: pointer; }
   .pdb-club-link:hover { color: var(--accent); text-decoration: underline; }
   .pdb-pagination {
@@ -708,20 +710,20 @@
           <table class="pdb-table">
             <thead>
               <tr>
-                <th>Nom</th>
-                <th>Club</th>
-                <th>Poste</th>
-                <th>Âge</th>
-                <th>Nation</th>
-                <th>Taille</th>
-                <th>Pied fort</th>
-                <th>Réputation</th>
-                <th>Valeur marchande</th>
-                <th>Fin de contrat</th>
-                <th>Salaire</th>
-                <th>Personnalité</th>
-                <th>Niveau</th>
-                <th>Potentiel</th>
+                <th class="pdb-sortable" data-sort-key="nom" data-label="Nom">Nom</th>
+                <th class="pdb-sortable" data-sort-key="club" data-label="Club">Club</th>
+                <th class="pdb-sortable" data-sort-key="poste" data-label="Poste">Poste</th>
+                <th class="pdb-sortable" data-sort-key="age" data-label="Âge">Âge</th>
+                <th class="pdb-sortable" data-sort-key="nation" data-label="Nation">Nation</th>
+                <th class="pdb-sortable" data-sort-key="taille" data-label="Taille">Taille</th>
+                <th class="pdb-sortable" data-sort-key="pied" data-label="Pied fort">Pied fort</th>
+                <th class="pdb-sortable" data-sort-key="reputation" data-label="Réputation">Réputation</th>
+                <th class="pdb-sortable" data-sort-key="valeur" data-label="Valeur marchande">Valeur marchande</th>
+                <th class="pdb-sortable" data-sort-key="contrat" data-label="Fin de contrat">Fin de contrat</th>
+                <th class="pdb-sortable" data-sort-key="salaire" data-label="Salaire">Salaire</th>
+                <th class="pdb-sortable" data-sort-key="personnalite" data-label="Personnalité">Personnalité</th>
+                <th class="pdb-sortable" data-sort-key="niveau" data-label="Niveau">Niveau</th>
+                <th class="pdb-sortable" data-sort-key="potentiel" data-label="Potentiel">Potentiel</th>
               </tr>
             </thead>
             <tbody id="pdbTableBody">
@@ -1277,6 +1279,76 @@ const PDB_PAGE_SIZE = 100;
 let pdbCurrentPage = 1;
 let pdbLastFiltered = [];
 
+// Tri par colonne (clic sur l'en-tete). Le tri s'applique sur l'ensemble
+// des joueurs filtres (pdbLastFiltered), pas seulement la page affichee, et
+// reste actif au fil du chargement en arriere-plan / des changements de filtre.
+let pdbSortKey = null;
+let pdbSortDir = "asc";
+
+const PDB_SORT_COLUMNS = {
+  nom: p => (p.nom || "").toLowerCase(),
+  club: p => (p.game_club_id ? (pdbClubNameById[p.game_club_id] || "") : "").toLowerCase(),
+  poste: p => (p.poste_brut || "").toLowerCase(),
+  age: p => Number(p.age),
+  nation: p => (p.nationalite || "").toLowerCase(),
+  taille: p => Number(p.taille_cm),
+  pied: p => dominantFoot(p).toLowerCase(),
+  reputation: p => Number(p.reputation_mondiale),
+  valeur: p => Number(p.valeur_marchande_actuelle),
+  contrat: p => p.contrat_expire || "",
+  salaire: p => Number(p.salaire_actuel),
+  personnalite: p => (p.personnalite || "").toLowerCase(),
+  niveau: p => Number(p.niveau_actuel),
+  potentiel: p => Number(p.potentiel),
+};
+
+function applyPdbSort() {
+  if (!pdbSortKey) return;
+  const accessor = PDB_SORT_COLUMNS[pdbSortKey];
+  if (!accessor) return;
+  const dir = pdbSortDir === "asc" ? 1 : -1;
+  pdbLastFiltered.sort((a, b) => {
+    const va = accessor(a);
+    const vb = accessor(b);
+    const missingA = va == null || va === "" || (typeof va === "number" && !Number.isFinite(va));
+    const missingB = vb == null || vb === "" || (typeof vb === "number" && !Number.isFinite(vb));
+    // Valeurs manquantes toujours en fin de liste, quel que soit le sens du tri.
+    if (missingA && missingB) return 0;
+    if (missingA) return 1;
+    if (missingB) return -1;
+    let cmp = 0;
+    if (va < vb) cmp = -1;
+    else if (va > vb) cmp = 1;
+    return dir === 1 ? cmp : -cmp;
+  });
+}
+
+function updatePdbSortHeaderIndicators() {
+  document.querySelectorAll(".pdb-table thead th[data-sort-key]").forEach(th => {
+    const key = th.getAttribute("data-sort-key");
+    const base = th.getAttribute("data-label") || th.textContent;
+    th.textContent = key === pdbSortKey ? `${base} ${pdbSortDir === "asc" ? "▲" : "▼"}` : base;
+  });
+}
+
+function wirePdbSortableHeaders() {
+  document.querySelectorAll(".pdb-table thead th[data-sort-key]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort-key");
+      if (pdbSortKey === key) {
+        pdbSortDir = pdbSortDir === "asc" ? "desc" : "asc";
+      } else {
+        pdbSortKey = key;
+        pdbSortDir = "asc";
+      }
+      applyPdbSort();
+      updatePdbSortHeaderIndicators();
+      pdbCurrentPage = 1;
+      renderPlayersDbTable(pdbLastFiltered);
+    });
+  });
+}
+
 // Marge de tolerance au-dessus de la reputation du club pour le mode
 // "interesse par transfert" : un joueur est considere interesse si sa
 // reputation mondiale ne depasse pas sensiblement celle du club (plafond),
@@ -1444,6 +1516,8 @@ function wirePlayersDbFilters(clubId) {
   if (pdbFiltersWired) return;
   pdbFiltersWired = true;
 
+  wirePdbSortableHeaders();
+
   document.getElementById("pdbSearchInput").addEventListener("input", () => applyPlayersDbFilters(clubId));
   document.getElementById("pdbPosteSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
   document.getElementById("pdbContractSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
@@ -1520,25 +1594,37 @@ function wirePlayersDbFilters(clubId) {
 // suivantes. Toutes les executions d'onBatch sont malgre tout garanties
 // terminees avant que la fonction ne retourne.
 const PDB_FETCH_PAGE_SIZE = 1000;
+const PDB_FETCH_RETRIES = 4;
+
+// Une page qui echoue (timeout, erreur reseau ponctuelle...) est retentee
+// plusieurs fois avec un delai croissant, plutot que de faire planter tout
+// le chargement en arriere-plan et tronquer silencieusement la base a mi-
+// chemin (c'etait la cause du "62 000 joueurs au lieu de 75 000+").
+async function fetchPlayersPageWithRetry(from) {
+  let lastErr;
+  for (let attempt = 0; attempt < PDB_FETCH_RETRIES; attempt++) {
+    const { data, error } = await supabaseClient
+      .from("game_players")
+      .select("*")
+      .eq("game_id", gameId)
+      .order("id", { ascending: true })
+      .range(from, from + PDB_FETCH_PAGE_SIZE - 1);
+    if (!error) return data || [];
+    lastErr = error;
+    console.warn(`Echec chargement page ${from} (tentative ${attempt + 1}/${PDB_FETCH_RETRIES})`, error);
+    await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+  }
+  throw lastErr;
+}
 
 async function fetchGamePlayersPages(pageStarts, concurrency, onBatch) {
   const collected = [];
   const pendingBatchWork = [];
   for (let i = 0; i < pageStarts.length; i += concurrency) {
     const batch = pageStarts.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map(from =>
-      supabaseClient
-        .from("game_players")
-        .select("*")
-        .eq("game_id", gameId)
-        .order("id", { ascending: true })
-        .range(from, from + PDB_FETCH_PAGE_SIZE - 1)
-    ));
+    const results = await Promise.all(batch.map(from => fetchPlayersPageWithRetry(from)));
     const batchPlayers = [];
-    for (const { data, error } of results) {
-      if (error) throw error;
-      batchPlayers.push(...(data || []));
-    }
+    results.forEach(data => batchPlayers.push(...data));
     collected.push(...batchPlayers);
     if (onBatch) {
       pendingBatchWork.push(Promise.resolve().then(() => onBatch(batchPlayers)).catch(err => console.error(err)));
@@ -1589,10 +1675,11 @@ async function refreshPdbClubLookups(newPlayers, userClubId) {
 // chaque lot ne fait qu'ajouter des joueurs et rafraichir l'affichage —
 // jamais geler la page en rendant 80 000 lignes d'un coup.
 const PDB_FIRST_WAVE_SIZE = 2000;
-// Nombre de requetes de page lancees en parallele. Augmente (etait 6) car le
-// fetch reseau n'est plus ralenti par l'attente du traitement de chaque lot
-// (voir fetchGamePlayersPages) : on peut se permettre plus de requetes en vol.
-const PDB_FETCH_CONCURRENCY = 12;
+// Nombre de requetes de page lancees en parallele. Le fetch reseau n'est
+// plus ralenti par l'attente du traitement de chaque lot (voir
+// fetchGamePlayersPages), donc on peut monter un peu par rapport aux 6
+// d'origine, sans pousser trop fort pour eviter des echecs reseau.
+const PDB_FETCH_CONCURRENCY = 8;
 
 async function loadPlayersDb(clubId) {
   const tbody = document.getElementById("pdbTableBody");
@@ -1902,8 +1989,9 @@ function applyPlayersDbFilters(clubId, opts = {}) {
   }
 
   pdbLastFiltered = filtered;
+  applyPdbSort();
   if (opts.resetPage !== false) pdbCurrentPage = 1;
-  renderPlayersDbTable(filtered);
+  renderPlayersDbTable(pdbLastFiltered);
 
   const countEl = document.getElementById("pdbCount");
   const total = pdbAllPlayers.length;
@@ -1940,7 +2028,14 @@ function formatContractEnd(dateStr) {
 function renderPlayersDbTable(players) {
   const tbody = document.getElementById("pdbTableBody");
   if (players.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Aucun joueur ne correspond à ces filtres.</td></tr>`;
+    // Tant que le chargement en arriere-plan n'est pas termine, "0 resultat"
+    // ne veut pas forcement dire "aucun joueur ne correspond" — ca peut juste
+    // vouloir dire que les joueurs correspondants n'ont pas encore ete
+    // recuperes. On l'indique clairement pour ne pas donner l'impression d'un
+    // bug pendant que la base continue de charger.
+    tbody.innerHTML = !pdbLoadingComplete
+      ? `<tr><td colspan="14" class="pdb-empty-cell">Chargement des joueurs en cours (${pdbAllPlayers.length.toLocaleString("fr-FR")}/${pdbTotalPlayers.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
+      : `<tr><td colspan="14" class="pdb-empty-cell">Aucun joueur ne correspond à ces filtres.</td></tr>`;
     renderPdbPagination(0, 1);
     return;
   }
