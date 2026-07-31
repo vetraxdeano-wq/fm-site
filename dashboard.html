@@ -349,6 +349,14 @@
   .pdb-field input[type="text"] { width: 190px; }
   .pdb-field input[type="text"]:focus, .pdb-field select:focus { border-color: var(--accent-dim); }
 
+  .pdb-mini-range { display: flex; align-items: center; gap: 5px; }
+  .pdb-mini-range input[type="number"] {
+    width: 64px; background: #14171d; border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 8px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  .pdb-mini-range input[type="number"]:focus { border-color: var(--accent-dim); }
+  .pdb-mini-range span { color: var(--text-dim); font-size: 11px; flex: 0 0 auto; }
+
   .pdb-nation-field { position: relative; }
   .pdb-nation-select { position: relative; }
   .pdb-nation-trigger {
@@ -509,6 +517,42 @@
   .pdb-attr-step.pdb-value-step { width: 32px; font-size: 10px; }
 
   .pdb-value-range-field { grid-column: 1 / -1; }
+
+  .pdb-attr-groups-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+  }
+  .pdb-attr-picker-btn, .pdb-attr-picker-clear-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 12px; font-size: 11.5px; border-radius: 7px; font-family: inherit; cursor: pointer;
+  }
+  .pdb-attr-picker-btn:hover, .pdb-attr-picker-clear-btn:hover { border-color: var(--accent-dim); color: var(--text); }
+  .pdb-attr-picker-clear-btn { margin-left: auto; margin-right: 10px; }
+
+  .pdb-attr-picker-modal { max-width: 900px; }
+  .pdb-attr-picker-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px;
+  }
+  .pdb-attr-picker-col-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gold);
+    font-weight: 700; margin-bottom: 8px;
+  }
+  .pdb-attr-picker-item {
+    display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px;
+    color: var(--text); cursor: pointer;
+  }
+  .pdb-attr-picker-item input[type="checkbox"] { accent-color: var(--gold); width: 15px; height: 15px; flex: 0 0 auto; }
+  .pdb-attr-picker-footer { justify-content: space-between; flex-wrap: wrap; }
+  .pdb-attr-picker-count { color: var(--text-dim); font-size: 12px; margin-right: auto; }
+  .pdb-attr-picker-min-field { display: flex; align-items: center; gap: 8px; }
+  .pdb-attr-picker-min-field label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim);
+  }
+  .pdb-attr-picker-min-field input[type="number"] {
+    width: 56px; background: #14171d; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px; font-family: inherit; outline: none; text-align: center;
+  }
+  .pdb-attr-picker-min-field input[type="number"]:focus { border-color: var(--accent-dim); }
+
   .pdb-value-range { display: flex; align-items: center; gap: 8px; }
   .pdb-value-range > span { color: var(--text-dim); font-size: 11px; flex: 0 0 auto; }
   .pdb-value-input-group { display: flex; align-items: center; gap: 4px; flex: 1 1 0; min-width: 0; }
@@ -780,6 +824,34 @@
               <option value="1y">Expire dans -1 an</option>
             </select>
           </div>
+          <div class="pdb-field">
+            <label for="pdbContinentSelect">Continent</label>
+            <select id="pdbContinentSelect">
+              <option value="">Tous</option>
+              <option value="europe">Europe</option>
+              <option value="amerique du sud">Amérique du Sud</option>
+              <option value="amerique du nord">Amérique du Nord</option>
+              <option value="afrique">Afrique</option>
+              <option value="asie">Asie</option>
+              <option value="oceanie">Océanie</option>
+            </select>
+          </div>
+          <div class="pdb-field">
+            <label>Âge</label>
+            <div class="pdb-mini-range">
+              <input type="number" id="pdbAgeMinInput" min="14" max="45" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="pdbAgeMaxInput" min="14" max="45" placeholder="Max">
+            </div>
+          </div>
+          <div class="pdb-field">
+            <label>Valeur marchande (M€)</label>
+            <div class="pdb-mini-range">
+              <input type="number" id="pdbValMinInput" step="0.1" min="0" placeholder="Min">
+              <span>–</span>
+              <input type="number" id="pdbValMaxInput" step="0.1" min="0" placeholder="Max">
+            </div>
+          </div>
           <label class="pdb-checkbox-field" for="pdbTransferCheckbox">
             <input type="checkbox" id="pdbTransferCheckbox" checked>
             <span>Intéressé par transfert</span>
@@ -799,6 +871,24 @@
             <div class="pdb-modal-footer">
               <button class="pdb-reset-btn" id="pdbAdvResetBtn" type="button">Réinitialiser</button>
               <button class="pdb-apply-btn" id="pdbAdvApplyBtn" type="button">Appliquer</button>
+            </div>
+          </div>
+        </div>
+        <div class="pdb-modal-overlay hidden" id="pdbAttrPickerOverlay">
+          <div class="pdb-modal pdb-attr-picker-modal">
+            <div class="pdb-modal-header">
+              <h3>Choisir des attributs</h3>
+              <button class="pdb-attr-picker-clear-btn" id="pdbAttrPickerClearBtn" type="button">Effacer tous les attributs</button>
+              <button class="pdb-modal-close" id="pdbAttrPickerClose" type="button">✕</button>
+            </div>
+            <div class="pdb-modal-body" id="pdbAttrPickerBody"></div>
+            <div class="pdb-modal-footer pdb-attr-picker-footer">
+              <span class="pdb-attr-picker-count" id="pdbAttrPickerCount">0 attribut sélectionné</span>
+              <div class="pdb-attr-picker-min-field">
+                <label for="pdbAttrPickerMin">Note minimum</label>
+                <input type="number" id="pdbAttrPickerMin" min="1" max="20" placeholder="—">
+              </div>
+              <button class="pdb-apply-btn" id="pdbAttrPickerApplyBtn" type="button">Appliquer aux attributs sélectionnés</button>
             </div>
           </div>
         </div>
@@ -912,6 +1002,41 @@ const NATION_NAME_TO_ISO2 = {
   "singapour": "sg", "iran": "ir", "irak": "iq", "inde": "in",
 };
 
+// Regroupement (approximatif, a but de filtrage) des nations par continent.
+// Reprend les memes cles normalisees que NATION_NAME_TO_ISO2 / GB_SUBCODES.
+const NATION_CONTINENT_GROUPS = {
+  "europe": [
+    "france", "allemagne", "espagne", "italie", "portugal", "pays-bas", "belgique",
+    "irlande", "irlande du nord", "angleterre", "ecosse", "pays de galles", "suisse",
+    "autriche", "turquie", "grece", "russie", "ukraine", "pologne", "republique tcheque",
+    "rep. tcheque", "croatie", "serbie", "roumanie", "bulgarie", "hongrie", "danemark",
+    "suede", "norvege", "finlande", "islande", "bosnie-herzegovine", "slovaquie",
+    "slovenie", "albanie", "macedoine du nord", "montenegro", "luxembourg", "chypre",
+    "malte", "lituanie", "lettonie", "estonie", "bielorussie", "moldavie", "kosovo",
+    "andorre", "saint-marin", "feroe",
+  ],
+  "amerique du sud": [
+    "bresil", "argentine", "uruguay", "chili", "colombie", "perou", "equateur",
+    "paraguay", "bolivie", "venezuela",
+  ],
+  "amerique du nord": ["mexique", "etats-unis", "canada"],
+  "asie": [
+    "japon", "coree du sud", "chine", "arabie saoudite", "qatar", "israel", "iran",
+    "irak", "inde", "indonesie", "thailande", "vietnam", "singapour", "georgie",
+    "armenie", "azerbaidjan", "kazakhstan",
+  ],
+  "afrique": [
+    "maroc", "algerie", "tunisie", "senegal", "cote d'ivoire", "cameroun", "nigeria",
+    "ghana", "egypte", "afrique du sud",
+  ],
+  "oceanie": ["australie", "nouvelle-zelande"],
+};
+
+const NATION_KEY_TO_CONTINENT = {};
+Object.entries(NATION_CONTINENT_GROUPS).forEach(([continent, keys]) => {
+  keys.forEach(k => { NATION_KEY_TO_CONTINENT[k] = continent; });
+});
+
 function normalizeNationKey(name) {
   return (name || "")
     .toLowerCase()
@@ -922,6 +1047,10 @@ function flagCodeForNation(name) {
   const key = normalizeNationKey(name);
   if (GB_SUBCODES[key]) return GB_SUBCODES[key];
   return NATION_NAME_TO_ISO2[key] || null;
+}
+
+function continentForNation(name) {
+  return NATION_KEY_TO_CONTINENT[normalizeNationKey(name)] || null;
 }
 
 function nationLabel(name) {
@@ -1379,6 +1508,7 @@ let pdbClubReputationById = {};
 let pdbUserClubId = null;
 let pdbFiltersWired = false;
 let pdbNationValue = "";
+let pdbContinentValue = "";
 
 // Chargement progressif : on affiche une premiere vague de joueurs tout de
 // suite, puis le reste continue de charger en arriere-plan sans bloquer la
@@ -1619,7 +1749,6 @@ const PDB_ATTR_GROUPS = [
 let pdbAdvancedFilters = {
   ageMin: null, ageMax: null,
   tailleMin: null, tailleMax: null,
-  repMin: null, repMax: null,
   valMin: null, valMax: null,
   personnalite: "",
   piedFort: "",
@@ -1720,7 +1849,12 @@ async function loadPdbPlayersFromCache(clubId) {
     pdbTotalPlayers = data.totalPlayers || data.players.length;
     pdbKnownClubIds = new Set(Object.keys(pdbClubNameById));
     pdbKnownRepClubIds = new Set(Object.keys(pdbClubReputationById));
-    pdbLoadingComplete = true;
+    // Le cache peut avoir ete sauvegarde en plein milieu du chargement en
+    // arriere-plan (ex: l'utilisateur a ouvert la fiche d'un joueur avant la
+    // fin) : dans ce cas il ne contient qu'une partie des joueurs, et il ne
+    // faut PAS considerer le chargement comme termine, sinon le reste de la
+    // base ne sera jamais telecharge.
+    pdbLoadingComplete = pdbAllPlayers.length >= pdbTotalPlayers;
     pdbLoaded = true;
     return true;
   } catch (e) {
@@ -1735,6 +1869,7 @@ function getPdbFiltersSnapshot() {
     poste: document.getElementById("pdbPosteSelect")?.value || "",
     nation: pdbNationValue || "",
     contractValue: document.getElementById("pdbContractSelect")?.value || "",
+    continent: pdbContinentValue || "",
     interestedOnly: !!document.getElementById("pdbTransferCheckbox")?.checked,
     advancedFilters: pdbAdvancedFilters,
     sortKey: pdbSortKey,
@@ -1775,6 +1910,10 @@ function restorePdbFiltersFromCache() {
   const contractSelect = document.getElementById("pdbContractSelect");
   if (contractSelect) contractSelect.value = state.contractValue || "";
 
+  pdbContinentValue = state.continent || "";
+  const continentSelect = document.getElementById("pdbContinentSelect");
+  if (continentSelect) continentSelect.value = pdbContinentValue;
+
   const transferCheckbox = document.getElementById("pdbTransferCheckbox");
   if (transferCheckbox) transferCheckbox.checked = !!state.interestedOnly;
 
@@ -1782,6 +1921,7 @@ function restorePdbFiltersFromCache() {
     pdbAdvancedFilters = state.advancedFilters;
     populateAdvancedFiltersInputs();
   }
+  syncMiniRangeInputsFromAdvanced();
   updateMoreFiltersButtonLabel();
 
   pdbSortKey = state.sortKey || null;
@@ -1796,7 +1936,7 @@ async function showFmPlayersDbView(clubId) {
   document.getElementById("fmPlayersDbView").classList.remove("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
-  if (input) input.placeholder = "BASE DE DONNÉES DE JOUEURS";
+  if (input) input.placeholder = "BASE DE DONNÉES";
 
   pdbUserClubId = clubId;
   wirePlayersDbFilters(clubId);
@@ -1816,6 +1956,13 @@ async function showFmPlayersDbView(clubId) {
     restorePdbFiltersFromCache();
     updatePdbSortHeaderIndicators();
     applyPlayersDbFilters(clubId, { resetPage: false });
+    // Le cache restaure peut n'etre que partiel (ex: on a quitte la page en
+    // plein milieu du chargement en arriere-plan) : dans ce cas on reprend
+    // le telechargement du reste de la base la ou il s'etait arrete, plutot
+    // que de rester bloque avec une liste tronquee.
+    if (!pdbLoadingComplete) {
+      loadRemainingPlayersDb(clubId);
+    }
   } else {
     await loadPlayersDb(clubId);
   }
@@ -1831,6 +1978,29 @@ function wirePlayersDbFilters(clubId) {
   document.getElementById("pdbPosteSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
   document.getElementById("pdbContractSelect").addEventListener("change", () => applyPlayersDbFilters(clubId));
   document.getElementById("pdbTransferCheckbox").addEventListener("change", () => applyPlayersDbFilters(clubId));
+  document.getElementById("pdbContinentSelect").addEventListener("change", (e) => {
+    pdbContinentValue = e.target.value;
+    applyPlayersDbFilters(clubId);
+  });
+
+  // Âge / Valeur marchande : champs de la barre principale, qui lisent et
+  // ecrivent directement pdbAdvancedFilters (memes cles que la modale
+  // "Filtres avancés") pour garder un etat unique.
+  ["pdbAgeMinInput", "pdbAgeMaxInput", "pdbValMinInput", "pdbValMaxInput"].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => {
+      const ageMin = document.getElementById("pdbAgeMinInput").value;
+      const ageMax = document.getElementById("pdbAgeMaxInput").value;
+      const valMin = document.getElementById("pdbValMinInput").value;
+      const valMax = document.getElementById("pdbValMaxInput").value;
+      pdbAdvancedFilters.ageMin = ageMin === "" ? null : Number(ageMin);
+      pdbAdvancedFilters.ageMax = ageMax === "" ? null : Number(ageMax);
+      pdbAdvancedFilters.valMin = valMin === "" ? null : Math.round(Number(valMin) * 1000000);
+      pdbAdvancedFilters.valMax = valMax === "" ? null : Math.round(Number(valMax) * 1000000);
+      if (pdbAdvModalBuilt) populateAdvancedFiltersInputs();
+      updateMoreFiltersButtonLabel();
+      applyPlayersDbFilters(clubId);
+    });
+  });
 
   document.getElementById("pdbNationTrigger").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1858,8 +2028,11 @@ function wirePlayersDbFilters(clubId) {
     document.getElementById("pdbContractSelect").value = "";
     pdbNationValue = "";
     updateNationTriggerLabel();
+    pdbContinentValue = "";
+    document.getElementById("pdbContinentSelect").value = "";
     document.getElementById("pdbTransferCheckbox").checked = false;
     resetAdvancedFilters();
+    syncMiniRangeInputsFromAdvanced();
     updateMoreFiltersButtonLabel();
     applyPlayersDbFilters(clubId);
   });
@@ -1900,9 +2073,17 @@ function wirePlayersDbFilters(clubId) {
   document.getElementById("pdbAdvResetBtn").addEventListener("click", () => {
     resetAdvancedFilters();
     populateAdvancedFiltersInputs();
+    syncMiniRangeInputsFromAdvanced();
     updateMoreFiltersButtonLabel();
     applyPlayersDbFilters(clubId);
   });
+
+  document.getElementById("pdbAttrPickerClose").addEventListener("click", () => closeAttrPickerModal());
+  document.getElementById("pdbAttrPickerOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "pdbAttrPickerOverlay") closeAttrPickerModal();
+  });
+  document.getElementById("pdbAttrPickerApplyBtn").addEventListener("click", () => applyAttrPickerSelection());
+  document.getElementById("pdbAttrPickerClearBtn").addEventListener("click", () => clearAllAttrPickerFilters());
 
   document.getElementById("pdbTableBody").addEventListener("click", (e) => {
     const clubLink = e.target.closest(".pdb-club-link");
@@ -2069,8 +2250,31 @@ async function loadPlayersDb(clubId) {
     maybeSavePdbPlayersToCache(clubId, true);
 
     // 2) Reste des joueurs, en arriere-plan, par lots.
+    await loadRemainingPlayersDb(clubId);
+  } catch (e) {
+    console.error(e);
+    if (!pdbAllPlayers.length) {
+      tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
+      countEl.textContent = "";
+    } else {
+      pdbLoadingComplete = true;
+      toast("Erreur pendant le chargement en arrière-plan : " + e.message, true);
+      applyPlayersDbFilters(clubId, { resetPage: false });
+    }
+  }
+}
+
+// Telecharge le reste des joueurs (au-dela de ceux deja dans pdbAllPlayers)
+// par lots, en arriere-plan, sans bloquer l'UI. Reutilisee a deux endroits :
+// - juste apres la premiere vague dans loadPlayersDb() ;
+// - quand on revient sur cette page et que le cache IndexedDB restaure ne
+//   contenait qu'un chargement PARTIEL (l'utilisateur avait quitte la page
+//   -ex: ouvert la fiche d'un joueur- avant la fin du telechargement complet) :
+//   sans cet appel, le reste de la base ne se telechargeait plus jamais.
+async function loadRemainingPlayersDb(clubId) {
+  try {
     const remainingStarts = [];
-    for (let from = firstWave.length; from < pdbTotalPlayers; from += PDB_FETCH_PAGE_SIZE) {
+    for (let from = pdbAllPlayers.length; from < pdbTotalPlayers; from += PDB_FETCH_PAGE_SIZE) {
       remainingStarts.push(from);
     }
 
@@ -2098,14 +2302,9 @@ async function loadPlayersDb(clubId) {
     maybeSavePdbPlayersToCache(clubId, true);
   } catch (e) {
     console.error(e);
-    if (!pdbAllPlayers.length) {
-      tbody.innerHTML = `<tr><td colspan="14" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
-      countEl.textContent = "";
-    } else {
-      pdbLoadingComplete = true;
-      toast("Erreur pendant le chargement en arrière-plan : " + e.message, true);
-      applyPlayersDbFilters(clubId, { resetPage: false });
-    }
+    pdbLoadingComplete = true;
+    toast("Erreur pendant le chargement en arrière-plan : " + e.message, true);
+    applyPlayersDbFilters(clubId, { resetPage: false });
   }
 }
 
@@ -2355,6 +2554,9 @@ function applyPlayersDbFilters(clubId, opts = {}) {
   if (nation) {
     filtered = filtered.filter(p => p.nationalite === nation);
   }
+  if (pdbContinentValue) {
+    filtered = filtered.filter(p => continentForNation(p.nationalite) === pdbContinentValue);
+  }
   if (contractValue) {
     filtered = filtered.filter(p => playerPassesContractFilter(p, contractValue));
   }
@@ -2557,14 +2759,6 @@ function buildAdvancedFiltersModal() {
             <input type="number" id="pdbAdvTailleMax" min="150" max="210" placeholder="Max">
           </div>
         </div>
-        <div class="pdb-range-field">
-          <label>Réputation</label>
-          <div class="pdb-range-inputs">
-            <input type="number" id="pdbAdvRepMin" min="0" placeholder="Min">
-            <span>–</span>
-            <input type="number" id="pdbAdvRepMax" min="0" placeholder="Max">
-          </div>
-        </div>
         <div class="pdb-range-field pdb-value-range-field">
           <label>Valeur marchande (M€)</label>
           <div class="pdb-value-range">
@@ -2611,7 +2805,16 @@ function buildAdvancedFiltersModal() {
     </details>
   `).join("");
 
-  document.getElementById("pdbFiltersModalBody").innerHTML = generalHtml + groupsHtml;
+  const attrGroupsHeaderHtml = `
+    <div class="pdb-attr-groups-header">
+      <div class="pdb-filter-section-title">Attributs</div>
+      <button type="button" class="pdb-attr-picker-btn" id="pdbAttrPickerBtn">Choisir des attributs</button>
+    </div>
+  `;
+
+  document.getElementById("pdbFiltersModalBody").innerHTML = generalHtml + attrGroupsHeaderHtml + groupsHtml;
+
+  document.getElementById("pdbAttrPickerBtn").addEventListener("click", () => openAttrPickerModal());
 
   // Tous les champs (generaux et attributs) sauvegardent l'etat des filtres
   // des qu'ils sont modifies, meme sans cliquer sur "Appliquer" : au retour
@@ -2621,7 +2824,6 @@ function buildAdvancedFiltersModal() {
   const PDB_ADV_GENERAL_FIELDS = [
     ["pdbAdvAgeMin", "ageMin", "number"], ["pdbAdvAgeMax", "ageMax", "number"],
     ["pdbAdvTailleMin", "tailleMin", "number"], ["pdbAdvTailleMax", "tailleMax", "number"],
-    ["pdbAdvRepMin", "repMin", "number"], ["pdbAdvRepMax", "repMax", "number"],
     ["pdbAdvPiedFort", "piedFort", "text"], ["pdbAdvPersonnalite", "personnalite", "text"],
   ];
   PDB_ADV_GENERAL_FIELDS.forEach(([id, key, type]) => {
@@ -2691,14 +2893,116 @@ function buildAdvancedFiltersModal() {
   });
 }
 
+// ---- Popup "Choisir des attributs" -----------------------------------
+// Alternative rapide aux champs individuels de chaque attribut (dans les
+// sections repliables ci-dessus, qui restent disponibles) : on coche
+// plusieurs attributs a la fois, on saisit UNE note minimum, et elle
+// s'applique a tous les attributs coches en une fois plutot que de devoir
+// chercher et remplir chaque champ un par un.
+function buildAttrPickerBody() {
+  const body = document.getElementById("pdbAttrPickerBody");
+  body.innerHTML = `
+    <div class="pdb-attr-picker-grid">
+      ${PDB_ATTR_GROUPS.map(g => `
+        <div class="pdb-attr-picker-col">
+          <div class="pdb-attr-picker-col-title">${escapeHtml(g.title)}</div>
+          ${g.attrs.map(([key, label]) => `
+            <label class="pdb-attr-picker-item">
+              <input type="checkbox" data-attr-picker="${key}">
+              <span>${escapeHtml(label)}</span>
+            </label>
+          `).join("")}
+        </div>
+      `).join("")}
+    </div>
+  `;
+  body.querySelectorAll("input[data-attr-picker]").forEach(cb => {
+    cb.addEventListener("change", updateAttrPickerCount);
+  });
+}
+
+function updateAttrPickerCount() {
+  const n = document.querySelectorAll("#pdbAttrPickerBody input[data-attr-picker]:checked").length;
+  document.getElementById("pdbAttrPickerCount").textContent =
+    `${n} attribut${n > 1 ? "s" : ""} sélectionné${n > 1 ? "s" : ""}`;
+}
+
+function openAttrPickerModal() {
+  buildAttrPickerBody();
+  // Pre-coche les attributs qui ont deja une note minimum active, pour
+  // pouvoir la revoir/l'ajuster sans repartir de zero.
+  document.querySelectorAll("#pdbAttrPickerBody input[data-attr-picker]").forEach(cb => {
+    cb.checked = pdbAdvancedFilters.attrs[cb.dataset.attrPicker] != null;
+  });
+  updateAttrPickerCount();
+  document.getElementById("pdbAttrPickerMin").value = "";
+  document.getElementById("pdbAttrPickerOverlay").classList.remove("hidden");
+}
+
+function closeAttrPickerModal() {
+  document.getElementById("pdbAttrPickerOverlay").classList.add("hidden");
+}
+
+function applyAttrPickerSelection() {
+  const minVal = document.getElementById("pdbAttrPickerMin").value;
+  const min = minVal === "" ? null : Number(minVal);
+  const checked = document.querySelectorAll("#pdbAttrPickerBody input[data-attr-picker]:checked");
+  if (!checked.length || !Number.isFinite(min)) {
+    closeAttrPickerModal();
+    return;
+  }
+  checked.forEach(cb => {
+    pdbAdvancedFilters.attrs[cb.dataset.attrPicker] = min;
+  });
+  // Repercute sur les champs individuels de la modale "Filtres avances"
+  // (toujours disponibles pour un reglage fin attribut par attribut).
+  document.querySelectorAll("#pdbFiltersModalBody [data-attr]").forEach(input => {
+    const v = pdbAdvancedFilters.attrs[input.dataset.attr];
+    input.value = v == null ? "" : v;
+  });
+  updateMoreFiltersButtonLabel();
+  savePdbFiltersToCache();
+  closeAttrPickerModal();
+}
+
+function clearAllAttrPickerFilters() {
+  pdbAdvancedFilters.attrs = {};
+  document.querySelectorAll("#pdbAttrPickerBody input[data-attr-picker]").forEach(cb => { cb.checked = false; });
+  document.querySelectorAll("#pdbFiltersModalBody [data-attr]").forEach(input => { input.value = ""; });
+  updateAttrPickerCount();
+  updateMoreFiltersButtonLabel();
+  savePdbFiltersToCache();
+}
+
+// Les champs Âge / Valeur marchande de la barre de filtres principale
+// pilotent les MEMES cles (ageMin/ageMax/valMin/valMax) que la modale
+// "Filtres avancés", pour ne pas avoir deux etats independants. Cette
+// fonction remet les champs de la barre principale a jour a partir de
+// pdbAdvancedFilters (ex: apres restauration du cache, ou apres avoir
+// modifie/reinitialise les filtres depuis la modale avancee).
+function syncMiniRangeInputsFromAdvanced() {
+  const af = pdbAdvancedFilters;
+  const ageMinEl = document.getElementById("pdbAgeMinInput");
+  const ageMaxEl = document.getElementById("pdbAgeMaxInput");
+  const valMinEl = document.getElementById("pdbValMinInput");
+  const valMaxEl = document.getElementById("pdbValMaxInput");
+  if (ageMinEl) ageMinEl.value = af.ageMin ?? "";
+  if (ageMaxEl) ageMaxEl.value = af.ageMax ?? "";
+  const toMillions = (euros) => {
+    if (euros == null) return "";
+    const m = euros / 1000000;
+    return Number.isInteger(m) ? m : Math.round(m * 100) / 100;
+  };
+  if (valMinEl) valMinEl.value = toMillions(af.valMin);
+  if (valMaxEl) valMaxEl.value = toMillions(af.valMax);
+}
+
 function populateAdvancedFiltersInputs() {
   const af = pdbAdvancedFilters;
   document.getElementById("pdbAdvAgeMin").value = af.ageMin ?? "";
   document.getElementById("pdbAdvAgeMax").value = af.ageMax ?? "";
   document.getElementById("pdbAdvTailleMin").value = af.tailleMin ?? "";
   document.getElementById("pdbAdvTailleMax").value = af.tailleMax ?? "";
-  document.getElementById("pdbAdvRepMin").value = af.repMin ?? "";
-  document.getElementById("pdbAdvRepMax").value = af.repMax ?? "";
   const toMillions = (euros) => {
     if (euros == null) return "";
     const m = euros / 1000000;
@@ -2727,8 +3031,6 @@ function readAdvancedFiltersFromInputs() {
   pdbAdvancedFilters.ageMax = num("pdbAdvAgeMax");
   pdbAdvancedFilters.tailleMin = num("pdbAdvTailleMin");
   pdbAdvancedFilters.tailleMax = num("pdbAdvTailleMax");
-  pdbAdvancedFilters.repMin = num("pdbAdvRepMin");
-  pdbAdvancedFilters.repMax = num("pdbAdvRepMax");
   pdbAdvancedFilters.valMin = numMillions("pdbAdvValMin");
   pdbAdvancedFilters.valMax = numMillions("pdbAdvValMax");
   pdbAdvancedFilters.piedFort = document.getElementById("pdbAdvPiedFort").value;
@@ -2740,7 +3042,6 @@ function resetAdvancedFilters() {
   pdbAdvancedFilters = {
     ageMin: null, ageMax: null,
     tailleMin: null, tailleMax: null,
-    repMin: null, repMax: null,
     valMin: null, valMax: null,
     personnalite: "",
     piedFort: "",
@@ -2752,7 +3053,6 @@ function hasActiveAdvancedFilters() {
   const af = pdbAdvancedFilters;
   if (af.ageMin != null || af.ageMax != null) return true;
   if (af.tailleMin != null || af.tailleMax != null) return true;
-  if (af.repMin != null || af.repMax != null) return true;
   if (af.valMin != null || af.valMax != null) return true;
   if (af.personnalite || af.piedFort) return true;
   return Object.values(af.attrs).some(v => v != null);
@@ -2764,8 +3064,6 @@ function playerPassesAdvancedFilters(p) {
   if (af.ageMax != null && !(Number(p.age) <= af.ageMax)) return false;
   if (af.tailleMin != null && !(Number(p.taille_cm) >= af.tailleMin)) return false;
   if (af.tailleMax != null && !(Number(p.taille_cm) <= af.tailleMax)) return false;
-  if (af.repMin != null && !(Number(p.reputation_mondiale) >= af.repMin)) return false;
-  if (af.repMax != null && !(Number(p.reputation_mondiale) <= af.repMax)) return false;
   if (af.valMin != null && !(Number(p.valeur_marchande_actuelle) >= af.valMin)) return false;
   if (af.valMax != null && !(Number(p.valeur_marchande_actuelle) <= af.valMax)) return false;
   if (af.personnalite && p.personnalite !== af.personnalite) return false;
@@ -2791,6 +3089,7 @@ function openAdvancedFiltersModal() {
 function closeAdvancedFiltersModal(clubId) {
   readAdvancedFiltersFromInputs();
   document.getElementById("pdbFiltersModalOverlay").classList.add("hidden");
+  syncMiniRangeInputsFromAdvanced();
   updateMoreFiltersButtonLabel();
   applyPlayersDbFilters(clubId);
 }
@@ -2800,7 +3099,6 @@ function countActiveAdvancedFilters() {
   let n = 0;
   if (af.ageMin != null || af.ageMax != null) n++;
   if (af.tailleMin != null || af.tailleMax != null) n++;
-  if (af.repMin != null || af.repMax != null) n++;
   if (af.valMin != null || af.valMax != null) n++;
   if (af.personnalite) n++;
   if (af.piedFort) n++;
