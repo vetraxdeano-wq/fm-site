@@ -1116,6 +1116,7 @@
               <label for="sdbContractSelect">Contrat</label>
               <select id="sdbContractSelect">
                 <option value="">Tous</option>
+                <option value="libre">Staff libre</option>
                 <option value="3m">Expire dans -3 mois</option>
                 <option value="6m">Expire dans -6 mois</option>
                 <option value="1y">Expire dans -1 an</option>
@@ -1137,7 +1138,22 @@
                 <input type="number" id="sdbSalMaxInput" step="1" min="0" placeholder="Max">
               </div>
             </div>
+            <button class="pdb-more-filters-btn" id="sdbMoreFiltersBtn" type="button">+ Ajouter des filtres</button>
             <button class="pdb-reset-btn" id="sdbResetBtn" type="button">Effacer les filtres</button>
+          </div>
+
+          <div class="pdb-modal-overlay hidden" id="sdbFiltersModalOverlay">
+            <div class="pdb-modal">
+              <div class="pdb-modal-header">
+                <h3>Filtres avancés</h3>
+                <button class="pdb-modal-close" id="sdbFiltersModalClose" type="button">✕</button>
+              </div>
+              <div class="pdb-modal-body" id="sdbFiltersModalBody"></div>
+              <div class="pdb-modal-footer">
+                <button class="pdb-reset-btn" id="sdbAdvResetBtn" type="button">Réinitialiser</button>
+                <button class="pdb-apply-btn" id="sdbAdvApplyBtn" type="button">Appliquer</button>
+              </div>
+            </div>
           </div>
 
           <div class="sdb-category-filters" id="sdbCategoryFilters">
@@ -1165,12 +1181,19 @@
                   <th class="pdb-sortable" data-sort-key="niveau_defense" data-label="Défense">Défense</th>
                   <th class="pdb-sortable" data-sort-key="formation_jeunes" data-label="Formation jeunes">Formation jeunes</th>
                   <th class="pdb-sortable" data-sort-key="connaissance_tactique" data-label="Connaissance tactique">Connaissance tactique</th>
+                  <th class="pdb-sortable" data-sort-key="formation_preferee" data-label="Formation préférée">Formation préférée</th>
+                  <th class="pdb-sortable" data-sort-key="deuxieme_formation_preferee" data-label="2e formation préférée">2e formation préférée</th>
+                  <th class="pdb-sortable" data-sort-key="style_tactique" data-label="Style tactique">Style tactique</th>
+                  <th class="pdb-sortable" data-sort-key="style_jeu" data-label="Style de jeu">Style de jeu</th>
+                  <th class="pdb-sortable" data-sort-key="type_pressing" data-label="Type de pressing">Type de pressing</th>
+                  <th class="pdb-sortable" data-sort-key="type_marquage" data-label="Type de marquage">Type de marquage</th>
+                  <th class="pdb-sortable" data-sort-key="mentalite" data-label="Mentalité">Mentalité</th>
                   <th class="pdb-sortable" data-sort-key="salaire" data-label="Salaire">Salaire</th>
                   <th class="pdb-sortable" data-sort-key="contrat" data-label="Fin de contrat">Fin de contrat</th>
                 </tr>
               </thead>
               <tbody id="sdbTableBody">
-                <tr><td colspan="15" class="pdb-empty-cell">Chargement du staff...</td></tr>
+                <tr><td colspan="22" class="pdb-empty-cell">Chargement du staff...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2492,6 +2515,13 @@ const SDB_SORT_COLUMNS = {
   niveau_defense: s => Number(s.niveau_defense),
   formation_jeunes: s => Number(s.formation_jeunes),
   connaissance_tactique: s => Number(s.connaissance_tactique),
+  formation_preferee: s => (s.formation_preferee || "").toLowerCase(),
+  deuxieme_formation_preferee: s => (s.deuxieme_formation_preferee || "").toLowerCase(),
+  style_tactique: s => (s.style_tactique || "").toLowerCase(),
+  style_jeu: s => (s.style_jeu || "").toLowerCase(),
+  type_pressing: s => (s.type_pressing || "").toLowerCase(),
+  type_marquage: s => (s.type_marquage || "").toLowerCase(),
+  mentalite: s => (s.mentalite || "").toLowerCase(),
   salaire: s => Number(s.salaire_actuel),
   contrat: s => s.contrat_expire || "",
 };
@@ -2619,7 +2649,7 @@ async function enrichStaffBatch(gameStaffRows) {
 async function loadStaffDb(clubId) {
   const tbody = document.getElementById("sdbTableBody");
   const countEl = document.getElementById("sdbCount");
-  tbody.innerHTML = `<tr><td colspan="15" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="22" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
   countEl.textContent = "Chargement...";
 
   sdbAllStaff = [];
@@ -2790,6 +2820,7 @@ function getSdbFiltersSnapshot() {
     ageMax: document.getElementById("sdbAgeMaxInput")?.value || "",
     salMin: document.getElementById("sdbSalMinInput")?.value || "",
     salMax: document.getElementById("sdbSalMaxInput")?.value || "",
+    advancedFilters: sdbAdvancedFilters,
     sortKey: sdbSortKey,
     sortDir: sdbSortDir,
     currentPage: sdbCurrentPage,
@@ -2842,6 +2873,13 @@ function restoreSdbFiltersFromCache() {
   const salMaxInput = document.getElementById("sdbSalMaxInput");
   if (salMaxInput) salMaxInput.value = state.salMax || "";
 
+  if (state.advancedFilters) {
+    sdbAdvancedFilters = state.advancedFilters;
+    buildStaffAdvancedFiltersModal();
+    populateStaffAdvancedFiltersInputs();
+    updateSdbMoreFiltersButtonLabel();
+  }
+
   sdbSortKey = state.sortKey || null;
   sdbSortDir = state.sortDir || "asc";
   sdbCurrentPage = state.currentPage || 1;
@@ -2861,6 +2899,215 @@ function populateStaffDbFilterOptions() {
     .sort((a, b) => nationDisplayName(a).localeCompare(nationDisplayName(b), "fr"));
   renderSdbNationOptions(sdbAllNationsCache);
   updateSdbNationTriggerLabel();
+}
+
+// ---- Filtres avances "+ Ajouter des filtres" (BDD Staff) ------------------
+// Meme principe que la BDD de joueurs : un groupe "Général" (personnalité),
+// un groupe "Profil tactique" (les champs specifiques aux entraineurs :
+// formation preferee, style tactique/de jeu, types de pressing/marquage,
+// mentalite) et un groupe "Attributs" (notes /20, filtre "au moins X").
+// Vu le nombre reduit d'attributs staff (par rapport aux joueurs), pas besoin
+// d'un picker separe : tout tient dans un seul groupe deplie.
+const SDB_ATTR_FIELDS = [
+  ["eval_joueurs", "Éval. joueurs"],
+  ["eval_potentiel", "Éval. potentiel"],
+  ["niveau_tactique", "Tactique"],
+  ["niveau_attaque", "Attaque"],
+  ["niveau_defense", "Défense"],
+  ["formation_jeunes", "Formation jeunes"],
+  ["connaissance_tactique", "Connaissance tactique"],
+  ["determination", "Détermination"],
+  ["professionnalisme", "Professionnalisme"],
+];
+
+let sdbAdvancedFilters = {
+  personnalite: "",
+  formationPreferee: "", deuxiemeFormationPreferee: "", styleTactique: "", styleJeu: "", typePressing: "", typeMarquage: "", mentalite: "",
+  attrs: {},
+};
+let sdbAdvModalBuilt = false;
+
+function sdbSelectFieldHtml(id, label, values, current) {
+  return `
+    <div class="pdb-select-field">
+      <label>${escapeHtml(label)}</label>
+      <select id="${id}">
+        <option value="">Toutes</option>
+        ${values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
+      </select>
+    </div>
+  `;
+}
+
+function buildStaffAdvancedFiltersModal() {
+  if (sdbAdvModalBuilt) return;
+  sdbAdvModalBuilt = true;
+
+  const uniqueValuesOf = (key) => [...new Set(sdbAllStaff.map(s => s[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  const personnalites = uniqueValuesOf("personnalite");
+
+  const generalHtml = `
+    <div class="pdb-filter-section">
+      <div class="pdb-filter-section-title">Général</div>
+      <div class="pdb-general-grid">
+        <div class="pdb-select-field">
+          <label>Personnalité</label>
+          <select id="sdbAdvPersonnalite">
+            <option value="">Toutes</option>
+            ${personnalites.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const tacticalHtml = `
+    <div class="pdb-filter-section">
+      <div class="pdb-filter-section-title">Profil tactique (entraîneurs)</div>
+      <div class="pdb-general-grid">
+        ${sdbSelectFieldHtml("sdbAdvFormationPreferee", "Formation préférée", uniqueValuesOf("formation_preferee"))}
+        ${sdbSelectFieldHtml("sdbAdvDeuxiemeFormationPreferee", "2e formation préférée", uniqueValuesOf("deuxieme_formation_preferee"))}
+        ${sdbSelectFieldHtml("sdbAdvStyleTactique", "Style tactique", uniqueValuesOf("style_tactique"))}
+        ${sdbSelectFieldHtml("sdbAdvStyleJeu", "Style de jeu", uniqueValuesOf("style_jeu"))}
+        ${sdbSelectFieldHtml("sdbAdvTypePressing", "Type de pressing", uniqueValuesOf("type_pressing"))}
+        ${sdbSelectFieldHtml("sdbAdvTypeMarquage", "Type de marquage", uniqueValuesOf("type_marquage"))}
+        ${sdbSelectFieldHtml("sdbAdvMentalite", "Mentalité", uniqueValuesOf("mentalite"))}
+      </div>
+    </div>
+  `;
+
+  const attrsHtml = `
+    <div class="pdb-filter-section">
+      <div class="pdb-filter-section-title">Attributs</div>
+      <div class="pdb-attr-grid">
+        ${SDB_ATTR_FIELDS.map(([key, label]) => `
+          <div class="pdb-attr-row">
+            <label for="sdbAdvAttr_${key}">${escapeHtml(label)} (min)</label>
+            <div class="pdb-attr-input-group">
+              <button type="button" class="pdb-attr-step" data-step="-1" data-attr-target="sdbAdvAttr_${key}" aria-label="Diminuer">−1</button>
+              <input type="number" id="sdbAdvAttr_${key}" data-attr="${key}" min="1" max="20" placeholder="—">
+              <button type="button" class="pdb-attr-step" data-step="1" data-attr-target="sdbAdvAttr_${key}" aria-label="Augmenter">+1</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  document.getElementById("sdbFiltersModalBody").innerHTML = generalHtml + tacticalHtml + attrsHtml;
+
+  // Chaque champ sauvegarde l'etat des filtres des qu'il est modifie, meme
+  // sans cliquer sur "Appliquer" (comme pour la BDD de joueurs).
+  const SDB_ADV_SELECT_FIELDS = [
+    ["sdbAdvPersonnalite", "personnalite"],
+    ["sdbAdvFormationPreferee", "formationPreferee"],
+    ["sdbAdvDeuxiemeFormationPreferee", "deuxiemeFormationPreferee"],
+    ["sdbAdvStyleTactique", "styleTactique"],
+    ["sdbAdvStyleJeu", "styleJeu"],
+    ["sdbAdvTypePressing", "typePressing"],
+    ["sdbAdvTypeMarquage", "typeMarquage"],
+    ["sdbAdvMentalite", "mentalite"],
+  ];
+  SDB_ADV_SELECT_FIELDS.forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
+      sdbAdvancedFilters[key] = el.value;
+      saveSdbFiltersToCache();
+    });
+  });
+
+  document.querySelectorAll("#sdbFiltersModalBody [data-attr]").forEach(input => {
+    input.addEventListener("change", () => {
+      const v = input.value === "" ? null : Number(input.value);
+      sdbAdvancedFilters.attrs[input.dataset.attr] = Number.isFinite(v) ? v : null;
+      saveSdbFiltersToCache();
+    });
+  });
+}
+
+function populateStaffAdvancedFiltersInputs() {
+  const af = sdbAdvancedFilters;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
+  setVal("sdbAdvPersonnalite", af.personnalite);
+  setVal("sdbAdvFormationPreferee", af.formationPreferee);
+  setVal("sdbAdvDeuxiemeFormationPreferee", af.deuxiemeFormationPreferee);
+  setVal("sdbAdvStyleTactique", af.styleTactique);
+  setVal("sdbAdvStyleJeu", af.styleJeu);
+  setVal("sdbAdvTypePressing", af.typePressing);
+  setVal("sdbAdvTypeMarquage", af.typeMarquage);
+  setVal("sdbAdvMentalite", af.mentalite);
+  document.querySelectorAll("#sdbFiltersModalBody [data-attr]").forEach(input => {
+    const v = af.attrs[input.dataset.attr];
+    input.value = v == null ? "" : v;
+  });
+}
+
+function resetStaffAdvancedFilters() {
+  sdbAdvancedFilters = {
+    personnalite: "",
+    formationPreferee: "", deuxiemeFormationPreferee: "", styleTactique: "", styleJeu: "", typePressing: "", typeMarquage: "", mentalite: "",
+    attrs: {},
+  };
+}
+
+function hasActiveSdbAdvancedFilters() {
+  const af = sdbAdvancedFilters;
+  if (af.personnalite || af.formationPreferee || af.deuxiemeFormationPreferee || af.styleTactique || af.styleJeu || af.typePressing || af.typeMarquage || af.mentalite) return true;
+  return Object.values(af.attrs).some(v => v != null);
+}
+
+function staffPassesAdvancedFilters(s) {
+  const af = sdbAdvancedFilters;
+  if (af.personnalite && s.personnalite !== af.personnalite) return false;
+  if (af.formationPreferee && s.formation_preferee !== af.formationPreferee) return false;
+  if (af.deuxiemeFormationPreferee && s.deuxieme_formation_preferee !== af.deuxiemeFormationPreferee) return false;
+  if (af.styleTactique && s.style_tactique !== af.styleTactique) return false;
+  if (af.styleJeu && s.style_jeu !== af.styleJeu) return false;
+  if (af.typePressing && s.type_pressing !== af.typePressing) return false;
+  if (af.typeMarquage && s.type_marquage !== af.typeMarquage) return false;
+  if (af.mentalite && s.mentalite !== af.mentalite) return false;
+  for (const key in af.attrs) {
+    const min = af.attrs[key];
+    if (min == null) continue;
+    const v = Number(s[key]);
+    if (!Number.isFinite(v) || v < min) return false;
+  }
+  return true;
+}
+
+function openStaffAdvancedFiltersModal() {
+  buildStaffAdvancedFiltersModal();
+  populateStaffAdvancedFiltersInputs();
+  document.getElementById("sdbFiltersModalOverlay").classList.remove("hidden");
+}
+
+function closeStaffAdvancedFiltersModal(clubId) {
+  document.getElementById("sdbFiltersModalOverlay").classList.add("hidden");
+  updateSdbMoreFiltersButtonLabel();
+  applyStaffDbFilters();
+}
+
+function countActiveSdbAdvancedFilters() {
+  const af = sdbAdvancedFilters;
+  let n = 0;
+  if (af.personnalite) n++;
+  if (af.formationPreferee) n++;
+  if (af.deuxiemeFormationPreferee) n++;
+  if (af.styleTactique) n++;
+  if (af.styleJeu) n++;
+  if (af.typePressing) n++;
+  if (af.typeMarquage) n++;
+  if (af.mentalite) n++;
+  n += Object.values(af.attrs).filter(v => v != null).length;
+  return n;
+}
+
+function updateSdbMoreFiltersButtonLabel() {
+  const btn = document.getElementById("sdbMoreFiltersBtn");
+  if (!btn) return;
+  const n = countActiveSdbAdvancedFilters();
+  btn.textContent = n > 0 ? `+ Filtres avancés (${n})` : "+ Ajouter des filtres";
 }
 
 // ---- Dropdown Nation custom (repris de la BDD de joueurs) ----
@@ -2899,6 +3146,7 @@ function closeSdbNationPanel() {
 
 function staffPassesContractFilter(s, contractValue) {
   if (!contractValue) return true;
+  if (contractValue === "libre") return !s.game_club_id;
   if (!s.contrat_expire) return false;
   const expireDate = new Date(`${s.contrat_expire}T00:00:00`);
   if (isNaN(expireDate.getTime())) return false;
@@ -2930,6 +3178,7 @@ function applyStaffDbFilters(opts = {}) {
   if (ageMax !== "") filtered = filtered.filter(s => Number.isFinite(Number(s.age)) && Number(s.age) <= Number(ageMax));
   if (salMin !== "") filtered = filtered.filter(s => Number.isFinite(Number(s.salaire_actuel)) && Number(s.salaire_actuel) >= Number(salMin) * 1000);
   if (salMax !== "") filtered = filtered.filter(s => Number.isFinite(Number(s.salaire_actuel)) && Number(s.salaire_actuel) <= Number(salMax) * 1000);
+  if (hasActiveSdbAdvancedFilters()) filtered = filtered.filter(staffPassesAdvancedFilters);
 
   sdbLastFiltered = filtered;
   applySdbSort();
@@ -2951,8 +3200,8 @@ function renderStaffDbTable(members) {
   const tbody = document.getElementById("sdbTableBody");
   if (members.length === 0) {
     tbody.innerHTML = !sdbLoadingComplete
-      ? `<tr><td colspan="15" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
-      : `<tr><td colspan="15" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
+      ? `<tr><td colspan="22" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
+      : `<tr><td colspan="22" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
     renderSdbPagination(0, 1);
     return;
   }
@@ -2987,6 +3236,13 @@ function renderStaffDbTable(members) {
         <td>${sdbAttrCell(s.niveau_defense)}</td>
         <td>${sdbAttrCell(s.formation_jeunes)}</td>
         <td>${sdbAttrCell(s.connaissance_tactique)}</td>
+        <td>${escapeHtml(s.formation_preferee || "-")}</td>
+        <td>${escapeHtml(s.deuxieme_formation_preferee || "-")}</td>
+        <td>${escapeHtml(s.style_tactique || "-")}</td>
+        <td>${escapeHtml(s.style_jeu || "-")}</td>
+        <td>${escapeHtml(s.type_pressing || "-")}</td>
+        <td>${escapeHtml(s.type_marquage || "-")}</td>
+        <td>${escapeHtml(s.mentalite || "-")}</td>
         <td>${salaireCell}</td>
         <td>${escapeHtml(formatContractEnd(s.contrat_expire))}</td>
       </tr>
@@ -3038,6 +3294,33 @@ function wireStaffDbFilters(clubId) {
     document.getElementById(id).addEventListener("change", () => applyStaffDbFilters());
   });
 
+  document.getElementById("sdbMoreFiltersBtn").addEventListener("click", () => openStaffAdvancedFiltersModal());
+  document.getElementById("sdbFiltersModalClose").addEventListener("click", () => closeStaffAdvancedFiltersModal(clubId));
+  document.getElementById("sdbFiltersModalOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "sdbFiltersModalOverlay") closeStaffAdvancedFiltersModal(clubId);
+  });
+  document.getElementById("sdbAdvApplyBtn").addEventListener("click", () => closeStaffAdvancedFiltersModal(clubId));
+  document.getElementById("sdbAdvResetBtn").addEventListener("click", () => {
+    resetStaffAdvancedFilters();
+    populateStaffAdvancedFiltersInputs();
+    updateSdbMoreFiltersButtonLabel();
+    applyStaffDbFilters();
+  });
+  document.getElementById("sdbFiltersModalOverlay").addEventListener("click", (e) => {
+    const stepBtn = e.target.closest(".pdb-attr-step");
+    if (!stepBtn) return;
+    const input = document.getElementById(stepBtn.dataset.attrTarget);
+    if (!input) return;
+    const min = input.min !== "" ? Number(input.min) : 1;
+    const max = input.max !== "" ? Number(input.max) : 20;
+    const step = Number(stepBtn.dataset.step);
+    let current = input.value === "" ? (step > 0 ? min - step : min) : Number(input.value);
+    if (!Number.isFinite(current)) current = min - step;
+    let next = Math.min(max, Math.max(min, Math.round((current + step) * 100) / 100));
+    input.value = next;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
   document.getElementById("sdbCategoryFilters").addEventListener("click", (e) => {
     const chip = e.target.closest(".staff-role-chip");
     if (!chip) return;
@@ -3084,6 +3367,9 @@ function wireStaffDbFilters(clubId) {
     sdbSortKey = null;
     sdbSortDir = "asc";
     updateSdbSortHeaderIndicators();
+    resetStaffAdvancedFilters();
+    populateStaffAdvancedFiltersInputs();
+    updateSdbMoreFiltersButtonLabel();
     applyStaffDbFilters();
   });
 
