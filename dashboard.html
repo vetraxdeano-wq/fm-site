@@ -1820,29 +1820,39 @@ let staffViewMembers = [];
 let staffViewIsOwnClub = true;
 let leagueStaffStatsLoadedFor = null;
 let leagueStaffStats = null;
+let myClubNation = null;
+let myClubDivision = null;
 
-// Recupere le staff de TOUS les clubs de la ligue pour ce game, et calcule
-// par departement : l'effectif moyen par club et la moyenne des attributs
-// pertinents, pour permettre la comparaison affichee sur les colonnes.
-async function fetchLeagueStaffStats(gid) {
+// Recupere le staff des clubs de la MEME ligue (meme nation + division) que
+// le club consulte, et calcule par departement : l'effectif moyen par club
+// et la moyenne des attributs pertinents, pour permettre la comparaison
+// affichee sur les colonnes. Le classement ne porte que sur cette ligue,
+// jamais sur l'ensemble des clubs de la partie (potentiellement plusieurs
+// centaines, toutes nations et divisions confondues).
+async function fetchLeagueStaffStats(gid, nation, division) {
+  if (!nation || !division) {
+    console.warn("fetchLeagueStaffStats: nation/division manquantes, classement ignore");
+    return { numClubs: 1, depts: {} };
+  }
+
   const { data: clubs, error: clubsErr } = await supabaseClient
-    .from("game_clubs").select("id").eq("game_id", gid);
-  if (clubsErr) console.error("fetchLeagueStaffStats: erreur chargement game_clubs", clubsErr);
+    .from("game_club_overview")
+    .select("game_club_id")
+    .eq("game_id", gid)
+    .eq("nation", nation)
+    .eq("division", division);
+  if (clubsErr) console.error("fetchLeagueStaffStats: erreur chargement des clubs de la ligue", clubsErr);
+  const clubIds = [...new Set((clubs || []).map(c => c.game_club_id))];
+  const numClubs = clubIds.length || 1;
+  if (clubIds.length === 0) return { numClubs, depts: {} };
 
   const { data: gameStaffRows, error: gsErr } = await supabaseClient
     .from("game_staff")
     .select("id, staff_ref, poste, game_club_id")
-    .eq("game_id", gid);
+    .eq("game_id", gid)
+    .in("game_club_id", clubIds);
   if (gsErr) console.error("fetchLeagueStaffStats: erreur chargement game_staff", gsErr);
-  if (gsErr || !gameStaffRows) return { numClubs: 1, depts: {} };
-
-  // Liste des clubs de la ligue : union de game_clubs (si la requete a
-  // fonctionne) et des clubs presents dans le staff deja recupere, pour que
-  // le classement se calcule meme si l'une des deux requetes est incomplete.
-  const clubIdSet = new Set((clubs || []).map(c => c.id));
-  gameStaffRows.forEach(r => { if (r.game_club_id != null) clubIdSet.add(r.game_club_id); });
-  const clubIds = [...clubIdSet];
-  const numClubs = clubIds.length || 1;
+  if (gsErr || !gameStaffRows) return { numClubs, depts: {} };
 
   const refs = [...new Set(gameStaffRows.map(r => r.staff_ref).filter(Boolean))];
   let staffByRef = {};
@@ -2011,7 +2021,7 @@ function renderStaffColRecap(dept, members, locked, clubId) {
   if (rank != null && totalRanked) {
     const tier = rank <= Math.ceil(totalRanked / 3) ? "pos" : (rank > Math.ceil(totalRanked * 2 / 3) ? "neg" : "");
     const ord = rank === 1 ? "ᵉʳ" : "ᵉ";
-    rankHtml = `<span class="staff-recap-rank ${tier}">${rank}${ord} / ${totalRanked} clubs</span>`;
+    rankHtml = `<span class="staff-recap-rank ${tier}">${rank}${ord} / ${totalRanked} clubs de la ligue</span>`;
   } else {
     rankHtml = `<span class="staff-recap-rank">Classement indisponible</span>`;
   }
@@ -2183,7 +2193,7 @@ async function showFmStaffView(clubId) {
   el.innerHTML = `<div class="fm-empty">Chargement...</div>`;
   const [members, league] = await Promise.all([
     needsMembers ? fetchClubStaffMembers(clubId) : Promise.resolve(staffViewMembers),
-    needsLeague ? fetchLeagueStaffStats(gameId) : Promise.resolve(leagueStaffStats),
+    needsLeague ? fetchLeagueStaffStats(gameId, myClubNation, myClubDivision) : Promise.resolve(leagueStaffStats),
   ]);
   staffViewMembers = members;
   staffViewLoadedForClub = clubId;
@@ -4429,6 +4439,8 @@ async function showMyClub(gameClubId, canChange) {
       `<div class="empty-state">Impossible de charger ton club.</div>`;
     return;
   }
+  myClubNation = club.nation;
+  myClubDivision = club.division;
 
   const { data: participants } = await supabaseClient
     .from("game_participants")
