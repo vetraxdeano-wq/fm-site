@@ -325,7 +325,7 @@
 <div id="appRoot">
   <div class="fm-header" id="fmHeader">
     <div class="title-block">
-      <a href="#" id="backLink" class="back-link">← Effectif</a>
+      <a href="#" id="backLink" class="back-link">← Retour</a>
       <div class="topbar-avatar" id="topbarAvatar"></div>
       <div class="page-title-wrap" id="fmSearchWrap">
         <input type="text" class="page-title-input" id="fmSearchInput" placeholder="Chargement..." autocomplete="off">
@@ -1208,6 +1208,33 @@ async function runGlobalSearch(q, dropdown) {
 }
 initHeaderSearch();
 
+// Le bouton retour doit ramener a l'ecran precedent (base de donnees,
+// effectif du club regarde, etc.) plutot que systematiquement vers
+// l'effectif du club du joueur affiche. On s'appuie sur l'historique du
+// navigateur (chaque navigation vers fiche.html est un vrai changement de
+// page, donc history.back() renvoie exactement a la page/onglet/club qui a
+// ouvert cette fiche). Si aucune page precedente fiable n'est detectee
+// (acces direct, lien partage, page rechargee...), on garde en repli le lien
+// classique vers l'effectif du club du joueur deja pose sur le href.
+function initBackLink() {
+  const backLinkEl = document.getElementById("backLink");
+  if (!backLinkEl) return;
+
+  let cameFromApp = false;
+  try {
+    cameFromApp = !!document.referrer && new URL(document.referrer).origin === window.location.origin;
+  } catch (e) {
+    cameFromApp = false;
+  }
+
+  if (cameFromApp && window.history.length > 1) {
+    backLinkEl.addEventListener("click", (e) => {
+      e.preventDefault();
+      window.history.back();
+    });
+  }
+}
+
 async function loadFiche() {
   renderFmSidebar(clubIdParam);
 
@@ -1258,6 +1285,7 @@ async function loadFiche() {
   clubIdParam = clubIdParam || gp.game_club_id;
 
   document.getElementById("backLink").href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubIdParam || "")}`;
+  initBackLink();
   renderFmSidebar(clubIdParam);
 
   let clubNom = "";
