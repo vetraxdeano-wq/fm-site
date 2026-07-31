@@ -553,6 +553,56 @@
   }
   .fm-inbox-empty .big-icon { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.6; }
 
+  /* ---- Boite de reception (sous-onglet, vue liste + detail) ---- */
+  .fm-inbox-view {
+    width: 100%; height: 100%; display: flex; gap: 16px; min-height: 0;
+  }
+  .fm-inbox-list-pane {
+    width: 320px; flex: 0 0 320px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  .fm-inbox-list-header {
+    flex: 0 0 auto; padding: 14px 16px; border-bottom: 1px solid var(--border);
+    font-weight: 700; font-size: 14px;
+  }
+  .fm-inbox-list-pane .fm-inbox-list {
+    flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px; gap: 0;
+  }
+  .fm-inbox-list-pane .fm-inbox-item {
+    cursor: pointer; padding: 11px 4px; border-radius: 8px; margin: 1px 0;
+  }
+  .fm-inbox-list-pane .fm-inbox-item:hover { background: rgba(251,191,36,0.06); }
+  .fm-inbox-list-pane .fm-inbox-item.active { background: rgba(251,191,36,0.12); }
+  .fm-inbox-list-pane .fm-inbox-item.unread .subject::before {
+    content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); margin-right: 7px; vertical-align: middle;
+  }
+  .fm-inbox-list-pane .fm-inbox-item.unread .subject { color: var(--text); font-weight: 700; }
+  .fm-inbox-list-pane .fm-inbox-item:not(.unread) .subject { font-weight: 500; color: var(--text-dim); }
+  .fm-inbox-detail-pane {
+    flex: 1; min-width: 0; min-height: 0; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow-y: auto; padding: 24px 28px;
+  }
+  .fm-inbox-detail-empty {
+    height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--text-dim); font-size: 13px; text-align: center; gap: 4px;
+  }
+  .fm-inbox-detail-empty .big-icon { font-size: 30px; margin-bottom: 6px; opacity: 0.6; }
+  .fm-inbox-detail-subject { font-size: 19px; font-weight: 700; margin-bottom: 10px; }
+  .fm-inbox-detail-meta {
+    display: flex; align-items: center; gap: 10px; padding-bottom: 16px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--text-dim);
+  }
+  .fm-inbox-detail-meta .fm-inbox-icon { width: 34px; height: 34px; font-size: 15px; }
+  .fm-inbox-detail-meta .sender { color: var(--text); font-weight: 600; font-size: 13px; }
+  .fm-inbox-detail-body { font-size: 13.5px; line-height: 1.7; white-space: pre-line; }
+
+  @media (max-width: 900px) {
+    .fm-inbox-view { flex-direction: column; }
+    .fm-inbox-list-pane { width: 100%; flex: 0 0 auto; max-height: 40vh; }
+    .fm-inbox-detail-pane { flex: 1; }
+  }
+
   @media (max-width: 900px) {
     .fm-header { padding: 10px 14px; }
     .fm-header .back-link { display: none; }
@@ -629,6 +679,10 @@
             <div id="fmNextMatch" class="fm-empty">Chargement...</div>
           </div>
           <div class="card">
+            <div class="fm-card-title"><span>Boîte de réception</span></div>
+            <div id="fmInbox" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
             <div class="fm-card-title"><span>Entraînement</span></div>
             <div id="fmTraining" class="fm-empty">Chargement...</div>
           </div>
@@ -646,10 +700,6 @@
           <div class="card">
             <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
             <div id="fmTeamStats" class="fm-empty">Chargement...</div>
-          </div>
-          <div class="card">
-            <div class="fm-card-title"><span>Boîte de réception</span></div>
-            <div id="fmInbox" class="fm-empty">Chargement...</div>
           </div>
         </div>
       </div>
@@ -732,6 +782,19 @@
           </table>
         </div>
         <div class="pdb-pagination" id="pdbPagination"></div>
+      </div>
+
+      <div class="fm-inbox-view hidden" id="fmInboxView">
+        <div class="fm-inbox-list-pane">
+          <div class="fm-inbox-list-header">Boîte de réception</div>
+          <div class="fm-inbox-list" id="fmInboxListEl"></div>
+        </div>
+        <div class="fm-inbox-detail-pane" id="fmInboxDetailEl">
+          <div class="fm-inbox-detail-empty">
+            <span class="big-icon">✉️</span>
+            Sélectionne un message dans la liste pour l'ouvrir.
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1231,6 +1294,12 @@ function renderFmSidebar(gameClubId) {
         showFmPlayersDbView(gameClubId);
         return;
       }
+      if (item.key === "messagerie") {
+        el.querySelectorAll(".fm-nav-item").forEach(r => r.classList.remove("active"));
+        row.classList.add("active");
+        showFmInboxView();
+        return;
+      }
       if (item.href) {
         window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
       } else {
@@ -1243,6 +1312,7 @@ function renderFmSidebar(gameClubId) {
 function showFmHomeView() {
   document.getElementById("fmHomeView").classList.remove("hidden");
   document.getElementById("fmPlayersDbView").classList.add("hidden");
+  document.getElementById("fmInboxView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "PAGE D'ACCUEIL";
 }
@@ -1500,6 +1570,7 @@ let pdbAdvModalBuilt = false;
 async function showFmPlayersDbView(clubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
   document.getElementById("fmPlayersDbView").classList.remove("hidden");
+  document.getElementById("fmInboxView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BASE DE DONNÉES DE JOUEURS";
 
@@ -2599,18 +2670,154 @@ async function renderFinances(club) {
   `;
 }
 
-// Boite de reception : pas encore de vraie messagerie cote base de donnees,
-// on affiche un etat vide informatif en attendant les premiers messages
-// (offres de transfert, rapports du staff, notifications de club...).
+// Boite de reception : pas encore de vraie messagerie cote base de donnees
+// (pas de table "messages" dans Supabase pour l'instant). En attendant, la
+// vue est alimentee par quelques messages d'exemple pour que l'interface
+// (apercu accueil + liste/detail du sous-onglet, marquage lu/non lu) soit
+// fonctionnelle et prete a etre branchee sur de vraies donnees plus tard.
+let fmInboxMessages = [
+  {
+    id: "welcome",
+    subject: "Bienvenue au club !",
+    sender: "Direction du club",
+    icon: "🛡️",
+    date: "Aujourd'hui",
+    preview: "Toute l'équipe est ravie de t'accueillir à la tête du club.",
+    body: "Toute l'équipe est ravie de t'accueillir à la tête du club.\n\nTu trouveras dans les prochains jours les premiers rapports du staff ainsi que les dossiers de recrutement en cours. N'hésite pas à consulter l'effectif et la base de données de joueurs pour préparer le mercato.\n\nBonne chance pour cette nouvelle aventure !",
+    unread: true,
+  },
+  {
+    id: "staff-report",
+    subject: "Rapport de pré-saison du staff",
+    sender: "Staff sportif",
+    icon: "📋",
+    date: "Aujourd'hui",
+    preview: "Un premier point sur la condition physique et le moral du groupe.",
+    body: "Le staff a terminé les premiers tests physiques de la pré-saison.\n\nDans l'ensemble, le groupe est en bonne condition. Quelques joueurs reviennent de blessure et seront suivis de près lors des premières séances.\n\nUn rapport plus détaillé suivra une fois le calendrier des matchs amicaux confirmé.",
+    unread: true,
+  },
+  {
+    id: "sponsor-offer",
+    subject: "Proposition de sponsoring maillot",
+    sender: "Service commercial",
+    icon: "💰",
+    date: "Hier",
+    preview: "Un partenaire local souhaite discuter d'un contrat de sponsoring.",
+    body: "Un partenaire local souhaite discuter d'un contrat de sponsoring pour la face avant du maillot.\n\nLes discussions préliminaires évoquent un contrat pluriannuel. Le service commercial attend ton feu vert pour entamer les négociations.",
+    unread: false,
+  },
+];
+let fmInboxSelectedId = null;
+
+// Apercu affiche dans le module "Boite de reception" de la page d'accueil :
+// les messages les plus recents, cliquables vers le sous-onglet complet.
 function renderInbox() {
   const el = document.getElementById("fmInbox");
+  if (fmInboxMessages.length === 0) {
+    el.innerHTML = `
+      <div class="fm-inbox-empty">
+        <span class="big-icon">📭</span>
+        Aucun message pour l'instant.<br>
+        Les offres de transfert, rapports du staff et notifications de club arriveront ici.
+      </div>
+    `;
+    return;
+  }
+
   el.innerHTML = `
-    <div class="fm-inbox-empty">
-      <span class="big-icon">📭</span>
-      Aucun message pour l'instant.<br>
-      Les offres de transfert, rapports du staff et notifications de club arriveront ici.
+    <div class="fm-inbox-list">
+      ${fmInboxMessages.slice(0, 3).map(m => `
+        <div class="fm-inbox-item ${m.unread ? "unread" : ""}" data-msg="${m.id}">
+          <span class="fm-inbox-icon">${m.icon}</span>
+          <span class="fm-inbox-text">
+            <span class="subject">${escapeHtml(m.subject)}</span><br>
+            <span class="preview">${escapeHtml(m.preview)}</span>
+          </span>
+          <span class="fm-inbox-time">${escapeHtml(m.date)}</span>
+        </div>
+      `).join("")}
     </div>
   `;
+
+  el.querySelectorAll(".fm-inbox-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const navRow = document.querySelector('.fm-nav-item[data-key="messagerie"]');
+      if (navRow) navRow.click();
+      else showFmInboxView();
+      selectFmInboxMessage(item.getAttribute("data-msg"));
+    });
+  });
+}
+
+// ---- Boite de reception (sous-onglet complet : liste + detail) -----------
+function renderFmInboxList() {
+  const el = document.getElementById("fmInboxListEl");
+  if (!el) return;
+  if (fmInboxMessages.length === 0) {
+    el.innerHTML = `<div class="fm-inbox-empty"><span class="big-icon">📭</span>Aucun message pour l'instant.</div>`;
+    return;
+  }
+
+  el.innerHTML = fmInboxMessages.map(m => `
+    <div class="fm-inbox-item ${m.unread ? "unread" : ""} ${m.id === fmInboxSelectedId ? "active" : ""}" data-msg="${m.id}">
+      <span class="fm-inbox-icon">${m.icon}</span>
+      <span class="fm-inbox-text">
+        <span class="subject">${escapeHtml(m.subject)}</span><br>
+        <span class="preview">${escapeHtml(m.preview)}</span>
+      </span>
+      <span class="fm-inbox-time">${escapeHtml(m.date)}</span>
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".fm-inbox-item").forEach(item => {
+    item.addEventListener("click", () => selectFmInboxMessage(item.getAttribute("data-msg")));
+  });
+}
+
+function renderFmInboxDetail() {
+  const el = document.getElementById("fmInboxDetailEl");
+  if (!el) return;
+  const msg = fmInboxMessages.find(m => m.id === fmInboxSelectedId);
+  if (!msg) {
+    el.innerHTML = `
+      <div class="fm-inbox-detail-empty">
+        <span class="big-icon">✉️</span>
+        Sélectionne un message dans la liste pour l'ouvrir.
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="fm-inbox-detail-subject">${escapeHtml(msg.subject)}</div>
+    <div class="fm-inbox-detail-meta">
+      <span class="fm-inbox-icon">${msg.icon}</span>
+      <span>
+        <div class="sender">${escapeHtml(msg.sender)}</div>
+        <div>${escapeHtml(msg.date)}</div>
+      </span>
+    </div>
+    <div class="fm-inbox-detail-body">${escapeHtml(msg.body)}</div>
+  `;
+}
+
+function selectFmInboxMessage(msgId) {
+  fmInboxSelectedId = msgId;
+  const msg = fmInboxMessages.find(m => m.id === msgId);
+  if (msg) msg.unread = false;
+  renderFmInboxList();
+  renderFmInboxDetail();
+  renderInbox(); // rafraichit aussi l'apercu de la page d'accueil (lu/non lu)
+}
+
+function showFmInboxView() {
+  document.getElementById("fmHomeView").classList.add("hidden");
+  document.getElementById("fmPlayersDbView").classList.add("hidden");
+  document.getElementById("fmInboxView").classList.remove("hidden");
+  const input = document.getElementById("fmSearchInput");
+  if (input) input.placeholder = "BOÎTE DE RÉCEPTION";
+  renderFmInboxList();
+  renderFmInboxDetail();
 }
 
 function renderTeamStats() {
