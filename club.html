@@ -264,6 +264,35 @@
   .staff-member-side .salaire { color: var(--text); font-weight: 700; font-size: 12px; }
   .staff-col-empty { color: var(--text-dim); font-size: 12.5px; padding: 6px 0 14px; }
 
+  /* ---- Staff : colonnes-recap cliquables (effectif + comparaison ligue) ---- */
+  .staff-column {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
+  }
+  .staff-column:hover { border-color: var(--gold); transform: translateY(-1px); }
+  .staff-col-recap { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
+  .staff-recap-count { font-size: 11px; color: var(--text-dim); }
+  .staff-recap-count .pos { color: #6bcf7f; }
+  .staff-recap-count .neg { color: #e2725b; }
+  .staff-recap-attr {
+    display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .staff-recap-attr b { color: var(--text); font-size: 12.5px; }
+  .staff-recap-vs { font-size: 10.5px; margin-left: auto; white-space: nowrap; }
+  .staff-recap-vs.pos { color: #6bcf7f; }
+  .staff-recap-vs.neg { color: #e2725b; }
+  .staff-col-open-hint {
+    font-size: 10.5px; color: var(--text-dim); text-align: right; margin-top: 4px; opacity: 0.7;
+  }
+  .staff-column:hover .staff-col-open-hint { color: var(--gold); opacity: 1; }
+  .staff-sector-list { max-height: 60vh; overflow-y: auto; }
+  .staff-modal-back {
+    background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer;
+    padding: 4px 8px 4px 0; line-height: 1;
+  }
+  .staff-modal-back:hover { color: var(--gold); }
+
   .staff-modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300;
     display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -273,6 +302,7 @@
     width: 100%; max-width: 460px; max-height: 86vh; overflow-y: auto;
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px;
   }
+  .staff-modal.wide { max-width: 620px; }
   .staff-modal-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
   .staff-modal-close {
     margin-left: auto; background: none; border: none; color: var(--text-dim); font-size: 18px;
@@ -1031,6 +1061,7 @@ const STAFF_DEPARTMENTS = {
       "préparateur physique", "préparatrice physique",
       "préparateur aux coups de pied arrêtés", "analyste des performances",
       "préparateur", "préparatrice",
+      "responsable de la formation jeunes",
     ],
   },
   recrutement: {
@@ -1038,7 +1069,7 @@ const STAFF_DEPARTMENTS = {
     postes: [
       "recruteur", "recruteuse", "analyste du recrutement", "directeur sportif",
       "directrice sportive", "directeur technique", "directrice technique",
-      "responsable de la formation jeunes", "responsable des prêts",
+      "responsable des prêts",
     ],
   },
   medical: {
@@ -1072,6 +1103,57 @@ const STAFF_DEPT_ATTRS = {
 
 let staffLoadedForClub = null;
 let staffMembers = [];
+let leagueStaffStatsLoadedFor = null;
+let leagueStaffStats = null;
+
+// Recupere le staff de TOUS les clubs de la ligue pour ce game, et calcule
+// par departement : l'effectif moyen par club et la moyenne des attributs
+// pertinents, pour permettre la comparaison affichee sur les colonnes.
+async function fetchLeagueStaffStats(gid) {
+  const { data: clubs } = await supabaseClient
+    .from("game_clubs").select("id").eq("game_id", gid);
+  const numClubs = (clubs || []).length || 1;
+
+  const { data: gameStaffRows, error: gsErr } = await supabaseClient
+    .from("game_staff")
+    .select("id, staff_ref, poste")
+    .eq("game_id", gid);
+  if (gsErr || !gameStaffRows) return { numClubs, depts: {} };
+
+  const refs = [...new Set(gameStaffRows.map(r => r.staff_ref).filter(Boolean))];
+  let staffByRef = {};
+  const chunkSize = 300;
+  for (let i = 0; i < refs.length; i += chunkSize) {
+    const chunk = refs.slice(i, i + chunkSize);
+    const { data: staffRows } = await supabaseClient
+      .from("staff")
+      .select("id, niveau_tactique, niveau_defense, niveau_attaque, eval_joueurs, eval_potentiel, formation_jeunes, determination, professionnalisme")
+      .in("id", chunk);
+    (staffRows || []).forEach(s => { staffByRef[s.id] = s; });
+  }
+
+  const depts = {};
+  gameStaffRows.forEach(r => {
+    const dept = staffDepartmentFor(r.poste);
+    const attrs = staffByRef[r.staff_ref] || {};
+    if (!depts[dept]) depts[dept] = { count: 0, sums: {}, counts: {} };
+    depts[dept].count++;
+    (STAFF_DEPT_ATTRS[dept] || []).forEach(([key]) => {
+      const val = Number(attrs[key]);
+      if (Number.isFinite(val)) {
+        depts[dept].sums[key] = (depts[dept].sums[key] || 0) + val;
+        depts[dept].counts[key] = (depts[dept].counts[key] || 0) + 1;
+      }
+    });
+  });
+  Object.values(depts).forEach(d => {
+    d.avgPerClub = d.count / numClubs;
+    d.avgAttrs = {};
+    Object.keys(d.sums).forEach(key => { d.avgAttrs[key] = d.sums[key] / d.counts[key]; });
+  });
+
+  return { numClubs, depts };
+}
 
 async function fetchClubStaffMembers(clubId) {
   const { data: gameStaffRows, error: gsErr } = await supabaseClient
@@ -1151,30 +1233,94 @@ function renderStaffColumns(locked) {
       .filter(m => staffDepartmentFor(m.poste) === dept)
       .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
     return `
-      <div class="staff-column">
+      <div class="staff-column" data-dept="${dept}">
         <div class="staff-col-title">
           <span>${info.icon} ${info.label}</span>
           <span class="count">${members.length}</span>
         </div>
-        ${members.length > 0
-          ? members.map(m => staffMemberCardHtml(m, dept, locked)).join("")
-          : `<div class="staff-col-empty">Aucun membre à ce poste.</div>`}
+        ${renderStaffColRecap(dept, members, locked)}
+        <div class="staff-col-open-hint">Voir le détail →</div>
       </div>
     `;
   }).join("");
 
-  el.querySelectorAll(".staff-member-card").forEach(card => {
-    card.addEventListener("click", () => {
-      const id = card.getAttribute("data-staff-id");
-      const member = staffMembers.find(m => String(m.id) === String(id));
-      if (member) openStaffModal(member, locked);
-    });
+  el.querySelectorAll(".staff-column").forEach(col => {
+    col.addEventListener("click", () => openStaffSectorModal(col.getAttribute("data-dept"), locked));
   });
 }
 
-function openStaffModal(member, locked) {
+// Recap affiche sur chaque colonne : effectif (compare a la moyenne de la
+// ligue par club) + moyenne des attributs cles du departement, avec un ecart
+// (▲/▼) par rapport a la moyenne de la ligue sur ces memes attributs.
+function renderStaffColRecap(dept, members, locked) {
+  const league = leagueStaffStats?.depts?.[dept];
+  const leagueAvgPerClub = league ? league.avgPerClub : null;
+
+  const countHtml = leagueAvgPerClub != null
+    ? `<div class="staff-recap-count">Moy. ligue : <span class="${members.length >= leagueAvgPerClub ? "pos" : "neg"}">${leagueAvgPerClub.toFixed(1)} / club</span></div>`
+    : "";
+
+  if (locked) {
+    return `<div class="staff-col-recap">${countHtml}<div class="staff-col-empty" style="padding:0;">🔒 Statistiques verrouillées</div></div>`;
+  }
+
+  const attrDefs = STAFF_DEPT_ATTRS[dept] || [];
+  const attrHtml = attrDefs.map(([key, label]) => {
+    const vals = members.map(m => Number(m[key])).filter(Number.isFinite);
+    if (vals.length === 0) return "";
+    const ownAvg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const leagueAvg = league?.avgAttrs?.[key];
+    const diffHtml = leagueAvg != null
+      ? `<span class="staff-recap-vs ${ownAvg >= leagueAvg ? "pos" : "neg"}">${ownAvg >= leagueAvg ? "▲" : "▼"} ${Math.abs(ownAvg - leagueAvg).toFixed(1)} vs ligue</span>`
+      : "";
+    return `<div class="staff-recap-attr"><span>${label}</span><b>${ownAvg.toFixed(1)}/20</b>${diffHtml}</div>`;
+  }).join("");
+
+  return `<div class="staff-col-recap">${countHtml}${attrHtml}</div>`;
+}
+
+// Modal "secteur" : liste des membres d'un departement, chacun cliquable
+// pour afficher sa fiche complete (via openStaffModal).
+function openStaffSectorModal(dept, locked) {
   const overlay = document.getElementById("staffModalOverlay");
   const content = document.getElementById("staffModalContent");
+  content.classList.add("wide");
+  const info = STAFF_DEPARTMENTS[dept] || { label: "Autres", icon: "📋" };
+  const members = staffMembers
+    .filter(m => staffDepartmentFor(m.poste) === dept)
+    .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
+
+  content.innerHTML = `
+    <div class="staff-modal-header">
+      <div>
+        <div class="staff-modal-name">${info.icon} ${info.label}</div>
+        <div class="staff-modal-sub">${members.length} membre${members.length > 1 ? "s" : ""}</div>
+      </div>
+      <button class="staff-modal-close" id="staffModalCloseBtn">✕</button>
+    </div>
+    <div class="staff-sector-list">
+      ${members.length > 0
+        ? members.map(m => staffMemberCardHtml(m, dept, locked)).join("")
+        : `<div class="staff-col-empty">Aucun membre à ce poste.</div>`}
+    </div>
+  `;
+
+  content.querySelectorAll(".staff-member-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const id = card.getAttribute("data-staff-id");
+      const member = staffMembers.find(m => String(m.id) === String(id));
+      if (member) openStaffModal(member, locked, dept);
+    });
+  });
+
+  overlay.classList.remove("hidden");
+  document.getElementById("staffModalCloseBtn").addEventListener("click", closeStaffModal);
+}
+
+function openStaffModal(member, locked, fromDept) {
+  const overlay = document.getElementById("staffModalOverlay");
+  const content = document.getElementById("staffModalContent");
+  content.classList.remove("wide");
   const dept = staffDepartmentFor(member.poste);
   const nation = member.nationalite ? nationLabel(member.nationalite) : "-";
   const attrs = STAFF_DEPT_ATTRS[dept] || [];
@@ -1187,6 +1333,7 @@ function openStaffModal(member, locked) {
 
   content.innerHTML = `
     <div class="staff-modal-header">
+      ${fromDept ? `<button class="staff-modal-back" id="staffModalBackBtn" title="Retour au secteur">←</button>` : ""}
       <div class="staff-modal-avatar" style="background:${colorFromName(member.nom)};">${initialsFromName(member.nom)}</div>
       <div>
         <div class="staff-modal-name">${escapeHtml(member.nom || "-")}</div>
@@ -1203,6 +1350,9 @@ function openStaffModal(member, locked) {
 
   overlay.classList.remove("hidden");
   document.getElementById("staffModalCloseBtn").addEventListener("click", closeStaffModal);
+  if (fromDept) {
+    document.getElementById("staffModalBackBtn").addEventListener("click", () => openStaffSectorModal(fromDept, locked));
+  }
 }
 function closeStaffModal() {
   document.getElementById("staffModalOverlay").classList.add("hidden");
@@ -1218,10 +1368,18 @@ async function showStaffTab(viewedClubId) {
   document.getElementById("staffColumns").classList.remove("hidden");
 
   const locked = !isOwnClubView;
-  if (staffLoadedForClub !== viewedClubId) {
+  const needsMembers = staffLoadedForClub !== viewedClubId;
+  const needsLeague = leagueStaffStatsLoadedFor !== gameId;
+  if (needsMembers || needsLeague) {
     document.getElementById("staffColumns").innerHTML = `<div class="fm-empty">Chargement...</div>`;
-    staffMembers = await fetchClubStaffMembers(viewedClubId);
+    const tasks = [];
+    tasks.push(needsMembers ? fetchClubStaffMembers(viewedClubId) : Promise.resolve(staffMembers));
+    tasks.push(needsLeague ? fetchLeagueStaffStats(gameId) : Promise.resolve(leagueStaffStats));
+    const [members, league] = await Promise.all(tasks);
+    staffMembers = members;
     staffLoadedForClub = viewedClubId;
+    leagueStaffStats = league;
+    leagueStaffStatsLoadedFor = gameId;
   }
   renderStaffColumns(locked);
 }
