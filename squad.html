@@ -642,14 +642,14 @@ function renderGenericView(club, players) {
 
 const FM_NAV_ITEMS = [
   { key: "accueil", icon: "🏠", label: "Accueil", href: "dashboard.html" },
+  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
   { key: "effectif", icon: "👥", label: "Effectif", href: "squad.html" },
-  { key: "staff", icon: "🧑‍💼", label: "Staff", href: null },
+  { key: "staff", icon: "💼", label: "Staff", href: null },
   { key: "tactique", icon: "♟️", label: "Tactique", href: null },
   { key: "datacenter", icon: "📊", label: "Data Center", href: null },
-  { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: null },
+  { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: "dashboard.html" },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
   { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
-  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
 ];
 
 function renderFmSidebar(navClubId) {
@@ -670,7 +670,8 @@ function renderFmSidebar(navClubId) {
       if (item.href) {
         // On navigue toujours vers le club du manager connecte (jamais vers
         // le club consulte), y compris pour revenir a son propre effectif.
-        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(navClubId)}`;
+        const extra = item.key === "basejoueurs" ? "&view=bdd" : "";
+        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(navClubId)}${extra}`;
       } else {
         toast(`${item.label} arrive bientôt !`);
       }
