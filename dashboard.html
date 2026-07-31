@@ -698,21 +698,27 @@
   .fm-inbox-empty .big-icon { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.6; }
 
   /* ---- Staff (sous-onglet) : 3 colonnes departement + fiches membres ---- */
-  .fm-staff-view { width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; gap: 12px; }
-  .staff-subtab-bar { display: flex; gap: 8px; flex: 0 0 auto; }
-  .staff-subtab-btn {
-    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
-    padding: 8px 16px; font-size: 12.5px; border-radius: 8px; font-weight: 600; font-family: inherit; cursor: pointer;
+  .fm-staff-view { width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; gap: 0; }
+  .staff-subtab-bar {
+    display: flex; gap: 4px; flex: 0 0 auto; background: #14171d;
+    border-bottom: 1px solid var(--border); padding: 0 24px; margin: -16px -24px 18px;
   }
-  .staff-subtab-btn:hover { border-color: var(--text-dim); color: var(--text); }
-  .staff-subtab-btn.active { background: var(--accent); border-color: var(--accent); color: #14171d; }
+  .staff-subtab-btn {
+    display: flex; align-items: center; gap: 8px; background: transparent; border: none;
+    border-bottom: 3px solid transparent; color: var(--text-dim);
+    padding: 14px 16px 11px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .staff-subtab-icon { font-size: 15px; line-height: 1; }
+  .staff-subtab-btn:hover { color: var(--text); }
+  .staff-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
   .staff-subtab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .staff-subtab-panel.hidden { display: none; }
   .staff-columns {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: stretch;
+    flex: 1; min-height: 0;
   }
   @media (max-width: 1100px) {
-    .staff-columns { grid-template-columns: 1fr; }
+    .staff-columns { grid-template-columns: 1fr; flex: none; }
   }
   .staff-col-title {
     display: flex; align-items: center; justify-content: space-between;
@@ -751,13 +757,14 @@
   .staff-member-side .salaire { color: var(--text); font-weight: 700; font-size: 12px; }
   .staff-col-empty { color: var(--text-dim); font-size: 12.5px; padding: 6px 0 14px; }
 
-  /* ---- Staff : colonnes-recap cliquables (effectif + comparaison ligue) ---- */
+  /* ---- Staff : colonnes departement, pleine hauteur, avec la liste des
+     membres affichee directement (plus besoin d'ouvrir une modale pour
+     voir qui compose le secteur) ---- */
   .staff-column {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
+    padding: 14px 16px; display: flex; flex-direction: column; min-height: 0; height: 100%;
   }
-  .staff-column:hover { border-color: var(--gold); transform: translateY(-1px); }
-  .staff-col-recap { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .staff-col-recap { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; flex: 0 0 auto; }
   .staff-recap-count {
     display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
     font-size: 11.5px; color: var(--text-dim);
@@ -780,10 +787,14 @@
   .staff-recap-vs { font-size: 10.5px; margin-left: auto; white-space: nowrap; }
   .staff-recap-vs.pos { color: #6bcf7f; }
   .staff-recap-vs.neg { color: #e2725b; }
-  .staff-col-open-hint {
-    font-size: 10.5px; color: var(--text-dim); text-align: right; margin-top: 4px; opacity: 0.7;
+  .staff-col-expand-btn {
+    display: block; width: 100%; background: transparent; border: 1px solid var(--border);
+    color: var(--gold); border-radius: 8px; padding: 8px 10px; font-size: 11.5px; font-weight: 700;
+    font-family: inherit; cursor: pointer; text-align: center; margin-bottom: 10px; flex: 0 0 auto;
+    transition: border-color 0.15s, background 0.15s;
   }
-  .staff-column:hover .staff-col-open-hint { color: var(--gold); opacity: 1; }
+  .staff-col-expand-btn:hover { border-color: var(--gold); background: rgba(251,191,36,0.08); }
+  .staff-col-members { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
   .staff-sector-list { max-height: 60vh; overflow-y: auto; }
   .staff-role-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .staff-role-chip {
@@ -906,6 +917,7 @@
     .fm-nav-item { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
     .fm-nav-item.active { border-left-color: transparent; border-bottom-color: var(--gold); }
     .fm-content-wrap { padding: 14px; overflow-y: auto; }
+    .staff-subtab-bar { margin: -14px -14px 18px; padding: 0 14px; }
     .fm-content { height: auto; grid-template-columns: 1fr; }
     .fm-col { height: auto; }
     .fm-col .card { flex: none; }
@@ -1137,8 +1149,8 @@
 
       <div class="fm-staff-view hidden" id="fmStaffView">
         <div class="staff-subtab-bar" id="staffSubtabBar">
-          <button type="button" class="staff-subtab-btn active" data-subtab="effectif">Effectif</button>
-          <button type="button" class="staff-subtab-btn" data-subtab="basestaff">Base de données Staff</button>
+          <button type="button" class="staff-subtab-btn active" data-subtab="effectif"><span class="staff-subtab-icon">👥</span>Effectif</button>
+          <button type="button" class="staff-subtab-btn" data-subtab="basestaff"><span class="staff-subtab-icon">🗂️</span>Base de données Staff</button>
         </div>
 
         <div class="staff-subtab-panel" id="staffEffectifPanel">
@@ -2228,6 +2240,7 @@ function staffMemberCardHtml(member, dept, locked, opts = {}) {
           ${clubHtml}
           ${nation ? `<span>${nation}</span>` : ""}
           ${age ? `<span>· ${age}</span>` : ""}
+          ${member.personnalite ? `<span>· ${escapeHtml(member.personnalite)}</span>` : ""}
         </div>
         <div class="staff-member-meta">${renderStaffAttrChips(member, dept, locked)}</div>
         ${opts.showTactical ? renderStaffTacticalChips(member) : ""}
@@ -2253,6 +2266,9 @@ function renderStaffColumns() {
     const members = staffViewMembers
       .filter(m => staffDepartmentFor(m.poste) === dept)
       .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
+    const membersHtml = members.length > 0
+      ? members.map(m => staffMemberCardHtml(m, dept, locked, { showTactical: true })).join("")
+      : `<div class="staff-col-empty">Aucun membre dans ce secteur.</div>`;
     return `
       <div class="staff-column" data-dept="${dept}">
         <div class="staff-col-title">
@@ -2260,13 +2276,26 @@ function renderStaffColumns() {
           <span class="count">${members.length}</span>
         </div>
         ${renderStaffColRecap(dept, members, locked, staffViewLoadedForClub)}
-        <div class="staff-col-open-hint">Voir le détail →</div>
+        ${members.length > 1 ? `<button type="button" class="staff-col-expand-btn" data-dept="${dept}">Voir en plein écran / filtrer par poste →</button>` : ""}
+        <div class="staff-col-members">${membersHtml}</div>
       </div>
     `;
   }).join("");
 
-  el.querySelectorAll(".staff-column").forEach(col => {
-    col.addEventListener("click", () => openStaffSectorModal(col.getAttribute("data-dept"), locked));
+  el.querySelectorAll(".staff-col-expand-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openStaffSectorModal(btn.getAttribute("data-dept"), locked);
+    });
+  });
+
+  el.querySelectorAll(".staff-member-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const id = card.getAttribute("data-staff-id");
+      const member = staffViewMembers.find(m => String(m.id) === String(id));
+      const dept = card.closest(".staff-column")?.getAttribute("data-dept");
+      if (member) openStaffModal(member, locked, dept);
+    });
   });
 }
 
@@ -2292,6 +2321,11 @@ function renderStaffColRecap(dept, members, locked, clubId) {
   }
   const countHtml = `<div class="staff-recap-count"><span>Effectif : <b>${members.length}</b></span>${rankHtml}</div>`;
 
+  const salaryValues = members.map(m => Number(m.salaire_actuel)).filter(Number.isFinite);
+  const salaryMassHtml = salaryValues.length > 0
+    ? `<div class="staff-recap-count"><span>Masse salariale : <b>${escapeHtml(formatMoney(salaryValues.reduce((a, b) => a + b, 0)))} / mois</b></span></div>`
+    : "";
+
   const roleCounts = {};
   members.forEach(m => {
     const role = (m.poste || "Autre").trim();
@@ -2303,7 +2337,7 @@ function renderStaffColRecap(dept, members, locked, clubId) {
     : "";
 
   if (locked) {
-    return `<div class="staff-col-recap">${countHtml}${rolesHtml}<div class="staff-col-empty" style="padding:0;">🔒 Statistiques verrouillées</div></div>`;
+    return `<div class="staff-col-recap">${countHtml}${salaryMassHtml}${rolesHtml}<div class="staff-col-empty" style="padding:0;">🔒 Statistiques verrouillées</div></div>`;
   }
 
   const attrDefs = STAFF_DEPT_ATTRS[dept] || [];
@@ -2318,7 +2352,7 @@ function renderStaffColRecap(dept, members, locked, clubId) {
     return `<div class="staff-recap-attr"><span>${label}</span><b>${ownAvg.toFixed(1)}/20</b>${diffHtml}</div>`;
   }).join("");
 
-  return `<div class="staff-col-recap">${countHtml}${rolesHtml}${attrHtml}</div>`;
+  return `<div class="staff-col-recap">${countHtml}${salaryMassHtml}${rolesHtml}${attrHtml}</div>`;
 }
 
 // Modal "secteur" : liste des membres d'un departement, chacun cliquable
@@ -4031,10 +4065,13 @@ async function loadRecruitmentMode(clubId) {
       .eq("id", clubId)
       .maybeSingle();
     if (error) throw error;
-    pdbRecruitmentMode = data?.mode_recrutement || null;
+    // Repli cote client si jamais la ligne n'a pas encore ete alignee sur le
+    // defaut base de donnees (mode_recrutement = 'partage') : coherent avec
+    // le defaut choisi pour les clubs.
+    pdbRecruitmentMode = data?.mode_recrutement || "partage";
   } catch (e) {
     console.error(e);
-    pdbRecruitmentMode = null;
+    pdbRecruitmentMode = "partage";
   }
   updateRecruitmentModeButtonsUI();
 }
