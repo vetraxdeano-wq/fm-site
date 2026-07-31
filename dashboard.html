@@ -785,6 +785,22 @@
   .staff-modal-role { font-size: 12.5px; color: var(--gold); font-weight: 700; margin-top: 2px; }
   .staff-modal-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
 
+  /* ---- BDD Staff (sous-onglet) : cartes façon "Effectif" (club.html) ---- */
+  .sdb-category-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; }
+  .sdb-cards-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px;
+    align-content: start;
+  }
+  .sdb-cards-grid .staff-member-card { margin-bottom: 0; }
+  .sdb-club-name { color: var(--text-dim); }
+  .sdb-club-name.pdb-club-link { color: var(--gold); cursor: pointer; }
+  .sdb-club-name.pdb-club-link:hover { text-decoration: underline; }
+  .sdb-tactical-title {
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin-top: 6px;
+  }
+  .sdb-empty-cell { color: var(--text-dim); font-size: 13px; padding: 30px 10px; text-align: center; }
+
   /* ---- Boite de reception (sous-onglet, vue liste + detail) ---- */
   .fm-inbox-view {
     width: 100%; height: 100%; display: flex; gap: 16px; min-height: 0;
@@ -1086,10 +1102,6 @@
               <label for="sdbPosteSelect">Poste</label>
               <select id="sdbPosteSelect"><option value="">Tous</option></select>
             </div>
-            <div class="pdb-field">
-              <label for="sdbDeptSelect">Département</label>
-              <select id="sdbDeptSelect"><option value="">Tous</option></select>
-            </div>
             <div class="pdb-field pdb-nation-field">
               <label for="sdbNationTrigger">Nation</label>
               <div class="pdb-nation-select" id="sdbNationSelectWrap">
@@ -1125,37 +1137,29 @@
                 <input type="number" id="sdbSalMaxInput" step="1" min="0" placeholder="Max">
               </div>
             </div>
+            <div class="pdb-field">
+              <label for="sdbSortSelect">Trier par</label>
+              <select id="sdbSortSelect">
+                <option value="reputation">Réputation</option>
+                <option value="nom">Nom (A → Z)</option>
+                <option value="salaire">Salaire (plus haut)</option>
+                <option value="contrat">Fin de contrat (plus proche)</option>
+                <option value="connaissance_tactique">Connaissance tactique</option>
+              </select>
+            </div>
             <button class="pdb-reset-btn" id="sdbResetBtn" type="button">Effacer les filtres</button>
           </div>
+
+          <div class="sdb-category-filters" id="sdbCategoryFilters">
+            <button type="button" class="staff-role-chip active" data-category="">Tous</button>
+            <button type="button" class="staff-role-chip" data-category="entraineurs">🧑‍🏫 Entraîneurs</button>
+            <button type="button" class="staff-role-chip" data-category="recrutement">🔎 Recrutement</button>
+          </div>
+
           <div class="pdb-count" id="sdbCount">Chargement...</div>
 
-          <div class="pdb-table-wrap">
-            <table class="pdb-table">
-              <thead>
-                <tr>
-                  <th class="pdb-sortable" data-sort-key="nom" data-label="Nom">Nom</th>
-                  <th class="pdb-sortable" data-sort-key="club" data-label="Club">Club</th>
-                  <th class="pdb-sortable" data-sort-key="poste" data-label="Poste">Poste</th>
-                  <th class="pdb-sortable" data-sort-key="dept" data-label="Département">Département</th>
-                  <th class="pdb-sortable" data-sort-key="age" data-label="Âge">Âge</th>
-                  <th class="pdb-sortable" data-sort-key="nation" data-label="Nation">Nation</th>
-                  <th class="pdb-sortable" data-sort-key="salaire" data-label="Salaire">Salaire</th>
-                  <th class="pdb-sortable" data-sort-key="contrat" data-label="Fin de contrat">Fin de contrat</th>
-                  <th class="pdb-sortable" data-sort-key="personnalite" data-label="Personnalité">Personnalité</th>
-                  <th class="pdb-sortable" data-sort-key="niveau_tactique" data-label="Tactique">Tactique</th>
-                  <th class="pdb-sortable" data-sort-key="niveau_attaque" data-label="Attaque">Attaque</th>
-                  <th class="pdb-sortable" data-sort-key="niveau_defense" data-label="Défense">Défense</th>
-                  <th class="pdb-sortable" data-sort-key="formation_jeunes" data-label="Formation jeunes">Formation jeunes</th>
-                  <th class="pdb-sortable" data-sort-key="eval_joueurs" data-label="Éval. joueurs">Éval. joueurs</th>
-                  <th class="pdb-sortable" data-sort-key="eval_potentiel" data-label="Éval. potentiel">Éval. potentiel</th>
-                  <th class="pdb-sortable" data-sort-key="determination" data-label="Détermination">Détermination</th>
-                  <th class="pdb-sortable" data-sort-key="professionnalisme" data-label="Professionnalisme">Professionnalisme</th>
-                </tr>
-              </thead>
-              <tbody id="sdbTableBody">
-                <tr><td colspan="17" class="pdb-empty-cell">Chargement...</td></tr>
-              </tbody>
-            </table>
+          <div class="sdb-cards-grid" id="sdbCardsGrid">
+            <div class="sdb-empty-cell">Chargement du staff...</div>
           </div>
           <div class="pdb-pagination" id="sdbPagination"></div>
         </div>
@@ -1902,6 +1906,58 @@ const STAFF_DEPT_ATTRS = {
   ],
 };
 
+// ---- Base de donnees Staff : seuls les entraineurs et le departement
+// recrutement y sont accessibles (le reste de l'organigramme - medical,
+// preparateurs physiques...- sera recrute plus tard par l'entraineur choisi).
+// Intitules avec la casse exacte utilisee dans les tables `staff`/`game_staff`.
+const STAFF_DB_CATEGORIES = {
+  entraineurs: {
+    label: "Entraîneurs", icon: "🧑‍🏫",
+    postes: ["Entraîneur", "Entraîneur adjoint", "Entraîneur des gardiens", "Entraîneuse", "Entraîneuse adjointe", "Entraîneuse des gardiens"],
+  },
+  recrutement: {
+    label: "Recrutement", icon: "🔎",
+    postes: ["Recruteur", "Recruteuse", "Analyste du recrutement", "Directeur sportif", "Directrice sportive", "Directeur technique", "Directrice technique", "Responsable des prêts"],
+  },
+};
+const STAFF_DB_ALLOWED_POSTES = Object.values(STAFF_DB_CATEGORIES).flatMap(c => c.postes);
+const STAFF_DB_POSTE_TO_CATEGORY = {};
+Object.entries(STAFF_DB_CATEGORIES).forEach(([cat, info]) => {
+  info.postes.forEach(p => { STAFF_DB_POSTE_TO_CATEGORY[p] = cat; });
+});
+function staffDbCategoryFor(poste) {
+  return STAFF_DB_POSTE_TO_CATEGORY[(poste || "").trim()] || null;
+}
+function isEntraineurPoste(poste) {
+  return staffDbCategoryFor(poste) === "entraineurs";
+}
+
+// Profil tactique specifique aux entraineurs (colonnes de la table `staff`
+// remplies par l'import FM). Affiche en plus des attributs numeriques
+// habituels, en cartes (BDD Staff) comme en fiche detaillee.
+const STAFF_TACTICAL_FIELDS = [
+  ["formation_preferee", "Formation préférée"],
+  ["deuxieme_formation_preferee", "2e formation préférée"],
+  ["style_tactique", "Style tactique"],
+  ["style_jeu", "Style de jeu"],
+  ["type_pressing", "Type de pressing"],
+  ["type_marquage", "Type de marquage"],
+  ["mentalite", "Mentalité"],
+];
+function renderStaffTacticalChips(member) {
+  if (!isEntraineurPoste(member.poste)) return "";
+  const chips = STAFF_TACTICAL_FIELDS.map(([key, label]) => {
+    const val = member[key];
+    if (!val || val === "-") return "";
+    return `<span class="staff-attr-chip">${label}: <b>${escapeHtml(val)}</b></span>`;
+  }).filter(Boolean).join("");
+  const connChip = Number.isFinite(Number(member.connaissance_tactique))
+    ? `<span class="staff-attr-chip">Connaissance tactique: <b>${escapeHtml(String(member.connaissance_tactique))}</b>/20</span>`
+    : "";
+  if (!chips && !connChip) return "";
+  return `<div class="sdb-tactical-title">Profil tactique</div><div class="staff-member-meta">${chips}${connChip}</div>`;
+}
+
 function initialsFromName(nom) {
   const words = (nom || "").trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
@@ -2033,7 +2089,7 @@ async function fetchClubStaffMembers(clubId) {
   if (refs.length > 0) {
     const { data: staffRows, error: sErr } = await supabaseClient
       .from("staff")
-      .select("id, nationalite, age, personnalite, eval_joueurs, eval_potentiel, formation_jeunes, niveau_tactique, niveau_defense, niveau_attaque, determination, professionnalisme, qualification_preparateur")
+      .select("id, nationalite, age, personnalite, eval_joueurs, eval_potentiel, formation_jeunes, niveau_tactique, niveau_defense, niveau_attaque, determination, professionnalisme, qualification_preparateur, formation_preferee, deuxieme_formation_preferee, style_tactique, style_jeu, type_pressing, type_marquage, mentalite, connaissance_tactique")
       .in("id", refs);
     if (sErr) console.error(sErr);
     (staffRows || []).forEach(s => { staffByRef[s.id] = s; });
@@ -2052,9 +2108,15 @@ function renderStaffAttrChips(member, dept, locked) {
   }).join("");
 }
 
-function staffMemberCardHtml(member, dept, locked) {
+function staffMemberCardHtml(member, dept, locked, opts = {}) {
   const nation = member.nationalite ? nationLabel(member.nationalite) : "";
   const age = Number.isFinite(Number(member.age)) ? `${member.age} ans` : "";
+  const clubName = opts.clubName;
+  const clubHtml = clubName
+    ? (opts.clubClickable
+        ? `<span class="sdb-club-name pdb-club-link" data-club-id="${member.game_club_id}">${escapeHtml(clubName)}</span>`
+        : `<span class="sdb-club-name">${escapeHtml(clubName)}</span>`)
+    : "";
   return `
     <div class="staff-member-card" data-staff-id="${member.id}">
       <div class="staff-avatar" style="background:${colorFromName(member.nom)};">${initialsFromName(member.nom)}</div>
@@ -2062,10 +2124,12 @@ function staffMemberCardHtml(member, dept, locked) {
         <div class="staff-member-name">${escapeHtml(member.nom || "-")}</div>
         <div class="staff-member-role">${escapeHtml(member.poste || "-")}</div>
         <div class="staff-member-meta">
+          ${clubHtml}
           ${nation ? `<span>${nation}</span>` : ""}
           ${age ? `<span>· ${age}</span>` : ""}
         </div>
         <div class="staff-member-meta">${renderStaffAttrChips(member, dept, locked)}</div>
+        ${opts.showTactical ? renderStaffTacticalChips(member) : ""}
       </div>
       <div class="staff-member-side">
         <div class="salaire">${member.salaire_actuel != null ? formatMoney(member.salaire_actuel) + " / mois" : "-"}</div>
@@ -2230,6 +2294,16 @@ function openStaffSectorModal(dept, locked) {
   document.getElementById("staffModalCloseBtn").addEventListener("click", closeStaffModal);
 }
 
+function renderStaffTacticalRows(member, locked) {
+  const rows = STAFF_TACTICAL_FIELDS.map(([key, label]) => {
+    const val = member[key];
+    const display = locked ? "🔒" : (val && val !== "-" ? escapeHtml(val) : "-");
+    return `<div class="stat-row"><span class="label">${label}</span><span class="value">${display}</span></div>`;
+  }).join("");
+  const connDisplay = locked ? "🔒" : (Number.isFinite(Number(member.connaissance_tactique)) ? `${member.connaissance_tactique}/20` : "-");
+  return `<div class="staff-modal-role" style="margin-top:12px;">Profil tactique</div>${rows}<div class="stat-row"><span class="label">Connaissance tactique</span><span class="value">${connDisplay}</span></div>`;
+}
+
 function openStaffModal(member, locked, fromDept) {
   const overlay = document.getElementById("staffModalOverlay");
   const content = document.getElementById("staffModalContent");
@@ -2259,6 +2333,7 @@ function openStaffModal(member, locked, fromDept) {
     <div class="stat-row"><span class="label">Salaire</span><span class="value">${member.salaire_actuel != null ? formatMoney(member.salaire_actuel) + " / mois" : "-"}</span></div>
     ${member.qualification_preparateur && member.qualification_preparateur !== "-" ? `<div class="stat-row"><span class="label">Qualification</span><span class="value">${escapeHtml(member.qualification_preparateur)}</span></div>` : ""}
     ${attrRows}
+    ${isEntraineurPoste(member.poste) ? renderStaffTacticalRows(member, locked) : ""}
   `;
 
   overlay.classList.remove("hidden");
@@ -2338,105 +2413,79 @@ async function showStaffDbSubtab(clubId) {
 
   sdbUserClubId = clubId;
   wireStaffDbFilters(clubId);
-  populateStaffDeptFilterOptions();
 
   if (sdbLoaded) {
     applyStaffDbFilters();
     return;
   }
-  await loadStaffDb(clubId);
+
+  // Reprend la liste et les filtres d'un passage precedent (memorises en
+  // IndexedDB), comme pour la BDD de joueurs, plutot que de tout re-
+  // telecharger depuis Supabase a chaque retour sur l'onglet.
+  const restoredFromCache = await loadSdbStaffFromCache();
+  if (restoredFromCache) {
+    populateStaffDbFilterOptions();
+    restoreSdbFiltersFromCache();
+    applyStaffDbFilters({ resetPage: false });
+    if (!sdbLoadingComplete) {
+      loadRemainingStaffDb();
+    }
+  } else {
+    await loadStaffDb(clubId);
+  }
 }
 
 // ---- Base de donnees Staff (sous-onglet de l'onglet Staff) ----------------
-// Meme principe que la base de donnees de joueurs, mais pour le staff de
-// TOUS les clubs de la partie (pas seulement le sien). Les attributs
-// (tactique, eval joueurs...) restent masques (🔒) pour le staff d'un autre
-// club que le sien, comme deja pratique dans le sous-onglet "Effectif".
+// Ne montre que le staff RECRUTABLE : departement recrutement + entraineurs
+// (le reste - medical, preparateurs physiques...- sera recrute plus tard par
+// l'entraineur choisi). Filtrer sur ces postes des la requete reduit deja
+// fortement le volume telecharge, ce qui repond aussi au probleme de lenteur.
+// Les stats/attributs sont toujours affiches en clair ici (base de
+// recrutement), jamais masques comme dans l'onglet "Effectif".
 let sdbLoaded = false;
+let sdbLoadingComplete = false;
 let sdbAllStaff = [];
+let sdbTotalStaff = 0;
 let sdbClubNameById = {};
+let sdbKnownClubIds = new Set();
 let sdbUserClubId = null;
 let sdbFiltersWired = false;
 let sdbNationValue = "";
 let sdbAllNationsCache = [];
+let sdbCategoryValue = "";
 let sdbCurrentPage = 1;
 let sdbLastFiltered = [];
-let sdbSortKey = null;
-let sdbSortDir = "asc";
-const SDB_PAGE_SIZE = 100;
+const SDB_PAGE_SIZE = 40;
 
-const SDB_SORT_COLUMNS = {
+const SDB_SORT_ACCESSORS = {
+  reputation: s => { const v = Number(s.reputation_mondiale); return Number.isFinite(v) ? -v : Infinity; },
   nom: s => (s.nom || "").toLowerCase(),
-  club: s => (s.game_club_id ? (sdbClubNameById[s.game_club_id] || "") : "").toLowerCase(),
-  poste: s => (s.poste || "").toLowerCase(),
-  dept: s => staffDepartmentFor(s.poste),
-  age: s => Number(s.age),
-  nation: s => nationDisplayName(s.nationalite || "").toLowerCase(),
-  salaire: s => Number(s.salaire_actuel),
-  contrat: s => s.contrat_expire || "",
-  personnalite: s => (s.personnalite || "").toLowerCase(),
-  niveau_tactique: s => Number(s.niveau_tactique),
-  niveau_attaque: s => Number(s.niveau_attaque),
-  niveau_defense: s => Number(s.niveau_defense),
-  formation_jeunes: s => Number(s.formation_jeunes),
-  eval_joueurs: s => Number(s.eval_joueurs),
-  eval_potentiel: s => Number(s.eval_potentiel),
-  determination: s => Number(s.determination),
-  professionnalisme: s => Number(s.professionnalisme),
+  salaire: s => { const v = Number(s.salaire_actuel); return Number.isFinite(v) ? -v : Infinity; },
+  contrat: s => s.contrat_expire || "9999-99-99",
+  connaissance_tactique: s => { const v = Number(s.connaissance_tactique); return Number.isFinite(v) ? -v : Infinity; },
 };
 
 function applySdbSort() {
-  if (!sdbSortKey) return;
-  const accessor = SDB_SORT_COLUMNS[sdbSortKey];
-  if (!accessor) return;
-  const dir = sdbSortDir === "asc" ? 1 : -1;
+  const sel = document.getElementById("sdbSortSelect");
+  const key = sel ? sel.value : "reputation";
+  const accessor = SDB_SORT_ACCESSORS[key] || SDB_SORT_ACCESSORS.reputation;
   sdbLastFiltered.sort((a, b) => {
-    const va = accessor(a);
-    const vb = accessor(b);
-    const missingA = va == null || va === "" || (typeof va === "number" && !Number.isFinite(va));
-    const missingB = vb == null || vb === "" || (typeof vb === "number" && !Number.isFinite(vb));
-    if (missingA && missingB) return 0;
-    if (missingA) return 1;
-    if (missingB) return -1;
-    let cmp = 0;
-    if (va < vb) cmp = -1;
-    else if (va > vb) cmp = 1;
-    return dir === 1 ? cmp : -cmp;
+    const va = accessor(a), vb = accessor(b);
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+    return (a.nom || "").localeCompare(b.nom || "", "fr");
   });
 }
 
-function updateSdbSortHeaderIndicators() {
-  document.querySelectorAll("#staffDbPanel .pdb-table thead th[data-sort-key]").forEach(th => {
-    const key = th.getAttribute("data-sort-key");
-    const base = th.getAttribute("data-label") || th.textContent;
-    th.textContent = key === sdbSortKey ? `${base} ${sdbSortDir === "asc" ? "▲" : "▼"}` : base;
-  });
-}
-
-function wireSdbSortableHeaders(clubId) {
-  document.querySelectorAll("#staffDbPanel .pdb-table thead th[data-sort-key]").forEach(th => {
-    th.addEventListener("click", () => {
-      const key = th.getAttribute("data-sort-key");
-      if (sdbSortKey === key) {
-        sdbSortDir = sdbSortDir === "asc" ? "desc" : "asc";
-      } else {
-        sdbSortKey = key;
-        sdbSortDir = "asc";
-      }
-      applySdbSort();
-      updateSdbSortHeaderIndicators();
-      sdbCurrentPage = 1;
-      renderStaffDbTable(sdbLastFiltered);
-    });
-  });
-}
-
-// Le staff peut, comme les joueurs, largement depasser la limite de 1000
-// lignes par requete Supabase/PostgREST une fois toute la base de clubs
-// prise en compte : pagination complete via .range(), comme pour la BDD de
-// joueurs.
+// Le staff recrutable peut malgre tout representer plusieurs milliers de
+// lignes une fois toute la base de clubs prise en compte : pagination
+// complete via .range(), comme pour la BDD de joueurs, avec un filtre
+// .in("poste", ...) directement cote serveur pour ne jamais telecharger le
+// staff non recrutable (medical, preparateurs...).
 const SDB_FETCH_PAGE_SIZE = 1000;
 const SDB_FETCH_RETRIES = 4;
+const SDB_FETCH_CONCURRENCY = 8;
+const SDB_FIRST_WAVE_SIZE = 1500;
 
 async function fetchStaffPageWithRetry(from) {
   let lastErr;
@@ -2445,6 +2494,7 @@ async function fetchStaffPageWithRetry(from) {
       .from("game_staff")
       .select("id, staff_ref, nom, poste, salaire_actuel, contrat_expire, game_club_id")
       .eq("game_id", gameId)
+      .in("poste", STAFF_DB_ALLOWED_POSTES)
       .order("id", { ascending: true })
       .range(from, from + SDB_FETCH_PAGE_SIZE - 1);
     if (!error) return data || [];
@@ -2455,67 +2505,281 @@ async function fetchStaffPageWithRetry(from) {
   throw lastErr;
 }
 
-async function fetchAllGameStaffRows() {
-  const { count, error: countError } = await supabaseClient
-    .from("game_staff")
-    .select("id", { count: "exact", head: true })
-    .eq("game_id", gameId);
-  if (countError) throw countError;
-  const total = count || 0;
-  if (total === 0) return [];
-  const starts = [];
-  for (let from = 0; from < total; from += SDB_FETCH_PAGE_SIZE) starts.push(from);
-  const pages = await Promise.all(starts.map(from => fetchStaffPageWithRetry(from)));
-  const rows = [];
-  pages.forEach(p => rows.push(...p));
-  return rows;
+async function fetchGameStaffPages(pageStarts, concurrency, onBatch) {
+  const collected = [];
+  const pendingBatchWork = [];
+  for (let i = 0; i < pageStarts.length; i += concurrency) {
+    const batch = pageStarts.slice(i, i + concurrency);
+    const results = await Promise.all(batch.map(from => fetchStaffPageWithRetry(from)));
+    const batchRows = [];
+    results.forEach(data => batchRows.push(...data));
+    collected.push(...batchRows);
+    if (onBatch) {
+      pendingBatchWork.push(Promise.resolve().then(() => onBatch(batchRows)).catch(err => console.error(err)));
+    }
+  }
+  if (pendingBatchWork.length) await Promise.all(pendingBatchWork);
+  return collected;
+}
+
+// Recupere en une fois les attributs (table `staff`, y compris le profil
+// tactique des entraineurs) pour un lot de `staff_ref`, et les noms de club
+// des nouveaux `game_club_id` rencontres.
+async function enrichStaffBatch(gameStaffRows) {
+  const refs = [...new Set(gameStaffRows.map(r => r.staff_ref).filter(Boolean))];
+  let staffByRef = {};
+  const chunkSize = 300;
+  for (let i = 0; i < refs.length; i += chunkSize) {
+    const chunk = refs.slice(i, i + chunkSize);
+    const { data: staffRows } = await supabaseClient
+      .from("staff")
+      .select("id, nationalite, age, personnalite, reputation_mondiale, eval_joueurs, eval_potentiel, formation_jeunes, niveau_tactique, niveau_defense, niveau_attaque, determination, professionnalisme, qualification_preparateur, formation_preferee, deuxieme_formation_preferee, style_tactique, style_jeu, type_pressing, type_marquage, mentalite, connaissance_tactique")
+      .in("id", chunk);
+    (staffRows || []).forEach(s => { staffByRef[s.id] = s; });
+  }
+
+  const newClubIds = [...new Set(gameStaffRows.map(r => r.game_club_id).filter(Boolean))]
+    .filter(id => !sdbKnownClubIds.has(id));
+  if (newClubIds.length > 0) {
+    newClubIds.forEach(id => sdbKnownClubIds.add(id));
+    const { data: clubRows } = await supabaseClient.from("game_clubs").select("id, nom").in("id", newClubIds);
+    (clubRows || []).forEach(c => { sdbClubNameById[c.id] = c.nom; });
+  }
+
+  return gameStaffRows.map(r => ({ ...r, ...(staffByRef[r.staff_ref] || {}) }));
 }
 
 async function loadStaffDb(clubId) {
-  const tbody = document.getElementById("sdbTableBody");
+  const grid = document.getElementById("sdbCardsGrid");
   const countEl = document.getElementById("sdbCount");
-  tbody.innerHTML = `<tr><td colspan="17" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
+  grid.innerHTML = `<div class="sdb-empty-cell">Chargement du staff...</div>`;
   countEl.textContent = "Chargement...";
 
-  try {
-    const gameStaffRows = await fetchAllGameStaffRows();
+  sdbAllStaff = [];
+  sdbClubNameById = {};
+  sdbKnownClubIds = new Set();
+  sdbLoadingComplete = false;
 
-    if (gameStaffRows.length === 0) {
-      sdbAllStaff = [];
+  try {
+    const { count, error: countError } = await supabaseClient
+      .from("game_staff")
+      .select("id", { count: "exact", head: true })
+      .eq("game_id", gameId)
+      .in("poste", STAFF_DB_ALLOWED_POSTES);
+    if (countError) throw countError;
+    sdbTotalStaff = count || 0;
+
+    if (sdbTotalStaff === 0) {
       sdbLoaded = true;
+      sdbLoadingComplete = true;
       populateStaffDbFilterOptions();
       applyStaffDbFilters({ resetPage: false });
       return;
     }
 
-    const refs = [...new Set(gameStaffRows.map(r => r.staff_ref).filter(Boolean))];
-    let staffByRef = {};
-    const chunkSize = 300;
-    for (let i = 0; i < refs.length; i += chunkSize) {
-      const chunk = refs.slice(i, i + chunkSize);
-      const { data: staffRows } = await supabaseClient
-        .from("staff")
-        .select("id, nationalite, age, personnalite, eval_joueurs, eval_potentiel, formation_jeunes, niveau_tactique, niveau_defense, niveau_attaque, determination, professionnalisme, qualification_preparateur")
-        .in("id", chunk);
-      (staffRows || []).forEach(s => { staffByRef[s.id] = s; });
+    // 1) Premiere vague rapide, affichee tout de suite.
+    const firstWaveStarts = [];
+    for (let from = 0; from < Math.min(SDB_FIRST_WAVE_SIZE, sdbTotalStaff); from += SDB_FETCH_PAGE_SIZE) {
+      firstWaveStarts.push(from);
     }
-
-    const clubIds = [...new Set(gameStaffRows.map(r => r.game_club_id).filter(Boolean))];
-    if (clubIds.length > 0) {
-      const { data: clubRows } = await supabaseClient.from("game_clubs").select("id, nom").in("id", clubIds);
-      (clubRows || []).forEach(c => { sdbClubNameById[c.id] = c.nom; });
-    }
-
-    sdbAllStaff = gameStaffRows.map(r => ({ ...r, ...(staffByRef[r.staff_ref] || {}) }));
+    const firstWaveRaw = await fetchGameStaffPages(firstWaveStarts, SDB_FETCH_CONCURRENCY);
+    sdbAllStaff = await enrichStaffBatch(firstWaveRaw);
     sdbLoaded = true;
     populateStaffDbFilterOptions();
-    updateSdbSortHeaderIndicators();
     applyStaffDbFilters({ resetPage: false });
+    maybeSaveSdbStaffToCache(true);
+
+    // 2) Reste du staff recrutable, en arriere-plan, par lots.
+    await loadRemainingStaffDb();
   } catch (e) {
     console.error(e);
-    tbody.innerHTML = `<tr><td colspan="17" class="pdb-empty-cell">Erreur : ${escapeHtml(e.message)}</td></tr>`;
-    countEl.textContent = "";
+    if (!sdbAllStaff.length) {
+      grid.innerHTML = `<div class="sdb-empty-cell">Erreur : ${escapeHtml(e.message)}</div>`;
+      countEl.textContent = "";
+    } else {
+      sdbLoadingComplete = true;
+      toast("Erreur pendant le chargement en arrière-plan : " + e.message, true);
+      applyStaffDbFilters({ resetPage: false });
+    }
   }
+}
+
+// Reprend le telechargement du reste du staff recrutable la ou il s'etait
+// arrete (utilise a la fois juste apres la premiere vague, et quand un cache
+// restaure n'etait que partiel car la page avait ete quittee en cours de
+// route).
+async function loadRemainingStaffDb() {
+  try {
+    const remainingStarts = [];
+    for (let from = sdbAllStaff.length; from < sdbTotalStaff; from += SDB_FETCH_PAGE_SIZE) {
+      remainingStarts.push(from);
+    }
+
+    if (remainingStarts.length > 0) {
+      await fetchGameStaffPages(remainingStarts, SDB_FETCH_CONCURRENCY, async (batchRaw) => {
+        const batchEnriched = await enrichStaffBatch(batchRaw);
+        sdbAllStaff.push(...batchEnriched);
+        populateStaffDbFilterOptions();
+        applyStaffDbFilters({ resetPage: false });
+        maybeSaveSdbStaffToCache();
+      });
+    }
+
+    sdbLoadingComplete = true;
+    applyStaffDbFilters({ resetPage: false });
+    maybeSaveSdbStaffToCache(true);
+  } catch (e) {
+    console.error(e);
+    sdbLoadingComplete = true;
+    toast("Erreur pendant le chargement en arrière-plan : " + e.message, true);
+    applyStaffDbFilters({ resetPage: false });
+  }
+}
+
+// ---- Cache IndexedDB (memes principes que la BDD de joueurs) --------------
+const SDB_IDB_NAME = "fm_sdb_cache";
+const SDB_IDB_STORE = "staffCache";
+const SDB_CACHE_TTL_MS = 30 * 60 * 1000;
+
+function sdbCacheKey() {
+  return `${gameId}::staffdb`;
+}
+function sdbFiltersCacheKey() {
+  return `fm_sdb_filters::${gameId}`;
+}
+
+function openSdbIdb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error("IndexedDB indisponible")); return; }
+    const req = indexedDB.open(SDB_IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(SDB_IDB_STORE)) db.createObjectStore(SDB_IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+let sdbLastCacheSaveAt = 0;
+const SDB_CACHE_SAVE_INTERVAL_MS = 3000;
+
+function maybeSaveSdbStaffToCache(force = false) {
+  const now = Date.now();
+  if (!force && now - sdbLastCacheSaveAt < SDB_CACHE_SAVE_INTERVAL_MS) return;
+  sdbLastCacheSaveAt = now;
+  saveSdbStaffToCache();
+}
+
+async function saveSdbStaffToCache() {
+  try {
+    const db = await openSdbIdb();
+    const tx = db.transaction(SDB_IDB_STORE, "readwrite");
+    tx.objectStore(SDB_IDB_STORE).put({
+      staff: sdbAllStaff,
+      clubNameById: sdbClubNameById,
+      totalStaff: sdbTotalStaff,
+      savedAt: Date.now(),
+    }, sdbCacheKey());
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  } catch (e) {
+    console.warn("Cache BDD staff : sauvegarde impossible, on continue sans.", e);
+  }
+}
+
+async function loadSdbStaffFromCache() {
+  try {
+    const db = await openSdbIdb();
+    const tx = db.transaction(SDB_IDB_STORE, "readonly");
+    const req = tx.objectStore(SDB_IDB_STORE).get(sdbCacheKey());
+    const data = await new Promise((res, rej) => {
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+    if (!data || !Array.isArray(data.staff) || !data.staff.length) return false;
+    if (Date.now() - (data.savedAt || 0) > SDB_CACHE_TTL_MS) return false;
+
+    sdbAllStaff = data.staff;
+    sdbClubNameById = data.clubNameById || {};
+    sdbKnownClubIds = new Set(Object.keys(sdbClubNameById).map(k => Number(k) || k));
+    sdbTotalStaff = data.totalStaff || data.staff.length;
+    sdbLoadingComplete = sdbAllStaff.length >= sdbTotalStaff;
+    sdbLoaded = true;
+    return true;
+  } catch (e) {
+    console.warn("Cache BDD staff : lecture impossible, rechargement normal.", e);
+    return false;
+  }
+}
+
+function getSdbFiltersSnapshot() {
+  return {
+    q: document.getElementById("sdbSearchInput")?.value || "",
+    poste: document.getElementById("sdbPosteSelect")?.value || "",
+    category: sdbCategoryValue || "",
+    nation: sdbNationValue || "",
+    contractValue: document.getElementById("sdbContractSelect")?.value || "",
+    ageMin: document.getElementById("sdbAgeMinInput")?.value || "",
+    ageMax: document.getElementById("sdbAgeMaxInput")?.value || "",
+    salMin: document.getElementById("sdbSalMinInput")?.value || "",
+    salMax: document.getElementById("sdbSalMaxInput")?.value || "",
+    sortKey: document.getElementById("sdbSortSelect")?.value || "reputation",
+    currentPage: sdbCurrentPage,
+  };
+}
+
+function saveSdbFiltersToCache() {
+  try {
+    sessionStorage.setItem(sdbFiltersCacheKey(), JSON.stringify(getSdbFiltersSnapshot()));
+  } catch (e) {
+    // Stockage plein/indisponible : pas grave, les filtres ne seront
+    // simplement pas restaures au prochain passage.
+  }
+}
+
+function restoreSdbFiltersFromCache() {
+  let state;
+  try {
+    const raw = sessionStorage.getItem(sdbFiltersCacheKey());
+    if (!raw) return false;
+    state = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+  if (!state) return false;
+
+  const searchInput = document.getElementById("sdbSearchInput");
+  if (searchInput) searchInput.value = state.q || "";
+
+  const posteSelect = document.getElementById("sdbPosteSelect");
+  if (posteSelect && state.poste) posteSelect.value = state.poste;
+
+  sdbCategoryValue = state.category || "";
+  document.querySelectorAll("#sdbCategoryFilters .staff-role-chip").forEach(chip => {
+    chip.classList.toggle("active", (chip.getAttribute("data-category") || "") === sdbCategoryValue);
+  });
+
+  sdbNationValue = state.nation || "";
+  updateSdbNationTriggerLabel();
+
+  const contractSelect = document.getElementById("sdbContractSelect");
+  if (contractSelect) contractSelect.value = state.contractValue || "";
+
+  const ageMinInput = document.getElementById("sdbAgeMinInput");
+  if (ageMinInput) ageMinInput.value = state.ageMin || "";
+  const ageMaxInput = document.getElementById("sdbAgeMaxInput");
+  if (ageMaxInput) ageMaxInput.value = state.ageMax || "";
+  const salMinInput = document.getElementById("sdbSalMinInput");
+  if (salMinInput) salMinInput.value = state.salMin || "";
+  const salMaxInput = document.getElementById("sdbSalMaxInput");
+  if (salMaxInput) salMaxInput.value = state.salMax || "";
+
+  const sortSelect = document.getElementById("sdbSortSelect");
+  if (sortSelect) sortSelect.value = state.sortKey || "reputation";
+
+  sdbCurrentPage = state.currentPage || 1;
+
+  return true;
 }
 
 function populateStaffDbFilterOptions() {
@@ -2530,13 +2794,6 @@ function populateStaffDbFilterOptions() {
     .sort((a, b) => nationDisplayName(a).localeCompare(nationDisplayName(b), "fr"));
   renderSdbNationOptions(sdbAllNationsCache);
   updateSdbNationTriggerLabel();
-}
-
-function populateStaffDeptFilterOptions() {
-  const sel = document.getElementById("sdbDeptSelect");
-  if (!sel || sel.options.length > 1) return;
-  const opts = Object.entries(STAFF_DEPARTMENTS).map(([key, info]) => `<option value="${key}">${info.icon} ${info.label}</option>`).join("");
-  sel.innerHTML = `<option value="">Tous</option>${opts}<option value="autres">📋 Autres</option>`;
 }
 
 // ---- Dropdown Nation custom (repris de la BDD de joueurs) ----
@@ -2588,7 +2845,6 @@ function staffPassesContractFilter(s, contractValue) {
 function applyStaffDbFilters(opts = {}) {
   const q = document.getElementById("sdbSearchInput").value.trim().toLowerCase();
   const poste = document.getElementById("sdbPosteSelect").value;
-  const dept = document.getElementById("sdbDeptSelect").value;
   const nation = sdbNationValue;
   const contractValue = document.getElementById("sdbContractSelect").value;
   const ageMin = document.getElementById("sdbAgeMinInput").value;
@@ -2600,7 +2856,7 @@ function applyStaffDbFilters(opts = {}) {
 
   if (q) filtered = filtered.filter(s => (s.nom || "").toLowerCase().includes(q));
   if (poste) filtered = filtered.filter(s => (s.poste || "").trim() === poste);
-  if (dept) filtered = filtered.filter(s => staffDepartmentFor(s.poste) === dept);
+  if (sdbCategoryValue) filtered = filtered.filter(s => staffDbCategoryFor(s.poste) === sdbCategoryValue);
   if (nation) filtered = filtered.filter(s => s.nationalite === nation);
   if (contractValue) filtered = filtered.filter(s => staffPassesContractFilter(s, contractValue));
   if (ageMin !== "") filtered = filtered.filter(s => Number.isFinite(Number(s.age)) && Number(s.age) >= Number(ageMin));
@@ -2611,17 +2867,19 @@ function applyStaffDbFilters(opts = {}) {
   sdbLastFiltered = filtered;
   applySdbSort();
   if (opts.resetPage !== false) sdbCurrentPage = 1;
-  renderStaffDbTable(sdbLastFiltered);
+  renderStaffDbCards(sdbLastFiltered);
+  saveSdbFiltersToCache();
 
   const countEl = document.getElementById("sdbCount");
   const total = sdbAllStaff.length;
-  countEl.innerHTML = `<strong>${filtered.length}</strong> membre${filtered.length > 1 ? "s" : ""} du staff trouvé${filtered.length > 1 ? "s" : ""} sur ${total}`;
+  const loadingSuffix = sdbLoadingComplete ? "" : " (chargement en cours...)";
+  countEl.innerHTML = `<strong>${filtered.length}</strong> membre${filtered.length > 1 ? "s" : ""} du staff trouvé${filtered.length > 1 ? "s" : ""} sur ${total}${loadingSuffix}`;
 }
 
-function renderStaffDbTable(members) {
-  const tbody = document.getElementById("sdbTableBody");
+function renderStaffDbCards(members) {
+  const grid = document.getElementById("sdbCardsGrid");
   if (members.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="17" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
+    grid.innerHTML = `<div class="sdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</div>`;
     renderSdbPagination(0, 1);
     return;
   }
@@ -2632,45 +2890,10 @@ function renderStaffDbTable(members) {
   const startIdx = (sdbCurrentPage - 1) * SDB_PAGE_SIZE;
   const pageItems = members.slice(startIdx, startIdx + SDB_PAGE_SIZE);
 
-  tbody.innerHTML = pageItems.map(s => {
-    const isMine = sdbUserClubId != null && s.game_club_id === sdbUserClubId;
-    const locked = !isMine;
-    const clubCell = s.game_club_id
-      ? `<span class="pdb-club-link" data-club-id="${s.game_club_id}">${escapeHtml(sdbClubNameById[s.game_club_id] || "-")}</span>`
-      : "-";
+  grid.innerHTML = pageItems.map(s => {
     const dept = staffDepartmentFor(s.poste);
-    const deptInfo = STAFF_DEPARTMENTS[dept] || { label: "Autres", icon: "📋" };
-    const age = s.age ?? "-";
-    const nationCell = s.nationalite ? nationLabel(s.nationalite) : "-";
-    const salaireCell = s.salaire_actuel != null ? `${escapeHtml(formatMoney(s.salaire_actuel))} / mois` : "-";
-    const contratCell = escapeHtml(formatContractEnd(s.contrat_expire));
-    const personnaliteCell = escapeHtml(s.personnalite || "-");
-    const attrCell = (val) => {
-      if (locked) return `<span class="pdb-hint" title="Caché pour le staff hors de votre effectif">🔒</span>`;
-      return Number.isFinite(Number(val)) ? `${escapeHtml(String(val))}/20` : "-";
-    };
-
-    return `
-      <tr data-staff-id="${s.id}" data-club="${s.game_club_id ?? ""}">
-        <td class="pdb-name-cell">${escapeHtml(s.nom || "-")}</td>
-        <td>${clubCell}</td>
-        <td>${escapeHtml(s.poste || "-")}</td>
-        <td>${deptInfo.icon} ${escapeHtml(deptInfo.label)}</td>
-        <td>${escapeHtml(String(age))}</td>
-        <td>${nationCell}</td>
-        <td>${salaireCell}</td>
-        <td>${contratCell}</td>
-        <td>${personnaliteCell}</td>
-        <td>${attrCell(s.niveau_tactique)}</td>
-        <td>${attrCell(s.niveau_attaque)}</td>
-        <td>${attrCell(s.niveau_defense)}</td>
-        <td>${attrCell(s.formation_jeunes)}</td>
-        <td>${attrCell(s.eval_joueurs)}</td>
-        <td>${attrCell(s.eval_potentiel)}</td>
-        <td>${attrCell(s.determination)}</td>
-        <td>${attrCell(s.professionnalisme)}</td>
-      </tr>
-    `;
+    const clubName = s.game_club_id ? (sdbClubNameById[s.game_club_id] || "") : "";
+    return staffMemberCardHtml(s, dept, false, { clubName, clubClickable: true, showTactical: true });
   }).join("");
 
   renderSdbPagination(members.length, totalPages);
@@ -2692,14 +2915,16 @@ function renderSdbPagination(totalCount, totalPages) {
   if (prevBtn) prevBtn.addEventListener("click", () => {
     if (sdbCurrentPage <= 1) return;
     sdbCurrentPage--;
-    renderStaffDbTable(sdbLastFiltered);
-    document.querySelector("#staffDbPanel .pdb-table-wrap")?.scrollTo?.({ top: 0 });
+    renderStaffDbCards(sdbLastFiltered);
+    saveSdbFiltersToCache();
+    document.querySelector("#staffDbPanel .sdb-cards-grid")?.scrollTo?.({ top: 0 });
   });
   if (nextBtn) nextBtn.addEventListener("click", () => {
     if (sdbCurrentPage >= totalPages) return;
     sdbCurrentPage++;
-    renderStaffDbTable(sdbLastFiltered);
-    document.querySelector("#staffDbPanel .pdb-table-wrap")?.scrollTo?.({ top: 0 });
+    renderStaffDbCards(sdbLastFiltered);
+    saveSdbFiltersToCache();
+    document.querySelector("#staffDbPanel .sdb-cards-grid")?.scrollTo?.({ top: 0 });
   });
 }
 
@@ -2707,14 +2932,21 @@ function wireStaffDbFilters(clubId) {
   if (sdbFiltersWired) return;
   sdbFiltersWired = true;
 
-  wireSdbSortableHeaders(clubId);
-
   document.getElementById("sdbSearchInput").addEventListener("input", () => applyStaffDbFilters());
   document.getElementById("sdbPosteSelect").addEventListener("change", () => applyStaffDbFilters());
-  document.getElementById("sdbDeptSelect").addEventListener("change", () => applyStaffDbFilters());
   document.getElementById("sdbContractSelect").addEventListener("change", () => applyStaffDbFilters());
+  document.getElementById("sdbSortSelect").addEventListener("change", () => applyStaffDbFilters());
   ["sdbAgeMinInput", "sdbAgeMaxInput", "sdbSalMinInput", "sdbSalMaxInput"].forEach(id => {
     document.getElementById(id).addEventListener("change", () => applyStaffDbFilters());
+  });
+
+  document.getElementById("sdbCategoryFilters").addEventListener("click", (e) => {
+    const chip = e.target.closest(".staff-role-chip");
+    if (!chip) return;
+    document.querySelectorAll("#sdbCategoryFilters .staff-role-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    sdbCategoryValue = chip.getAttribute("data-category") || "";
+    applyStaffDbFilters();
   });
 
   document.getElementById("sdbNationTrigger").addEventListener("click", (e) => {
@@ -2740,34 +2972,36 @@ function wireStaffDbFilters(clubId) {
   document.getElementById("sdbResetBtn").addEventListener("click", () => {
     document.getElementById("sdbSearchInput").value = "";
     document.getElementById("sdbPosteSelect").value = "";
-    document.getElementById("sdbDeptSelect").value = "";
     document.getElementById("sdbContractSelect").value = "";
     document.getElementById("sdbAgeMinInput").value = "";
     document.getElementById("sdbAgeMaxInput").value = "";
     document.getElementById("sdbSalMinInput").value = "";
     document.getElementById("sdbSalMaxInput").value = "";
+    document.getElementById("sdbSortSelect").value = "reputation";
     sdbNationValue = "";
+    sdbCategoryValue = "";
+    document.querySelectorAll("#sdbCategoryFilters .staff-role-chip").forEach(c => {
+      c.classList.toggle("active", (c.getAttribute("data-category") || "") === "");
+    });
     updateSdbNationTriggerLabel();
     applyStaffDbFilters();
   });
 
-  document.getElementById("sdbTableBody").addEventListener("click", (e) => {
+  document.getElementById("sdbCardsGrid").addEventListener("click", (e) => {
     const clubLink = e.target.closest(".pdb-club-link");
     if (clubLink) {
       const clickedClubId = clubLink.getAttribute("data-club-id");
       if (clickedClubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clickedClubId)}`;
       return;
     }
-    const row = e.target.closest("tr[data-staff-id]");
-    if (!row) return;
-    const staffId = row.getAttribute("data-staff-id");
+    const card = e.target.closest(".staff-member-card[data-staff-id]");
+    if (!card) return;
+    const staffId = card.getAttribute("data-staff-id");
     const member = sdbAllStaff.find(s => String(s.id) === String(staffId));
-    if (member) {
-      const locked = !(sdbUserClubId != null && member.game_club_id === sdbUserClubId);
-      openStaffModal(member, locked, null);
-    }
+    if (member) openStaffModal(member, false, null);
   });
 }
+
 
 // ---- Base de donnees de joueurs (sous-onglet) ----------------------------
 // Charge une fois tous les joueurs de la partie (game_players), puis filtre
