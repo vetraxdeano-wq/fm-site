@@ -417,6 +417,22 @@
   .pdb-sortable:hover { color: var(--accent); }
   .pdb-club-link { cursor: pointer; }
   .pdb-club-link:hover { color: var(--accent); text-decoration: underline; }
+
+  /* ---- BDD Staff : tableau compact, sans scroll lateral (beaucoup plus de
+     colonnes que la BDD joueurs a cause du profil tactique des entraineurs).
+     table-layout: fixed + colonnes reparties a poids egal + retour a la ligne
+     du texte (au lieu de nowrap) permet de tout faire tenir en largeur, au
+     prix de cellules plus hautes (scroll vertical uniquement). */
+  #staffDbPanel .pdb-table-wrap { overflow-x: hidden; }
+  #staffDbPanel .pdb-table { table-layout: fixed; font-size: 11px; white-space: normal; }
+  #staffDbPanel .pdb-table thead th {
+    font-size: 9.5px; padding: 6px 4px; white-space: normal; word-break: break-word; line-height: 1.2;
+  }
+  #staffDbPanel .pdb-table tbody td {
+    padding: 5px 4px; word-break: break-word; overflow-wrap: break-word; line-height: 1.3;
+  }
+  #staffDbPanel .pdb-table .flag-icon { width: 13px; height: 10px; margin-right: 3px; }
+
   .pdb-pagination {
     display: flex; align-items: center; justify-content: center; gap: 14px;
     padding: 14px 0 4px;
@@ -1184,7 +1200,6 @@
                   <th class="pdb-sortable" data-sort-key="formation_preferee" data-label="Formation préférée">Formation préférée</th>
                   <th class="pdb-sortable" data-sort-key="deuxieme_formation_preferee" data-label="2e formation préférée">2e formation préférée</th>
                   <th class="pdb-sortable" data-sort-key="style_tactique" data-label="Style tactique">Style tactique</th>
-                  <th class="pdb-sortable" data-sort-key="style_jeu" data-label="Style de jeu">Style de jeu</th>
                   <th class="pdb-sortable" data-sort-key="type_pressing" data-label="Type de pressing">Type de pressing</th>
                   <th class="pdb-sortable" data-sort-key="type_marquage" data-label="Type de marquage">Type de marquage</th>
                   <th class="pdb-sortable" data-sort-key="mentalite" data-label="Mentalité">Mentalité</th>
@@ -1193,7 +1208,7 @@
                 </tr>
               </thead>
               <tbody id="sdbTableBody">
-                <tr><td colspan="22" class="pdb-empty-cell">Chargement du staff...</td></tr>
+                <tr><td colspan="21" class="pdb-empty-cell">Chargement du staff...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1975,7 +1990,6 @@ const STAFF_TACTICAL_FIELDS = [
   ["formation_preferee", "Formation préférée"],
   ["deuxieme_formation_preferee", "2e formation préférée"],
   ["style_tactique", "Style tactique"],
-  ["style_jeu", "Style de jeu"],
   ["type_pressing", "Type de pressing"],
   ["type_marquage", "Type de marquage"],
   ["mentalite", "Mentalité"],
@@ -2518,7 +2532,6 @@ const SDB_SORT_COLUMNS = {
   formation_preferee: s => (s.formation_preferee || "").toLowerCase(),
   deuxieme_formation_preferee: s => (s.deuxieme_formation_preferee || "").toLowerCase(),
   style_tactique: s => (s.style_tactique || "").toLowerCase(),
-  style_jeu: s => (s.style_jeu || "").toLowerCase(),
   type_pressing: s => (s.type_pressing || "").toLowerCase(),
   type_marquage: s => (s.type_marquage || "").toLowerCase(),
   mentalite: s => (s.mentalite || "").toLowerCase(),
@@ -2649,7 +2662,7 @@ async function enrichStaffBatch(gameStaffRows) {
 async function loadStaffDb(clubId) {
   const tbody = document.getElementById("sdbTableBody");
   const countEl = document.getElementById("sdbCount");
-  tbody.innerHTML = `<tr><td colspan="22" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="21" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
   countEl.textContent = "Chargement...";
 
   sdbAllStaff = [];
@@ -2922,7 +2935,7 @@ const SDB_ATTR_FIELDS = [
 
 let sdbAdvancedFilters = {
   personnalite: "",
-  formationPreferee: "", deuxiemeFormationPreferee: "", styleTactique: "", styleJeu: "", typePressing: "", typeMarquage: "", mentalite: "",
+  formationPreferee: "", deuxiemeFormationPreferee: "", styleTactique: "", typePressing: "", typeMarquage: "", mentalite: "",
   attrs: {},
 };
 let sdbAdvModalBuilt = false;
@@ -2968,7 +2981,6 @@ function buildStaffAdvancedFiltersModal() {
         ${sdbSelectFieldHtml("sdbAdvFormationPreferee", "Formation préférée", uniqueValuesOf("formation_preferee"))}
         ${sdbSelectFieldHtml("sdbAdvDeuxiemeFormationPreferee", "2e formation préférée", uniqueValuesOf("deuxieme_formation_preferee"))}
         ${sdbSelectFieldHtml("sdbAdvStyleTactique", "Style tactique", uniqueValuesOf("style_tactique"))}
-        ${sdbSelectFieldHtml("sdbAdvStyleJeu", "Style de jeu", uniqueValuesOf("style_jeu"))}
         ${sdbSelectFieldHtml("sdbAdvTypePressing", "Type de pressing", uniqueValuesOf("type_pressing"))}
         ${sdbSelectFieldHtml("sdbAdvTypeMarquage", "Type de marquage", uniqueValuesOf("type_marquage"))}
         ${sdbSelectFieldHtml("sdbAdvMentalite", "Mentalité", uniqueValuesOf("mentalite"))}
@@ -3003,7 +3015,6 @@ function buildStaffAdvancedFiltersModal() {
     ["sdbAdvFormationPreferee", "formationPreferee"],
     ["sdbAdvDeuxiemeFormationPreferee", "deuxiemeFormationPreferee"],
     ["sdbAdvStyleTactique", "styleTactique"],
-    ["sdbAdvStyleJeu", "styleJeu"],
     ["sdbAdvTypePressing", "typePressing"],
     ["sdbAdvTypeMarquage", "typeMarquage"],
     ["sdbAdvMentalite", "mentalite"],
@@ -3033,7 +3044,6 @@ function populateStaffAdvancedFiltersInputs() {
   setVal("sdbAdvFormationPreferee", af.formationPreferee);
   setVal("sdbAdvDeuxiemeFormationPreferee", af.deuxiemeFormationPreferee);
   setVal("sdbAdvStyleTactique", af.styleTactique);
-  setVal("sdbAdvStyleJeu", af.styleJeu);
   setVal("sdbAdvTypePressing", af.typePressing);
   setVal("sdbAdvTypeMarquage", af.typeMarquage);
   setVal("sdbAdvMentalite", af.mentalite);
@@ -3046,14 +3056,14 @@ function populateStaffAdvancedFiltersInputs() {
 function resetStaffAdvancedFilters() {
   sdbAdvancedFilters = {
     personnalite: "",
-    formationPreferee: "", deuxiemeFormationPreferee: "", styleTactique: "", styleJeu: "", typePressing: "", typeMarquage: "", mentalite: "",
+    formationPreferee: "", deuxiemeFormationPreferee: "", styleTactique: "", typePressing: "", typeMarquage: "", mentalite: "",
     attrs: {},
   };
 }
 
 function hasActiveSdbAdvancedFilters() {
   const af = sdbAdvancedFilters;
-  if (af.personnalite || af.formationPreferee || af.deuxiemeFormationPreferee || af.styleTactique || af.styleJeu || af.typePressing || af.typeMarquage || af.mentalite) return true;
+  if (af.personnalite || af.formationPreferee || af.deuxiemeFormationPreferee || af.styleTactique || af.typePressing || af.typeMarquage || af.mentalite) return true;
   return Object.values(af.attrs).some(v => v != null);
 }
 
@@ -3063,7 +3073,6 @@ function staffPassesAdvancedFilters(s) {
   if (af.formationPreferee && s.formation_preferee !== af.formationPreferee) return false;
   if (af.deuxiemeFormationPreferee && s.deuxieme_formation_preferee !== af.deuxiemeFormationPreferee) return false;
   if (af.styleTactique && s.style_tactique !== af.styleTactique) return false;
-  if (af.styleJeu && s.style_jeu !== af.styleJeu) return false;
   if (af.typePressing && s.type_pressing !== af.typePressing) return false;
   if (af.typeMarquage && s.type_marquage !== af.typeMarquage) return false;
   if (af.mentalite && s.mentalite !== af.mentalite) return false;
@@ -3095,7 +3104,6 @@ function countActiveSdbAdvancedFilters() {
   if (af.formationPreferee) n++;
   if (af.deuxiemeFormationPreferee) n++;
   if (af.styleTactique) n++;
-  if (af.styleJeu) n++;
   if (af.typePressing) n++;
   if (af.typeMarquage) n++;
   if (af.mentalite) n++;
@@ -3200,8 +3208,8 @@ function renderStaffDbTable(members) {
   const tbody = document.getElementById("sdbTableBody");
   if (members.length === 0) {
     tbody.innerHTML = !sdbLoadingComplete
-      ? `<tr><td colspan="22" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
-      : `<tr><td colspan="22" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
+      ? `<tr><td colspan="21" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
+      : `<tr><td colspan="21" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
     renderSdbPagination(0, 1);
     return;
   }
@@ -3239,7 +3247,6 @@ function renderStaffDbTable(members) {
         <td>${escapeHtml(s.formation_preferee || "-")}</td>
         <td>${escapeHtml(s.deuxieme_formation_preferee || "-")}</td>
         <td>${escapeHtml(s.style_tactique || "-")}</td>
-        <td>${escapeHtml(s.style_jeu || "-")}</td>
         <td>${escapeHtml(s.type_pressing || "-")}</td>
         <td>${escapeHtml(s.type_marquage || "-")}</td>
         <td>${escapeHtml(s.mentalite || "-")}</td>
