@@ -349,6 +349,34 @@
   .pdb-field input[type="text"] { width: 190px; }
   .pdb-field input[type="text"]:focus, .pdb-field select:focus { border-color: var(--accent-dim); }
 
+  /* ---- Selecteur "qui gere le recrutement" : tres visible en haut de la
+     BDD de joueurs, choix persiste en base (game_clubs.mode_recrutement). */
+  .pdb-recruitment-mode-card {
+    background: linear-gradient(135deg, rgba(251,191,36,0.14), rgba(251,191,36,0.03));
+    border: 1px solid rgba(251,191,36,0.45); border-radius: 12px;
+    padding: 14px 16px; flex: 0 0 auto;
+  }
+  .pdb-recruitment-mode-label {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+    color: var(--gold); margin-bottom: 10px;
+  }
+  .pdb-recruitment-mode-choices { display: flex; flex-wrap: wrap; gap: 10px; }
+  .pdb-recruitment-mode-btn {
+    flex: 1 1 240px; background: #14171d; border: 2px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 12px 14px; font-size: 13px; font-weight: 600; font-family: inherit;
+    line-height: 1.3; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    text-align: center;
+  }
+  .pdb-recruitment-mode-btn:hover { border-color: var(--gold); transform: translateY(-1px); }
+  .pdb-recruitment-mode-btn.active {
+    border-color: var(--gold); background: rgba(251,191,36,0.16); color: var(--gold);
+    box-shadow: 0 0 0 1px rgba(251,191,36,0.35) inset;
+  }
+  .pdb-recruitment-mode-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+  .pdb-recruitment-mode-status { margin-top: 8px; font-size: 11px; color: var(--text-dim); min-height: 14px; }
+  .pdb-recruitment-mode-status.saved { color: var(--accent); }
+  .pdb-recruitment-mode-status.error { color: #f87171; }
+
   .pdb-mini-range { display: flex; align-items: center; gap: 5px; }
   .pdb-mini-range input[type="number"] {
     width: 64px; background: #14171d; border: 1px solid var(--border); color: var(--text);
@@ -431,7 +459,7 @@
   #staffDbPanel .pdb-table tbody td {
     padding: 5px 4px; word-break: break-word; overflow-wrap: break-word; line-height: 1.3;
   }
-  #staffDbPanel .pdb-table .flag-icon { width: 13px; height: 10px; margin-right: 3px; }
+  #staffDbPanel .pdb-table .flag-icon { width: 13px; height: 10px; margin-right: 7px; }
 
   .pdb-pagination {
     display: flex; align-items: center; justify-content: center; gap: 14px;
@@ -969,6 +997,15 @@
       </div>
 
       <div class="fm-players-db hidden" id="fmPlayersDbView">
+        <div class="pdb-recruitment-mode-card" id="pdbRecruitmentModeCard">
+          <div class="pdb-recruitment-mode-label">Qui gère le recrutement ?</div>
+          <div class="pdb-recruitment-mode-choices" id="pdbRecruitmentModeChoices">
+            <button type="button" class="pdb-recruitment-mode-btn" data-mode="manager">Gestion intégrale du recrutement par moi-même</button>
+            <button type="button" class="pdb-recruitment-mode-btn" data-mode="coach">Gestion du recrutement par le coach intégralement</button>
+            <button type="button" class="pdb-recruitment-mode-btn" data-mode="partage">Gestion du recrutement partagé avec le coach</button>
+          </div>
+          <div class="pdb-recruitment-mode-status" id="pdbRecruitmentModeStatus"></div>
+        </div>
         <div class="pdb-filterbar">
           <div class="pdb-field">
             <label for="pdbSearchInput">Nom</label>
@@ -1192,6 +1229,7 @@
                   <th class="pdb-sortable" data-sort-key="poste" data-label="Poste">Poste</th>
                   <th class="pdb-sortable" data-sort-key="club" data-label="Club">Club</th>
                   <th class="pdb-sortable" data-sort-key="age" data-label="Âge">Âge</th>
+                  <th class="pdb-sortable" data-sort-key="reputation" data-label="Réputation">Réputation</th>
                   <th class="pdb-sortable" data-sort-key="personnalite" data-label="Personnalité">Personnalité</th>
                   <th class="pdb-sortable" data-sort-key="eval_joueurs" data-label="Éval. joueurs">Éval. joueurs</th>
                   <th class="pdb-sortable" data-sort-key="eval_potentiel" data-label="Éval. potentiel">Éval. potentiel</th>
@@ -1211,7 +1249,7 @@
                 </tr>
               </thead>
               <tbody id="sdbTableBody">
-                <tr><td colspan="20" class="pdb-empty-cell">Chargement du staff...</td></tr>
+                <tr><td colspan="21" class="pdb-empty-cell">Chargement du staff...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2540,6 +2578,7 @@ const SDB_SORT_COLUMNS = {
   poste: s => (s.poste || "").toLowerCase(),
   club: s => (s.game_club_id ? (sdbClubNameById[s.game_club_id] || "") : "").toLowerCase(),
   age: s => Number(s.age),
+  reputation: s => Number(s.reputation_mondiale),
   nation: s => nationDisplayName(s.nationalite || "").toLowerCase(),
   personnalite: s => (s.personnalite || "").toLowerCase(),
   eval_joueurs: s => Number(s.eval_joueurs),
@@ -2734,7 +2773,7 @@ async function refreshSdbClubReputations(userClubId) {
 async function loadStaffDb(clubId) {
   const tbody = document.getElementById("sdbTableBody");
   const countEl = document.getElementById("sdbCount");
-  tbody.innerHTML = `<tr><td colspan="20" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="21" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
   countEl.textContent = "Chargement...";
 
   sdbAllStaff = [];
@@ -3331,8 +3370,8 @@ function renderStaffDbTable(members) {
   const tbody = document.getElementById("sdbTableBody");
   if (members.length === 0) {
     tbody.innerHTML = !sdbLoadingComplete
-      ? `<tr><td colspan="20" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
-      : `<tr><td colspan="20" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
+      ? `<tr><td colspan="21" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
+      : `<tr><td colspan="21" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
     renderSdbPagination(0, 1);
     return;
   }
@@ -3350,6 +3389,8 @@ function renderStaffDbTable(members) {
     const age = s.age ?? "-";
     const nation = s.nationalite;
     const flagPrefix = nation ? nationFlagOnly(nation) : "";
+    const rep = Number.isFinite(Number(s.reputation_mondiale)) ? Number(s.reputation_mondiale) : null;
+    const repCell = rep != null ? starsHtml(starsFromScale(rep, 10000)) : "-";
     const salaireCell = s.salaire_actuel != null ? `${escapeHtml(formatMoney(s.salaire_actuel))} / mois` : "-";
 
     return `
@@ -3358,6 +3399,7 @@ function renderStaffDbTable(members) {
         <td>${escapeHtml(s.poste || "-")}</td>
         <td>${clubCell}</td>
         <td>${escapeHtml(String(age))}</td>
+        <td>${repCell}</td>
         <td>${escapeHtml(s.personnalite || "-")}</td>
         <td>${sdbAttrCell(s.eval_joueurs)}</td>
         <td>${sdbAttrCell(s.eval_potentiel)}</td>
@@ -3960,6 +4002,89 @@ function restorePdbFiltersFromCache() {
   return true;
 }
 
+// ---- Mode de gestion du recrutement (BDD de joueurs) -----------------------
+// Choix tres visible en haut de la BDD de joueurs, persiste directement sur
+// la fiche club (game_clubs.mode_recrutement) pour etre reutilise plus tard
+// par le workflow de recrutement (mercato gere par le manager, le coach, ou
+// les deux). Un seul choix actif a la fois, sauvegarde immediatement au clic.
+const RECRUITMENT_MODE_LABELS = {
+  manager: "Gestion intégrale du recrutement par moi-même",
+  coach: "Gestion du recrutement par le coach intégralement",
+  partage: "Gestion du recrutement partagé avec le coach",
+};
+let pdbRecruitmentMode = null;
+let pdbRecruitmentModeWired = false;
+
+function updateRecruitmentModeButtonsUI() {
+  document.querySelectorAll("#pdbRecruitmentModeChoices .pdb-recruitment-mode-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-mode") === pdbRecruitmentMode);
+  });
+}
+
+async function loadRecruitmentMode(clubId) {
+  const statusEl = document.getElementById("pdbRecruitmentModeStatus");
+  if (statusEl) { statusEl.textContent = ""; statusEl.className = "pdb-recruitment-mode-status"; }
+  try {
+    const { data, error } = await supabaseClient
+      .from("game_clubs")
+      .select("mode_recrutement")
+      .eq("id", clubId)
+      .maybeSingle();
+    if (error) throw error;
+    pdbRecruitmentMode = data?.mode_recrutement || null;
+  } catch (e) {
+    console.error(e);
+    pdbRecruitmentMode = null;
+  }
+  updateRecruitmentModeButtonsUI();
+}
+
+async function saveRecruitmentMode(clubId, mode) {
+  const statusEl = document.getElementById("pdbRecruitmentModeStatus");
+  const buttons = document.querySelectorAll("#pdbRecruitmentModeChoices .pdb-recruitment-mode-btn");
+  buttons.forEach(b => b.disabled = true);
+  if (statusEl) { statusEl.textContent = "Enregistrement..."; statusEl.className = "pdb-recruitment-mode-status"; }
+
+  const previousMode = pdbRecruitmentMode;
+  pdbRecruitmentMode = mode;
+  updateRecruitmentModeButtonsUI();
+
+  try {
+    const { error } = await supabaseClient
+      .from("game_clubs")
+      .update({ mode_recrutement: mode })
+      .eq("id", clubId);
+    if (error) throw error;
+    if (statusEl) {
+      statusEl.textContent = `Choix enregistré : ${RECRUITMENT_MODE_LABELS[mode] || mode}`;
+      statusEl.className = "pdb-recruitment-mode-status saved";
+    }
+  } catch (e) {
+    console.error(e);
+    pdbRecruitmentMode = previousMode;
+    updateRecruitmentModeButtonsUI();
+    if (statusEl) {
+      statusEl.textContent = "Erreur lors de l'enregistrement, réessaie.";
+      statusEl.className = "pdb-recruitment-mode-status error";
+    }
+    toast("Impossible d'enregistrer le mode de recrutement : " + e.message, true);
+  } finally {
+    buttons.forEach(b => b.disabled = false);
+  }
+}
+
+function wireRecruitmentModeButtons(clubId) {
+  if (pdbRecruitmentModeWired) return;
+  pdbRecruitmentModeWired = true;
+  document.getElementById("pdbRecruitmentModeChoices").addEventListener("click", (e) => {
+    const btn = e.target.closest(".pdb-recruitment-mode-btn");
+    if (!btn) return;
+    const mode = btn.getAttribute("data-mode");
+    if (!mode || mode === pdbRecruitmentMode) return;
+    saveRecruitmentMode(clubId, mode);
+  });
+}
+
 async function showFmPlayersDbView(clubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
   document.getElementById("fmPlayersDbView").classList.remove("hidden");
@@ -3970,6 +4095,8 @@ async function showFmPlayersDbView(clubId) {
 
   pdbUserClubId = clubId;
   wirePlayersDbFilters(clubId);
+  wireRecruitmentModeButtons(clubId);
+  loadRecruitmentMode(clubId);
 
   if (pdbLoaded) {
     applyPlayersDbFilters(clubId);
