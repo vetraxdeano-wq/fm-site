@@ -462,14 +462,14 @@ function renderFmDateBadge(game) {
 // ---------- Sidebar de navigation FM (identique à dashboard.html) ----------
 const FM_NAV_ITEMS = [
   { key: "accueil", icon: "🏠", label: "Accueil", href: "dashboard.html" },
+  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
   { key: "effectif", icon: "👥", label: "Effectif", href: "squad.html" },
-  { key: "staff", icon: "🧑‍💼", label: "Staff", href: null },
+  { key: "staff", icon: "💼", label: "Staff", href: null },
   { key: "tactique", icon: "♟️", label: "Tactique", href: null },
   { key: "datacenter", icon: "📊", label: "Data Center", href: null },
-  { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: null },
+  { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: "dashboard.html" },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
   { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
-  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
 ];
 function renderFmSidebar(clubId) {
   const el = document.getElementById("fmSidebar");
@@ -488,7 +488,8 @@ function renderFmSidebar(clubId) {
         return;
       }
       if (item.href) {
-        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId || "")}`;
+        const extra = item.key === "basejoueurs" ? "&view=bdd" : "";
+        window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId || "")}${extra}`;
       } else {
         toast(`${item.label} arrive bientôt !`);
       }
