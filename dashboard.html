@@ -277,12 +277,18 @@
   .fm-nav-item {
     display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 13.5px;
     color: var(--text-dim); cursor: pointer; border-left: 3px solid transparent; user-select: none;
+    position: relative;
   }
   .fm-nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
   .fm-nav-item.active {
     background: rgba(251,191,36,0.08); color: var(--gold); border-left-color: var(--gold); font-weight: 700;
   }
   .fm-nav-icon { width: 18px; text-align: center; flex-shrink: 0; }
+  .fm-nav-badge {
+    position: absolute; top: 8px; right: 14px; min-width: 16px; height: 16px; padding: 0 4px;
+    border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
 
   .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 16px 24px; }
   .fm-content {
@@ -2682,39 +2688,76 @@ async function renderFinances(club) {
 // vue est alimentee par quelques messages d'exemple pour que l'interface
 // (apercu accueil + liste/detail du sous-onglet, marquage lu/non lu) soit
 // fonctionnelle et prete a etre branchee sur de vraies donnees plus tard.
-let fmInboxMessages = [
-  {
-    id: "welcome",
-    subject: "Bienvenue au club !",
-    sender: "Direction du club",
-    icon: "🛡️",
-    date: "Aujourd'hui",
-    preview: "Toute l'équipe est ravie de t'accueillir à la tête du club.",
-    body: "Toute l'équipe est ravie de t'accueillir à la tête du club.\n\nTu trouveras dans les prochains jours les premiers rapports du staff ainsi que les dossiers de recrutement en cours. N'hésite pas à consulter l'effectif et la base de données de joueurs pour préparer le mercato.\n\nBonne chance pour cette nouvelle aventure !",
-    unread: true,
-  },
-  {
-    id: "staff-report",
-    subject: "Rapport de pré-saison du staff",
-    sender: "Staff sportif",
-    icon: "📋",
-    date: "Aujourd'hui",
-    preview: "Un premier point sur la condition physique et le moral du groupe.",
-    body: "Le staff a terminé les premiers tests physiques de la pré-saison.\n\nDans l'ensemble, le groupe est en bonne condition. Quelques joueurs reviennent de blessure et seront suivis de près lors des premières séances.\n\nUn rapport plus détaillé suivra une fois le calendrier des matchs amicaux confirmé.",
-    unread: true,
-  },
-  {
-    id: "sponsor-offer",
-    subject: "Proposition de sponsoring maillot",
-    sender: "Service commercial",
-    icon: "💰",
-    date: "Hier",
-    preview: "Un partenaire local souhaite discuter d'un contrat de sponsoring.",
-    body: "Un partenaire local souhaite discuter d'un contrat de sponsoring pour la face avant du maillot.\n\nLes discussions préliminaires évoquent un contrat pluriannuel. Le service commercial attend ton feu vert pour entamer les négociations.",
-    unread: false,
-  },
-];
+let fmInboxMessages = [];
 let fmInboxSelectedId = null;
+let myGameClubId = null;
+
+// Formatte la date d'un message (created_at, timestamp reel d'insertion en
+// base) en "Aujourd'hui" / "Hier" / "12 juil." pour l'affichage.
+function formatInboxDate(createdAt) {
+  if (!createdAt) return "";
+  const d = new Date(createdAt);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, now)) return "Aujourd'hui";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (sameDay(d, yesterday)) return "Hier";
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short" }).format(d);
+}
+
+// Charge les messages du joueur depuis game_messages : ceux adresses a son
+// club (game_club_id = son club) + les messages globaux de la partie
+// (game_club_id NULL). La RLS restreint deja cote serveur a ce que ce
+// participant a le droit de voir.
+async function loadInboxMessages() {
+  if (!myGameClubId) return;
+
+  const { data, error } = await supabaseClient
+    .from("game_messages")
+    .select("id, game_club_id, jour, type, icon, sender, subject, body, is_read, created_at")
+    .eq("game_id", gameId)
+    .or(`game_club_id.eq.${myGameClubId},game_club_id.is.null`)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    toast("Impossible de charger la boîte de réception", true);
+    fmInboxMessages = [];
+    return;
+  }
+
+  fmInboxMessages = (data || []).map(m => ({
+    id: String(m.id),
+    subject: m.subject,
+    sender: m.sender,
+    icon: m.icon,
+    date: formatInboxDate(m.created_at),
+    preview: (m.body || "").split("\n").find(line => line.trim().length > 0) || "",
+    body: m.body,
+    unread: !m.is_read,
+  }));
+}
+
+// Met a jour le badge de notification sur l'onglet "Boîte de réception" du
+// menu lateral : affiche le nombre de messages non lus, disparait a 0.
+function updateInboxBadge() {
+  const navRow = document.querySelector('.fm-nav-item[data-key="messagerie"]');
+  if (!navRow) return;
+  const unreadCount = fmInboxMessages.filter(m => m.unread).length;
+  let badge = navRow.querySelector(".fm-nav-badge");
+  if (unreadCount > 0) {
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "fm-nav-badge";
+      navRow.appendChild(badge);
+    }
+    badge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
+  } else if (badge) {
+    badge.remove();
+  }
+}
 
 // Tronque l'apercu du mail a environ 2 lignes et ajoute [...] si coupe.
 function truncateInboxPreview(text, maxChars = 130) {
@@ -2821,13 +2864,33 @@ function renderFmInboxDetail() {
   `;
 }
 
-function selectFmInboxMessage(msgId) {
+async function selectFmInboxMessage(msgId) {
   fmInboxSelectedId = msgId;
   const msg = fmInboxMessages.find(m => m.id === msgId);
-  if (msg) msg.unread = false;
   renderFmInboxList();
   renderFmInboxDetail();
-  renderInbox(); // rafraichit aussi l'apercu de la page d'accueil (lu/non lu)
+
+  if (!msg || !msg.unread) return;
+
+  // Mise a jour optimiste de l'UI (liste, apercu accueil, badge), puis
+  // persistance en base ; on revient en arriere si l'update echoue.
+  msg.unread = false;
+  renderFmInboxList();
+  renderInbox();
+  updateInboxBadge();
+
+  const { error } = await supabaseClient
+    .from("game_messages")
+    .update({ is_read: true })
+    .eq("id", Number(msgId));
+
+  if (error) {
+    msg.unread = true;
+    renderFmInboxList();
+    renderInbox();
+    updateInboxBadge();
+    toast("Impossible de marquer le message comme lu", true);
+  }
 }
 
 function showFmInboxView() {
@@ -2914,6 +2977,7 @@ async function renderStandings(club) {
 }
 
 async function showMyClub(gameClubId, canChange) {
+  myGameClubId = gameClubId;
   const { data: club, error } = await supabaseClient
     .from("game_club_overview")
     .select(`
@@ -2943,7 +3007,9 @@ async function showMyClub(gameClubId, canChange) {
   renderFinances(club);
   renderTeamStats();
   renderStandings(club);
+  await loadInboxMessages();
   renderInbox();
+  updateInboxBadge();
 
   // Arrivee depuis un lien "Base de donnees de joueurs" d'une autre page
   // (club.html, squad.html, fiche.html...) : on ouvre directement cet
