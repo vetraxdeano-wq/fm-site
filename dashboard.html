@@ -1154,6 +1154,10 @@
                 <input type="number" id="sdbSalMaxInput" step="1" min="0" placeholder="Max">
               </div>
             </div>
+            <label class="pdb-checkbox-field" for="sdbTransferCheckbox">
+              <input type="checkbox" id="sdbTransferCheckbox" checked>
+              <span>Intéressé par transfert</span>
+            </label>
             <button class="pdb-more-filters-btn" id="sdbMoreFiltersBtn" type="button">+ Ajouter des filtres</button>
             <button class="pdb-reset-btn" id="sdbResetBtn" type="button">Effacer les filtres</button>
           </div>
@@ -1188,7 +1192,6 @@
                   <th class="pdb-sortable" data-sort-key="poste" data-label="Poste">Poste</th>
                   <th class="pdb-sortable" data-sort-key="club" data-label="Club">Club</th>
                   <th class="pdb-sortable" data-sort-key="age" data-label="Âge">Âge</th>
-                  <th class="pdb-sortable" data-sort-key="nation" data-label="Nation">Nation</th>
                   <th class="pdb-sortable" data-sort-key="personnalite" data-label="Personnalité">Personnalité</th>
                   <th class="pdb-sortable" data-sort-key="eval_joueurs" data-label="Éval. joueurs">Éval. joueurs</th>
                   <th class="pdb-sortable" data-sort-key="eval_potentiel" data-label="Éval. potentiel">Éval. potentiel</th>
@@ -1208,7 +1211,7 @@
                 </tr>
               </thead>
               <tbody id="sdbTableBody">
-                <tr><td colspan="21" class="pdb-empty-cell">Chargement du staff...</td></tr>
+                <tr><td colspan="20" class="pdb-empty-cell">Chargement du staff...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1461,6 +1464,16 @@ function nationLabel(name) {
     ? `<img class="flag-icon" src="https://flagcdn.com/${flagCode}.svg" alt="" loading="lazy">`
     : "";
   return `${img}${escapeHtml(fullName)}`;
+}
+
+// Drapeau seul, sans le nom de la nation (utilise dans la BDD Staff, ou le
+// nom prend trop de place vu le nombre de colonnes) : le nom complet reste
+// disponible via l'attribut title au survol.
+function nationFlagOnly(name) {
+  const fullName = nationDisplayName(name);
+  const flagCode = flagCodeForNation(name);
+  if (!flagCode) return escapeHtml(fullName) || "-";
+  return `<img class="flag-icon" src="https://flagcdn.com/${flagCode}.svg" alt="${escapeHtml(fullName)}" title="${escapeHtml(fullName)}" loading="lazy">`;
 }
 
 function formatMoney(n) {
@@ -2478,6 +2491,7 @@ async function showStaffDbSubtab(clubId) {
     restoreSdbFiltersFromCache();
     updateSdbSortHeaderIndicators();
     applyStaffDbFilters({ resetPage: false });
+    refreshSdbClubReputations(clubId).then(() => applyStaffDbFilters({ resetPage: false }));
     if (!sdbLoadingComplete) {
       loadRemainingStaffDb();
     }
@@ -2504,6 +2518,12 @@ let sdbFiltersWired = false;
 let sdbNationValue = "";
 let sdbAllNationsCache = [];
 let sdbCategoryValue = "";
+// Reputation "officielle" (table clubs) des clubs rencontres dans la BDD
+// Staff, et reputation du club du manager : sert au mode "interesse par
+// transfert" (meme principe que la BDD de joueurs, base sur la RM du staff).
+let sdbClubReputation = null;
+let sdbClubReputationById = {};
+let sdbKnownRepClubIds = new Set();
 let sdbCurrentPage = 1;
 let sdbLastFiltered = [];
 const SDB_PAGE_SIZE = 40;
@@ -2656,18 +2676,73 @@ async function enrichStaffBatch(gameStaffRows) {
     (clubRows || []).forEach(c => { sdbClubNameById[c.id] = c.nom; });
   }
 
+  await refreshSdbClubReputations(sdbUserClubId);
+
   return gameStaffRows.map(r => ({ ...r, ...(staffByRef[r.staff_ref] || {}) }));
+}
+
+// Repli si le club n'a pas de reference valide dans la table `clubs` :
+// moyenne de reputation_mondiale du staff deja connu de ce club (equivalent
+// du repli utilise pour les joueurs, mais sur sdbAllStaff).
+async function fetchClubRealReputationForStaff(clubId) {
+  if (!clubId) return null;
+  try {
+    const { data: gameClub } = await supabaseClient
+      .from("game_clubs")
+      .select("club_ref")
+      .eq("id", clubId)
+      .maybeSingle();
+
+    if (gameClub?.club_ref) {
+      const { data: clubRow } = await supabaseClient
+        .from("clubs")
+        .select("reputation")
+        .eq("id", gameClub.club_ref)
+        .maybeSingle();
+      if (clubRow && Number.isFinite(Number(clubRow.reputation))) {
+        return Number(clubRow.reputation);
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  const myStaff = sdbAllStaff.filter(s => s.game_club_id === clubId && Number.isFinite(Number(s.reputation_mondiale)));
+  return myStaff.length > 0
+    ? myStaff.reduce((s, x) => s + Number(x.reputation_mondiale), 0) / myStaff.length
+    : null;
+}
+
+// Recupere/complete la reputation "officielle" des clubs connus de la BDD
+// Staff (et celle du club du manager), en ne re-interrogeant jamais un club
+// deja resolu. Appelee au fil du chargement (enrichStaffBatch) et apres une
+// restauration depuis le cache.
+async function refreshSdbClubReputations(userClubId) {
+  const clubIds = [...new Set(Object.keys(sdbClubNameById).map(id => (Number(id) || id)).concat(userClubId ? [userClubId] : []))]
+    .filter(id => id != null && !sdbKnownRepClubIds.has(id));
+  if (clubIds.length > 0) {
+    clubIds.forEach(id => sdbKnownRepClubIds.add(id));
+    const repMap = await fetchClubReputationsByGameClubId(clubIds);
+    Object.assign(sdbClubReputationById, repMap);
+  }
+
+  if (sdbClubReputation == null && userClubId) {
+    sdbClubReputation = sdbClubReputationById[userClubId] ?? await fetchClubRealReputationForStaff(userClubId);
+  }
 }
 
 async function loadStaffDb(clubId) {
   const tbody = document.getElementById("sdbTableBody");
   const countEl = document.getElementById("sdbCount");
-  tbody.innerHTML = `<tr><td colspan="21" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="20" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
   countEl.textContent = "Chargement...";
 
   sdbAllStaff = [];
   sdbClubNameById = {};
   sdbKnownClubIds = new Set();
+  sdbClubReputationById = {};
+  sdbClubReputation = null;
+  sdbKnownRepClubIds = new Set();
   sdbLoadingComplete = false;
 
   try {
@@ -2833,6 +2908,7 @@ function getSdbFiltersSnapshot() {
     ageMax: document.getElementById("sdbAgeMaxInput")?.value || "",
     salMin: document.getElementById("sdbSalMinInput")?.value || "",
     salMax: document.getElementById("sdbSalMaxInput")?.value || "",
+    interestedOnly: !!document.getElementById("sdbTransferCheckbox")?.checked,
     advancedFilters: sdbAdvancedFilters,
     sortKey: sdbSortKey,
     sortDir: sdbSortDir,
@@ -2885,6 +2961,9 @@ function restoreSdbFiltersFromCache() {
   if (salMinInput) salMinInput.value = state.salMin || "";
   const salMaxInput = document.getElementById("sdbSalMaxInput");
   if (salMaxInput) salMaxInput.value = state.salMax || "";
+
+  const transferCheckbox = document.getElementById("sdbTransferCheckbox");
+  if (transferCheckbox) transferCheckbox.checked = state.interestedOnly !== false;
 
   if (state.advancedFilters) {
     sdbAdvancedFilters = state.advancedFilters;
@@ -3165,6 +3244,14 @@ function staffPassesContractFilter(s, contractValue) {
   return expireDate >= today && expireDate <= cutoff;
 }
 
+// Meme marge que pour la BDD de joueurs pour le plafond de reputation
+// mondiale du staff (mode "interesse par transfert").
+const SDB_REPUTATION_MARGIN_RATIO = 0.03;
+// Au-dela de ce nombre d'annees de contrat restant, un membre du staff
+// vient generalement de signer/prolonger et n'est pas interesse par un
+// transfert, quelle que soit sa reputation.
+const SDB_LONG_CONTRACT_YEARS = 5;
+
 function applyStaffDbFilters(opts = {}) {
   const q = document.getElementById("sdbSearchInput").value.trim().toLowerCase();
   const poste = document.getElementById("sdbPosteSelect").value;
@@ -3174,8 +3261,43 @@ function applyStaffDbFilters(opts = {}) {
   const ageMax = document.getElementById("sdbAgeMaxInput").value;
   const salMin = document.getElementById("sdbSalMinInput").value;
   const salMax = document.getElementById("sdbSalMaxInput").value;
+  const interestedOnly = document.getElementById("sdbTransferCheckbox").checked;
 
   let filtered = sdbAllStaff;
+
+  if (interestedOnly) {
+    // Decoche = toute la BDD. Coche = le staff potentiellement interesse par
+    // un transfert vers ton club, sur la base de la reputation mondiale
+    // (RM) du staff comparee a celle du club (meme principe que la BDD de
+    // joueurs) :
+    // - reputation mondiale sous un PLAFOND (reputation du club + petite
+    //   marge) — tout le monde en dessous est inclus, pas seulement ceux
+    //   tres proches ; on exclut seulement les nettement plus reputes ;
+    // - on exclut aussi ceux dont le club actuel est plus repute que le
+    //   tien (generalement peu interesses par un transfert "vers moins bien") ;
+    // - on exclut ceux avec plus de 5 ans de contrat restant.
+    if (sdbClubReputation != null) {
+      const repMargin = Math.max(sdbClubReputation * SDB_REPUTATION_MARGIN_RATIO, 50);
+      const repCeiling = sdbClubReputation + repMargin;
+
+      const longContractCutoff = getPdbGameToday();
+      longContractCutoff.setFullYear(longContractCutoff.getFullYear() + SDB_LONG_CONTRACT_YEARS);
+
+      filtered = filtered.filter(s => {
+        const r = Number(s.reputation_mondiale);
+        if (!Number.isFinite(r) || r > repCeiling) return false;
+        const staffClubRep = s.game_club_id != null ? sdbClubReputationById[s.game_club_id] : null;
+        if (staffClubRep != null && staffClubRep > sdbClubReputation) return false;
+        if (s.contrat_expire) {
+          const expireDate = new Date(`${s.contrat_expire}T00:00:00`);
+          if (!isNaN(expireDate.getTime()) && expireDate > longContractCutoff) return false;
+        }
+        return true;
+      });
+    } else {
+      filtered = [];
+    }
+  }
 
   if (q) filtered = filtered.filter(s => (s.nom || "").toLowerCase().includes(q));
   if (poste) filtered = filtered.filter(s => (s.poste || "").trim() === poste);
@@ -3197,7 +3319,8 @@ function applyStaffDbFilters(opts = {}) {
   const countEl = document.getElementById("sdbCount");
   const total = sdbAllStaff.length;
   const loadingSuffix = sdbLoadingComplete ? "" : " (chargement en cours...)";
-  countEl.innerHTML = `<strong>${filtered.length}</strong> membre${filtered.length > 1 ? "s" : ""} du staff trouvé${filtered.length > 1 ? "s" : ""} sur ${total}${loadingSuffix}`;
+  const repHint = interestedOnly && sdbClubReputation == null ? ` <span class="pdb-hint">— réputation du club introuvable</span>` : "";
+  countEl.innerHTML = `<strong>${filtered.length}</strong> membre${filtered.length > 1 ? "s" : ""} du staff trouvé${filtered.length > 1 ? "s" : ""} sur ${total}${repHint}${loadingSuffix}`;
 }
 
 function sdbAttrCell(val) {
@@ -3208,8 +3331,8 @@ function renderStaffDbTable(members) {
   const tbody = document.getElementById("sdbTableBody");
   if (members.length === 0) {
     tbody.innerHTML = !sdbLoadingComplete
-      ? `<tr><td colspan="21" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
-      : `<tr><td colspan="21" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
+      ? `<tr><td colspan="20" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
+      : `<tr><td colspan="20" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
     renderSdbPagination(0, 1);
     return;
   }
@@ -3226,16 +3349,15 @@ function renderStaffDbTable(members) {
       : "-";
     const age = s.age ?? "-";
     const nation = s.nationalite;
-    const nationCell = nation ? nationLabel(nation) : "-";
+    const flagPrefix = nation ? nationFlagOnly(nation) : "";
     const salaireCell = s.salaire_actuel != null ? `${escapeHtml(formatMoney(s.salaire_actuel))} / mois` : "-";
 
     return `
       <tr data-staff-id="${s.id}" data-club="${s.game_club_id ?? ""}">
-        <td class="pdb-name-cell">${escapeHtml(s.nom || "-")}</td>
+        <td class="pdb-name-cell">${flagPrefix}${escapeHtml(s.nom || "-")}</td>
         <td>${escapeHtml(s.poste || "-")}</td>
         <td>${clubCell}</td>
         <td>${escapeHtml(String(age))}</td>
-        <td>${nationCell}</td>
         <td>${escapeHtml(s.personnalite || "-")}</td>
         <td>${sdbAttrCell(s.eval_joueurs)}</td>
         <td>${sdbAttrCell(s.eval_potentiel)}</td>
@@ -3297,6 +3419,7 @@ function wireStaffDbFilters(clubId) {
   document.getElementById("sdbSearchInput").addEventListener("input", () => applyStaffDbFilters());
   document.getElementById("sdbPosteSelect").addEventListener("change", () => applyStaffDbFilters());
   document.getElementById("sdbContractSelect").addEventListener("change", () => applyStaffDbFilters());
+  document.getElementById("sdbTransferCheckbox").addEventListener("change", () => applyStaffDbFilters());
   ["sdbAgeMinInput", "sdbAgeMaxInput", "sdbSalMinInput", "sdbSalMaxInput"].forEach(id => {
     document.getElementById(id).addEventListener("change", () => applyStaffDbFilters());
   });
@@ -3365,6 +3488,7 @@ function wireStaffDbFilters(clubId) {
     document.getElementById("sdbAgeMaxInput").value = "";
     document.getElementById("sdbSalMinInput").value = "";
     document.getElementById("sdbSalMaxInput").value = "";
+    document.getElementById("sdbTransferCheckbox").checked = true;
     sdbNationValue = "";
     sdbCategoryValue = "";
     document.querySelectorAll("#sdbCategoryFilters .staff-role-chip").forEach(c => {
