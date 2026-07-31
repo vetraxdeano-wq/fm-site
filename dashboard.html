@@ -496,7 +496,16 @@
   .pdb-attr-row label {
     display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 3px;
   }
-  .pdb-attr-row input[type="number"] { width: 60px; }
+  .pdb-attr-row input[type="number"] { width: 44px; text-align: center; }
+  .pdb-attr-input-group { display: flex; align-items: center; gap: 4px; }
+  .pdb-attr-step {
+    flex: 0 0 auto; width: 24px; height: 24px; padding: 0;
+    background: #14171d; border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 5px; font-size: 12px; font-weight: 700; line-height: 1;
+    display: flex; align-items: center; justify-content: center; user-select: none;
+  }
+  .pdb-attr-step:hover { background: var(--accent-dim); color: var(--text); border-color: var(--accent-dim); }
+  .pdb-attr-step:active { filter: brightness(1.15); }
 
   .fm-stat-row {
     display: flex; justify-content: space-between; align-items: baseline;
@@ -1429,6 +1438,7 @@ function wirePdbSortableHeaders() {
       updatePdbSortHeaderIndicators();
       pdbCurrentPage = 1;
       renderPlayersDbTable(pdbLastFiltered);
+      savePdbFiltersToCache();
     });
   });
 }
@@ -1580,6 +1590,155 @@ let pdbAdvancedFilters = {
 };
 let pdbAdvModalBuilt = false;
 
+// ---- Memorisation de la BDD de joueurs et des filtres ---------------------
+// Objectif : eviter de re-telecharger les 10aines de milliers de joueurs
+// depuis Supabase (et de perdre les filtres en cours) a chaque fois qu'on
+// revient sur cette page (typiquement apres avoir ouvert la fiche d'un
+// joueur puis fait "retour"). La liste complete des joueurs (potentiellement
+// volumineuse) est memorisee en IndexedDB (quota bien plus large que
+// sessionStorage/localStorage, et pas besoin de la re-serialiser en JSON a
+// chaque frame). Les filtres (recherche, poste, filtres avances...) sont eux
+// memorises en sessionStorage : c'est plus leger et ca ne survit pas a la
+// fermeture de l'onglet, ce qui evite de rouvrir un jour plus tard une partie
+// avec des filtres d'une autre session.
+const PDB_IDB_NAME = "fm_pdb_cache";
+const PDB_IDB_STORE = "playersCache";
+const PDB_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min : au-dela, on prefere re-telecharger pour eviter des donnees trop perimees.
+
+function pdbCacheKey(clubId) {
+  return `${gameId}::${clubId ?? pdbUserClubId ?? "none"}`;
+}
+
+function pdbFiltersCacheKey() {
+  return `fm_pdb_filters::${gameId}`;
+}
+
+function openPdbIdb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error("IndexedDB indisponible")); return; }
+    const req = indexedDB.open(PDB_IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(PDB_IDB_STORE)) db.createObjectStore(PDB_IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Sauvegarde "best effort" : si ca echoue (quota, navigateur en mode prive,
+// IndexedDB indisponible...), on log simplement et on continue normalement —
+// la seule consequence est de retomber sur un rechargement complet la
+// prochaine fois.
+async function savePdbPlayersToCache(clubId) {
+  try {
+    const db = await openPdbIdb();
+    const tx = db.transaction(PDB_IDB_STORE, "readwrite");
+    tx.objectStore(PDB_IDB_STORE).put({
+      players: pdbAllPlayers.map(({ _atomicPostes, ...rest }) => rest),
+      clubNameById: pdbClubNameById,
+      clubReputationById: pdbClubReputationById,
+      clubReputation: pdbClubReputation,
+      totalPlayers: pdbTotalPlayers,
+      savedAt: Date.now(),
+    }, pdbCacheKey(clubId));
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  } catch (e) {
+    console.warn("Cache BDD joueurs : sauvegarde impossible, on continue sans.", e);
+  }
+}
+
+async function loadPdbPlayersFromCache(clubId) {
+  try {
+    const db = await openPdbIdb();
+    const tx = db.transaction(PDB_IDB_STORE, "readonly");
+    const req = tx.objectStore(PDB_IDB_STORE).get(pdbCacheKey(clubId));
+    const data = await new Promise((res, rej) => {
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+    if (!data || !Array.isArray(data.players) || !data.players.length) return false;
+    if (Date.now() - (data.savedAt || 0) > PDB_CACHE_TTL_MS) return false;
+
+    data.players.forEach(p => { p._atomicPostes = computePlayerAtomicPostes(p); });
+    pdbAllPlayers = data.players;
+    pdbClubNameById = data.clubNameById || {};
+    pdbClubReputationById = data.clubReputationById || {};
+    pdbClubReputation = data.clubReputation ?? null;
+    pdbTotalPlayers = data.totalPlayers || data.players.length;
+    pdbKnownClubIds = new Set(Object.keys(pdbClubNameById));
+    pdbKnownRepClubIds = new Set(Object.keys(pdbClubReputationById));
+    pdbLoadingComplete = true;
+    pdbLoaded = true;
+    return true;
+  } catch (e) {
+    console.warn("Cache BDD joueurs : lecture impossible, rechargement normal.", e);
+    return false;
+  }
+}
+
+function getPdbFiltersSnapshot() {
+  return {
+    q: document.getElementById("pdbSearchInput")?.value || "",
+    poste: document.getElementById("pdbPosteSelect")?.value || "",
+    nation: pdbNationValue || "",
+    contractValue: document.getElementById("pdbContractSelect")?.value || "",
+    interestedOnly: !!document.getElementById("pdbTransferCheckbox")?.checked,
+    advancedFilters: pdbAdvancedFilters,
+    sortKey: pdbSortKey,
+    sortDir: pdbSortDir,
+    currentPage: pdbCurrentPage,
+  };
+}
+
+function savePdbFiltersToCache() {
+  try {
+    sessionStorage.setItem(pdbFiltersCacheKey(), JSON.stringify(getPdbFiltersSnapshot()));
+  } catch (e) {
+    // Stockage plein/indisponible : les filtres ne seront pas restaures au
+    // retour sur la page, mais rien d'autre n'est impacte.
+  }
+}
+
+function restorePdbFiltersFromCache() {
+  let state;
+  try {
+    const raw = sessionStorage.getItem(pdbFiltersCacheKey());
+    if (!raw) return false;
+    state = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+  if (!state) return false;
+
+  const searchInput = document.getElementById("pdbSearchInput");
+  if (searchInput) searchInput.value = state.q || "";
+
+  const posteSelect = document.getElementById("pdbPosteSelect");
+  if (posteSelect && state.poste) posteSelect.value = state.poste;
+
+  pdbNationValue = state.nation || "";
+  updateNationTriggerLabel();
+
+  const contractSelect = document.getElementById("pdbContractSelect");
+  if (contractSelect) contractSelect.value = state.contractValue || "";
+
+  const transferCheckbox = document.getElementById("pdbTransferCheckbox");
+  if (transferCheckbox) transferCheckbox.checked = !!state.interestedOnly;
+
+  if (state.advancedFilters) {
+    pdbAdvancedFilters = state.advancedFilters;
+    populateAdvancedFiltersInputs();
+  }
+  updateMoreFiltersButtonLabel();
+
+  pdbSortKey = state.sortKey || null;
+  pdbSortDir = state.sortDir || "asc";
+  pdbCurrentPage = state.currentPage || 1;
+
+  return true;
+}
+
 async function showFmPlayersDbView(clubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
   document.getElementById("fmPlayersDbView").classList.remove("hidden");
@@ -1590,10 +1749,23 @@ async function showFmPlayersDbView(clubId) {
   pdbUserClubId = clubId;
   wirePlayersDbFilters(clubId);
 
-  if (!pdbLoaded) {
-    await loadPlayersDb(clubId);
-  } else {
+  if (pdbLoaded) {
     applyPlayersDbFilters(clubId);
+    return;
+  }
+
+  // Reprend la liste et les filtres d'un passage precedent (memorises en
+  // IndexedDB) plutot que de tout retelecharger depuis Supabase, ex: quand on
+  // revient de la fiche d'un joueur.
+  const restoredFromCache = await loadPdbPlayersFromCache(clubId);
+  if (restoredFromCache) {
+    populatePlayersDbFilterOptions();
+    buildAdvancedFiltersModal();
+    restorePdbFiltersFromCache();
+    updatePdbSortHeaderIndicators();
+    applyPlayersDbFilters(clubId, { resetPage: false });
+  } else {
+    await loadPlayersDb(clubId);
   }
 }
 
@@ -1638,6 +1810,25 @@ function wirePlayersDbFilters(clubId) {
     resetAdvancedFilters();
     updateMoreFiltersButtonLabel();
     applyPlayersDbFilters(clubId);
+  });
+
+  // Boutons +1/-1 a cote de chaque attribut, pour ajuster le seuil sans avoir
+  // a taper chaque valeur a la main. Delegue sur le conteneur (statique dans
+  // le DOM) plutot que sur chaque input, car buildAdvancedFiltersModal peut
+  // regenerer le contenu (ex: quand la liste des personnalites se complete).
+  document.getElementById("pdbFiltersModalBody").addEventListener("click", (e) => {
+    const stepBtn = e.target.closest(".pdb-attr-step");
+    if (!stepBtn) return;
+    const input = document.getElementById(stepBtn.dataset.attrTarget);
+    if (!input) return;
+    const min = Number(input.min) || 1;
+    const max = Number(input.max) || 20;
+    const step = Number(stepBtn.dataset.step);
+    let current = input.value === "" ? (step > 0 ? min - 1 : min) : Number(input.value);
+    if (!Number.isFinite(current)) current = min - 1;
+    let next = Math.min(max, Math.max(min, current + step));
+    input.value = next;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   });
 
   document.getElementById("pdbMoreFiltersBtn").addEventListener("click", () => openAdvancedFiltersModal());
@@ -1793,7 +1984,8 @@ async function loadPlayersDb(clubId) {
       pdbLoadingComplete = true;
       populatePlayersDbFilterOptions();
       buildAdvancedFiltersModal();
-      applyPlayersDbFilters(clubId);
+      restorePdbFiltersFromCache();
+      applyPlayersDbFilters(clubId, { resetPage: false });
       return;
     }
 
@@ -1811,7 +2003,9 @@ async function loadPlayersDb(clubId) {
     pdbLoaded = true;
     populatePlayersDbFilterOptions();
     buildAdvancedFiltersModal();
-    applyPlayersDbFilters(clubId);
+    restorePdbFiltersFromCache();
+    updatePdbSortHeaderIndicators();
+    applyPlayersDbFilters(clubId, { resetPage: false });
 
     // 2) Reste des joueurs, en arriere-plan, par lots.
     const remainingStarts = [];
@@ -1836,6 +2030,10 @@ async function loadPlayersDb(clubId) {
     pdbAdvModalBuilt = false;
     buildAdvancedFiltersModal();
     applyPlayersDbFilters(clubId, { resetPage: false });
+    // Chargement complet : on memorise la liste pour les prochains passages
+    // sur cette page (retour depuis une fiche joueur, etc.). Ne bloque pas
+    // l'affichage, se fait en arriere-plan.
+    savePdbPlayersToCache(clubId);
   } catch (e) {
     console.error(e);
     if (!pdbAllPlayers.length) {
@@ -2086,6 +2284,8 @@ function applyPlayersDbFilters(clubId, opts = {}) {
   countEl.innerHTML = `<strong>${filtered.length}</strong> joueur${filtered.length > 1 ? "s" : ""} trouvé${filtered.length > 1 ? "s" : ""} sur ${total}` +
     (interestedOnly && pdbClubReputation == null ? ` <span class="pdb-hint">— réputation du club introuvable</span>` : "") +
     loadingHint;
+
+  savePdbFiltersToCache();
 }
 
 // Determine le pied fort a partir des notes textuelles pied_gauche/pied_droit
@@ -2202,12 +2402,14 @@ function renderPdbPagination(totalCount, totalPages) {
     pdbCurrentPage--;
     renderPlayersDbTable(pdbLastFiltered);
     document.querySelector(".pdb-table-wrap")?.scrollTo?.({ top: 0 });
+    savePdbFiltersToCache();
   });
   if (nextBtn) nextBtn.addEventListener("click", () => {
     if (pdbCurrentPage >= totalPages) return;
     pdbCurrentPage++;
     renderPlayersDbTable(pdbLastFiltered);
     document.querySelector(".pdb-table-wrap")?.scrollTo?.({ top: 0 });
+    savePdbFiltersToCache();
   });
 }
 
@@ -2282,7 +2484,11 @@ function buildAdvancedFiltersModal() {
         ${g.attrs.map(([key, label]) => `
           <div class="pdb-attr-row">
             <label for="pdbAdvAttr_${key}">${escapeHtml(label)} (min)</label>
-            <input type="number" id="pdbAdvAttr_${key}" data-attr="${key}" min="1" max="20" placeholder="—">
+            <div class="pdb-attr-input-group">
+              <button type="button" class="pdb-attr-step" data-step="-1" data-attr-target="pdbAdvAttr_${key}" aria-label="Diminuer">−1</button>
+              <input type="number" id="pdbAdvAttr_${key}" data-attr="${key}" min="1" max="20" placeholder="—">
+              <button type="button" class="pdb-attr-step" data-step="1" data-attr-target="pdbAdvAttr_${key}" aria-label="Augmenter">+1</button>
+            </div>
           </div>
         `).join("")}
       </div>
