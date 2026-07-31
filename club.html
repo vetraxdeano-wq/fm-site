@@ -270,10 +270,21 @@
     padding: 14px 16px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
   }
   .staff-column:hover { border-color: var(--gold); transform: translateY(-1px); }
-  .staff-col-recap { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
-  .staff-recap-count { font-size: 11px; color: var(--text-dim); }
-  .staff-recap-count .pos { color: #6bcf7f; }
-  .staff-recap-count .neg { color: #e2725b; }
+  .staff-col-recap { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .staff-recap-count {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    font-size: 11.5px; color: var(--text-dim);
+  }
+  .staff-recap-count b { color: var(--text); font-weight: 800; }
+  .staff-recap-rank { font-size: 10.5px; font-weight: 700; white-space: nowrap; color: var(--text-dim); }
+  .staff-recap-rank.pos { color: #6bcf7f; }
+  .staff-recap-rank.neg { color: #e2725b; }
+  .staff-recap-roles { display: flex; flex-wrap: wrap; gap: 5px; }
+  .staff-role-mini-chip {
+    background: rgba(255,255,255,0.05); border-radius: 6px; padding: 2px 7px;
+    font-size: 10.5px; color: var(--text-dim);
+  }
+  .staff-role-mini-chip b { color: var(--text); font-weight: 700; margin-left: 3px; }
   .staff-recap-attr {
     display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; color: var(--text-dim);
     flex-wrap: wrap;
@@ -1126,11 +1137,12 @@ let leagueStaffStats = null;
 async function fetchLeagueStaffStats(gid) {
   const { data: clubs } = await supabaseClient
     .from("game_clubs").select("id").eq("game_id", gid);
-  const numClubs = (clubs || []).length || 1;
+  const clubIds = (clubs || []).map(c => c.id);
+  const numClubs = clubIds.length || 1;
 
   const { data: gameStaffRows, error: gsErr } = await supabaseClient
     .from("game_staff")
-    .select("id, staff_ref, poste")
+    .select("id, staff_ref, poste, game_club_id")
     .eq("game_id", gid);
   if (gsErr || !gameStaffRows) return { numClubs, depts: {} };
 
@@ -1150,13 +1162,18 @@ async function fetchLeagueStaffStats(gid) {
   gameStaffRows.forEach(r => {
     const dept = staffDepartmentFor(r.poste);
     const attrs = staffByRef[r.staff_ref] || {};
-    if (!depts[dept]) depts[dept] = { count: 0, sums: {}, counts: {} };
+    if (!depts[dept]) depts[dept] = { count: 0, sums: {}, counts: {}, byClub: {} };
     depts[dept].count++;
+    const cid = r.game_club_id;
+    if (!depts[dept].byClub[cid]) depts[dept].byClub[cid] = { count: 0, sums: {}, counts: {} };
+    depts[dept].byClub[cid].count++;
     (STAFF_DEPT_ATTRS[dept] || []).forEach(([key]) => {
       const val = Number(attrs[key]);
       if (Number.isFinite(val)) {
         depts[dept].sums[key] = (depts[dept].sums[key] || 0) + val;
         depts[dept].counts[key] = (depts[dept].counts[key] || 0) + 1;
+        depts[dept].byClub[cid].sums[key] = (depts[dept].byClub[cid].sums[key] || 0) + val;
+        depts[dept].byClub[cid].counts[key] = (depts[dept].byClub[cid].counts[key] || 0) + 1;
       }
     });
   });
@@ -1164,6 +1181,30 @@ async function fetchLeagueStaffStats(gid) {
     d.avgPerClub = d.count / numClubs;
     d.avgAttrs = {};
     Object.keys(d.sums).forEach(key => { d.avgAttrs[key] = d.sums[key] / d.counts[key]; });
+
+    // Classement des clubs sur ce departement : score = moyenne des moyennes
+    // d'attributs cles (a effectif egal, un club avec un staff plus fort
+    // remonte dans le classement). Les clubs sans staff evalue dans ce
+    // departement sont places en fin de classement (tries par effectif).
+    const attrKeys = Object.keys(d.sums);
+    const scored = clubIds.map(cid => {
+      const cd = d.byClub[cid] || { count: 0, sums: {}, counts: {} };
+      let score = null;
+      if (attrKeys.length > 0) {
+        const avgs = attrKeys.map(k => (cd.counts[k] ? cd.sums[k] / cd.counts[k] : null)).filter(v => v != null);
+        if (avgs.length > 0) score = avgs.reduce((a, b) => a + b, 0) / avgs.length;
+      }
+      return { cid, count: cd.count, score };
+    });
+    scored.sort((a, b) => {
+      if (a.score == null && b.score == null) return b.count - a.count;
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return b.score - a.score;
+    });
+    d.rankByClub = {};
+    scored.forEach((s, i) => { d.rankByClub[s.cid] = i + 1; });
+    d.numClubsRanked = scored.length;
   });
 
   return { numClubs, depts };
@@ -1252,7 +1293,7 @@ function renderStaffColumns(locked) {
           <span>${info.icon} ${info.label}</span>
           <span class="count">${members.length}</span>
         </div>
-        ${renderStaffColRecap(dept, members, locked)}
+        ${renderStaffColRecap(dept, members, locked, staffLoadedForClub)}
         <div class="staff-col-open-hint">Voir le détail →</div>
       </div>
     `;
@@ -1263,19 +1304,38 @@ function renderStaffColumns(locked) {
   });
 }
 
-// Recap affiche sur chaque colonne : effectif (compare a la moyenne de la
-// ligue par club) + moyenne des attributs cles du departement, avec un ecart
-// (▲/▼) par rapport a la moyenne de la ligue sur ces memes attributs.
-function renderStaffColRecap(dept, members, locked) {
+// Recap affiche sur chaque colonne, dans l'ordre :
+// 1) effectif du departement + classement du club sur ce departement (parmi
+//    tous les clubs de la ligue, base sur le niveau moyen du secteur) ;
+// 2) repartition des effectifs par intitule de poste exact, pour voir d'un
+//    coup d'oeil "combien de X, combien de Y" sans ouvrir le detail ;
+// 3) moyenne des attributs cles du departement, avec ecart (▲/▼) vs la
+//    moyenne de la ligue sur ces memes attributs.
+function renderStaffColRecap(dept, members, locked, clubId) {
   const league = leagueStaffStats?.depts?.[dept];
-  const leagueAvgPerClub = league ? league.avgPerClub : null;
+  const rank = league?.rankByClub?.[clubId];
+  const totalRanked = league?.numClubsRanked;
 
-  const countHtml = leagueAvgPerClub != null
-    ? `<div class="staff-recap-count">Moy. ligue : <span class="${members.length >= leagueAvgPerClub ? "pos" : "neg"}">${leagueAvgPerClub.toFixed(1)} / club</span></div>`
+  let rankHtml = "";
+  if (rank != null && totalRanked) {
+    const tier = rank <= Math.ceil(totalRanked / 3) ? "pos" : (rank > Math.ceil(totalRanked * 2 / 3) ? "neg" : "");
+    const ord = rank === 1 ? "ᵉʳ" : "ᵉ";
+    rankHtml = `<span class="staff-recap-rank ${tier}">${rank}${ord} / ${totalRanked} clubs</span>`;
+  }
+  const countHtml = `<div class="staff-recap-count"><span>Effectif : <b>${members.length}</b></span>${rankHtml}</div>`;
+
+  const roleCounts = {};
+  members.forEach(m => {
+    const role = (m.poste || "Autre").trim();
+    roleCounts[role] = (roleCounts[role] || 0) + 1;
+  });
+  const roleNames = Object.keys(roleCounts).sort((a, b) => roleCounts[b] - roleCounts[a] || a.localeCompare(b, "fr"));
+  const rolesHtml = roleNames.length > 0
+    ? `<div class="staff-recap-roles">${roleNames.map(r => `<span class="staff-role-mini-chip">${escapeHtml(r)}<b>${roleCounts[r]}</b></span>`).join("")}</div>`
     : "";
 
   if (locked) {
-    return `<div class="staff-col-recap">${countHtml}<div class="staff-col-empty" style="padding:0;">🔒 Statistiques verrouillées</div></div>`;
+    return `<div class="staff-col-recap">${countHtml}${rolesHtml}<div class="staff-col-empty" style="padding:0;">🔒 Statistiques verrouillées</div></div>`;
   }
 
   const attrDefs = STAFF_DEPT_ATTRS[dept] || [];
@@ -1285,12 +1345,12 @@ function renderStaffColRecap(dept, members, locked) {
     const ownAvg = vals.reduce((a, b) => a + b, 0) / vals.length;
     const leagueAvg = league?.avgAttrs?.[key];
     const diffHtml = leagueAvg != null
-      ? `<span class="staff-recap-vs ${ownAvg >= leagueAvg ? "pos" : "neg"}">${ownAvg >= leagueAvg ? "▲" : "▼"} ${Math.abs(ownAvg - leagueAvg).toFixed(1)} vs ligue</span>`
+      ? `<span class="staff-recap-vs ${ownAvg >= leagueAvg ? "pos" : "neg"}">${ownAvg >= leagueAvg ? "▲" : "▼"} ${Math.abs(ownAvg - leagueAvg).toFixed(1)} vs moy. ligue</span>`
       : "";
     return `<div class="staff-recap-attr"><span>${label}</span><b>${ownAvg.toFixed(1)}/20</b>${diffHtml}</div>`;
   }).join("");
 
-  return `<div class="staff-col-recap">${countHtml}${attrHtml}</div>`;
+  return `<div class="staff-col-recap">${countHtml}${rolesHtml}${attrHtml}</div>`;
 }
 
 // Modal "secteur" : liste des membres d'un departement, chacun cliquable
