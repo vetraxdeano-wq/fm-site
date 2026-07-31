@@ -1825,16 +1825,25 @@ let leagueStaffStats = null;
 // par departement : l'effectif moyen par club et la moyenne des attributs
 // pertinents, pour permettre la comparaison affichee sur les colonnes.
 async function fetchLeagueStaffStats(gid) {
-  const { data: clubs } = await supabaseClient
+  const { data: clubs, error: clubsErr } = await supabaseClient
     .from("game_clubs").select("id").eq("game_id", gid);
-  const clubIds = (clubs || []).map(c => c.id);
-  const numClubs = clubIds.length || 1;
+  if (clubsErr) console.error("fetchLeagueStaffStats: erreur chargement game_clubs", clubsErr);
+  let clubIds = (clubs || []).map(c => c.id);
 
   const { data: gameStaffRows, error: gsErr } = await supabaseClient
     .from("game_staff")
     .select("id, staff_ref, poste, game_club_id")
     .eq("game_id", gid);
-  if (gsErr || !gameStaffRows) return { numClubs, depts: {} };
+  if (gsErr) console.error("fetchLeagueStaffStats: erreur chargement game_staff", gsErr);
+  if (gsErr || !gameStaffRows) return { numClubs: clubIds.length || 1, depts: {} };
+
+  // Filet de securite : si la requete game_clubs n'a rien renvoye (erreur
+  // silencieuse, RLS...), on reconstruit au moins la liste des clubs a
+  // partir du staff deja recupere, pour ne pas perdre tout le classement.
+  if (clubIds.length === 0) {
+    clubIds = [...new Set(gameStaffRows.map(r => r.game_club_id).filter(v => v != null))];
+  }
+  const numClubs = clubIds.length || 1;
 
   const refs = [...new Set(gameStaffRows.map(r => r.staff_ref).filter(Boolean))];
   let staffByRef = {};
