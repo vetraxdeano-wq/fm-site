@@ -1137,16 +1137,6 @@
                 <input type="number" id="sdbSalMaxInput" step="1" min="0" placeholder="Max">
               </div>
             </div>
-            <div class="pdb-field">
-              <label for="sdbSortSelect">Trier par</label>
-              <select id="sdbSortSelect">
-                <option value="reputation">Réputation</option>
-                <option value="nom">Nom (A → Z)</option>
-                <option value="salaire">Salaire (plus haut)</option>
-                <option value="contrat">Fin de contrat (plus proche)</option>
-                <option value="connaissance_tactique">Connaissance tactique</option>
-              </select>
-            </div>
             <button class="pdb-reset-btn" id="sdbResetBtn" type="button">Effacer les filtres</button>
           </div>
 
@@ -1158,8 +1148,31 @@
 
           <div class="pdb-count" id="sdbCount">Chargement...</div>
 
-          <div class="sdb-cards-grid" id="sdbCardsGrid">
-            <div class="sdb-empty-cell">Chargement du staff...</div>
+          <div class="pdb-table-wrap">
+            <table class="pdb-table">
+              <thead>
+                <tr>
+                  <th class="pdb-sortable" data-sort-key="nom" data-label="Nom">Nom</th>
+                  <th class="pdb-sortable" data-sort-key="poste" data-label="Poste">Poste</th>
+                  <th class="pdb-sortable" data-sort-key="club" data-label="Club">Club</th>
+                  <th class="pdb-sortable" data-sort-key="age" data-label="Âge">Âge</th>
+                  <th class="pdb-sortable" data-sort-key="nation" data-label="Nation">Nation</th>
+                  <th class="pdb-sortable" data-sort-key="personnalite" data-label="Personnalité">Personnalité</th>
+                  <th class="pdb-sortable" data-sort-key="eval_joueurs" data-label="Éval. joueurs">Éval. joueurs</th>
+                  <th class="pdb-sortable" data-sort-key="eval_potentiel" data-label="Éval. potentiel">Éval. potentiel</th>
+                  <th class="pdb-sortable" data-sort-key="niveau_tactique" data-label="Tactique">Tactique</th>
+                  <th class="pdb-sortable" data-sort-key="niveau_attaque" data-label="Attaque">Attaque</th>
+                  <th class="pdb-sortable" data-sort-key="niveau_defense" data-label="Défense">Défense</th>
+                  <th class="pdb-sortable" data-sort-key="formation_jeunes" data-label="Formation jeunes">Formation jeunes</th>
+                  <th class="pdb-sortable" data-sort-key="connaissance_tactique" data-label="Connaissance tactique">Connaissance tactique</th>
+                  <th class="pdb-sortable" data-sort-key="salaire" data-label="Salaire">Salaire</th>
+                  <th class="pdb-sortable" data-sort-key="contrat" data-label="Fin de contrat">Fin de contrat</th>
+                </tr>
+              </thead>
+              <tbody id="sdbTableBody">
+                <tr><td colspan="15" class="pdb-empty-cell">Chargement du staff...</td></tr>
+              </tbody>
+            </table>
           </div>
           <div class="pdb-pagination" id="sdbPagination"></div>
         </div>
@@ -2426,6 +2439,7 @@ async function showStaffDbSubtab(clubId) {
   if (restoredFromCache) {
     populateStaffDbFilterOptions();
     restoreSdbFiltersFromCache();
+    updateSdbSortHeaderIndicators();
     applyStaffDbFilters({ resetPage: false });
     if (!sdbLoadingComplete) {
       loadRemainingStaffDb();
@@ -2457,23 +2471,76 @@ let sdbCurrentPage = 1;
 let sdbLastFiltered = [];
 const SDB_PAGE_SIZE = 40;
 
-const SDB_SORT_ACCESSORS = {
-  reputation: s => { const v = Number(s.reputation_mondiale); return Number.isFinite(v) ? -v : Infinity; },
+// Tri par colonne (clic sur l'en-tete), exactement comme pour la BDD de
+// joueurs : le tri s'applique sur l'ensemble du staff filtre (sdbLastFiltered),
+// pas seulement la page affichee, et reste actif au fil du chargement en
+// arriere-plan / des changements de filtre.
+let sdbSortKey = null;
+let sdbSortDir = "asc";
+
+const SDB_SORT_COLUMNS = {
   nom: s => (s.nom || "").toLowerCase(),
-  salaire: s => { const v = Number(s.salaire_actuel); return Number.isFinite(v) ? -v : Infinity; },
-  contrat: s => s.contrat_expire || "9999-99-99",
-  connaissance_tactique: s => { const v = Number(s.connaissance_tactique); return Number.isFinite(v) ? -v : Infinity; },
+  poste: s => (s.poste || "").toLowerCase(),
+  club: s => (s.game_club_id ? (sdbClubNameById[s.game_club_id] || "") : "").toLowerCase(),
+  age: s => Number(s.age),
+  nation: s => nationDisplayName(s.nationalite || "").toLowerCase(),
+  personnalite: s => (s.personnalite || "").toLowerCase(),
+  eval_joueurs: s => Number(s.eval_joueurs),
+  eval_potentiel: s => Number(s.eval_potentiel),
+  niveau_tactique: s => Number(s.niveau_tactique),
+  niveau_attaque: s => Number(s.niveau_attaque),
+  niveau_defense: s => Number(s.niveau_defense),
+  formation_jeunes: s => Number(s.formation_jeunes),
+  connaissance_tactique: s => Number(s.connaissance_tactique),
+  salaire: s => Number(s.salaire_actuel),
+  contrat: s => s.contrat_expire || "",
 };
 
 function applySdbSort() {
-  const sel = document.getElementById("sdbSortSelect");
-  const key = sel ? sel.value : "reputation";
-  const accessor = SDB_SORT_ACCESSORS[key] || SDB_SORT_ACCESSORS.reputation;
+  if (!sdbSortKey) return;
+  const accessor = SDB_SORT_COLUMNS[sdbSortKey];
+  if (!accessor) return;
+  const dir = sdbSortDir === "asc" ? 1 : -1;
   sdbLastFiltered.sort((a, b) => {
-    const va = accessor(a), vb = accessor(b);
-    if (va < vb) return -1;
-    if (va > vb) return 1;
-    return (a.nom || "").localeCompare(b.nom || "", "fr");
+    const va = accessor(a);
+    const vb = accessor(b);
+    const missingA = va == null || va === "" || (typeof va === "number" && !Number.isFinite(va));
+    const missingB = vb == null || vb === "" || (typeof vb === "number" && !Number.isFinite(vb));
+    // Valeurs manquantes toujours en fin de liste, quel que soit le sens du tri.
+    if (missingA && missingB) return 0;
+    if (missingA) return 1;
+    if (missingB) return -1;
+    let cmp = 0;
+    if (va < vb) cmp = -1;
+    else if (va > vb) cmp = 1;
+    return dir === 1 ? cmp : -cmp;
+  });
+}
+
+function updateSdbSortHeaderIndicators() {
+  document.querySelectorAll("#staffDbPanel .pdb-table thead th[data-sort-key]").forEach(th => {
+    const key = th.getAttribute("data-sort-key");
+    const base = th.getAttribute("data-label") || th.textContent;
+    th.textContent = key === sdbSortKey ? `${base} ${sdbSortDir === "asc" ? "▲" : "▼"}` : base;
+  });
+}
+
+function wireSdbSortableHeaders() {
+  document.querySelectorAll("#staffDbPanel .pdb-table thead th[data-sort-key]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort-key");
+      if (sdbSortKey === key) {
+        sdbSortDir = sdbSortDir === "asc" ? "desc" : "asc";
+      } else {
+        sdbSortKey = key;
+        sdbSortDir = "asc";
+      }
+      applySdbSort();
+      updateSdbSortHeaderIndicators();
+      sdbCurrentPage = 1;
+      renderStaffDbTable(sdbLastFiltered);
+      saveSdbFiltersToCache();
+    });
   });
 }
 
@@ -2550,9 +2617,9 @@ async function enrichStaffBatch(gameStaffRows) {
 }
 
 async function loadStaffDb(clubId) {
-  const grid = document.getElementById("sdbCardsGrid");
+  const tbody = document.getElementById("sdbTableBody");
   const countEl = document.getElementById("sdbCount");
-  grid.innerHTML = `<div class="sdb-empty-cell">Chargement du staff...</div>`;
+  tbody.innerHTML = `<tr><td colspan="15" class="pdb-empty-cell">Chargement du staff...</td></tr>`;
   countEl.textContent = "Chargement...";
 
   sdbAllStaff = [];
@@ -2723,7 +2790,8 @@ function getSdbFiltersSnapshot() {
     ageMax: document.getElementById("sdbAgeMaxInput")?.value || "",
     salMin: document.getElementById("sdbSalMinInput")?.value || "",
     salMax: document.getElementById("sdbSalMaxInput")?.value || "",
-    sortKey: document.getElementById("sdbSortSelect")?.value || "reputation",
+    sortKey: sdbSortKey,
+    sortDir: sdbSortDir,
     currentPage: sdbCurrentPage,
   };
 }
@@ -2774,9 +2842,8 @@ function restoreSdbFiltersFromCache() {
   const salMaxInput = document.getElementById("sdbSalMaxInput");
   if (salMaxInput) salMaxInput.value = state.salMax || "";
 
-  const sortSelect = document.getElementById("sdbSortSelect");
-  if (sortSelect) sortSelect.value = state.sortKey || "reputation";
-
+  sdbSortKey = state.sortKey || null;
+  sdbSortDir = state.sortDir || "asc";
   sdbCurrentPage = state.currentPage || 1;
 
   return true;
@@ -2867,7 +2934,7 @@ function applyStaffDbFilters(opts = {}) {
   sdbLastFiltered = filtered;
   applySdbSort();
   if (opts.resetPage !== false) sdbCurrentPage = 1;
-  renderStaffDbCards(sdbLastFiltered);
+  renderStaffDbTable(sdbLastFiltered);
   saveSdbFiltersToCache();
 
   const countEl = document.getElementById("sdbCount");
@@ -2876,10 +2943,16 @@ function applyStaffDbFilters(opts = {}) {
   countEl.innerHTML = `<strong>${filtered.length}</strong> membre${filtered.length > 1 ? "s" : ""} du staff trouvé${filtered.length > 1 ? "s" : ""} sur ${total}${loadingSuffix}`;
 }
 
-function renderStaffDbCards(members) {
-  const grid = document.getElementById("sdbCardsGrid");
+function sdbAttrCell(val) {
+  return Number.isFinite(Number(val)) ? `${escapeHtml(String(val))}/20` : "-";
+}
+
+function renderStaffDbTable(members) {
+  const tbody = document.getElementById("sdbTableBody");
   if (members.length === 0) {
-    grid.innerHTML = `<div class="sdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</div>`;
+    tbody.innerHTML = !sdbLoadingComplete
+      ? `<tr><td colspan="15" class="pdb-empty-cell">Chargement du staff en cours (${sdbAllStaff.length.toLocaleString("fr-FR")}/${sdbTotalStaff.toLocaleString("fr-FR")})... aucun résultat pour l'instant avec ces filtres, ça peut arriver au fil du chargement.</td></tr>`
+      : `<tr><td colspan="15" class="pdb-empty-cell">Aucun membre du staff ne correspond à ces filtres.</td></tr>`;
     renderSdbPagination(0, 1);
     return;
   }
@@ -2890,10 +2963,34 @@ function renderStaffDbCards(members) {
   const startIdx = (sdbCurrentPage - 1) * SDB_PAGE_SIZE;
   const pageItems = members.slice(startIdx, startIdx + SDB_PAGE_SIZE);
 
-  grid.innerHTML = pageItems.map(s => {
-    const dept = staffDepartmentFor(s.poste);
-    const clubName = s.game_club_id ? (sdbClubNameById[s.game_club_id] || "") : "";
-    return staffMemberCardHtml(s, dept, false, { clubName, clubClickable: true, showTactical: true });
+  tbody.innerHTML = pageItems.map(s => {
+    const clubCell = s.game_club_id
+      ? `<span class="pdb-club-link" data-club-id="${s.game_club_id}">${escapeHtml(sdbClubNameById[s.game_club_id] || "-")}</span>`
+      : "-";
+    const age = s.age ?? "-";
+    const nation = s.nationalite;
+    const nationCell = nation ? nationLabel(nation) : "-";
+    const salaireCell = s.salaire_actuel != null ? `${escapeHtml(formatMoney(s.salaire_actuel))} / mois` : "-";
+
+    return `
+      <tr data-staff-id="${s.id}" data-club="${s.game_club_id ?? ""}">
+        <td class="pdb-name-cell">${escapeHtml(s.nom || "-")}</td>
+        <td>${escapeHtml(s.poste || "-")}</td>
+        <td>${clubCell}</td>
+        <td>${escapeHtml(String(age))}</td>
+        <td>${nationCell}</td>
+        <td>${escapeHtml(s.personnalite || "-")}</td>
+        <td>${sdbAttrCell(s.eval_joueurs)}</td>
+        <td>${sdbAttrCell(s.eval_potentiel)}</td>
+        <td>${sdbAttrCell(s.niveau_tactique)}</td>
+        <td>${sdbAttrCell(s.niveau_attaque)}</td>
+        <td>${sdbAttrCell(s.niveau_defense)}</td>
+        <td>${sdbAttrCell(s.formation_jeunes)}</td>
+        <td>${sdbAttrCell(s.connaissance_tactique)}</td>
+        <td>${salaireCell}</td>
+        <td>${escapeHtml(formatContractEnd(s.contrat_expire))}</td>
+      </tr>
+    `;
   }).join("");
 
   renderSdbPagination(members.length, totalPages);
@@ -2915,16 +3012,16 @@ function renderSdbPagination(totalCount, totalPages) {
   if (prevBtn) prevBtn.addEventListener("click", () => {
     if (sdbCurrentPage <= 1) return;
     sdbCurrentPage--;
-    renderStaffDbCards(sdbLastFiltered);
+    renderStaffDbTable(sdbLastFiltered);
     saveSdbFiltersToCache();
-    document.querySelector("#staffDbPanel .sdb-cards-grid")?.scrollTo?.({ top: 0 });
+    document.querySelector("#staffDbPanel .pdb-table-wrap")?.scrollTo?.({ top: 0 });
   });
   if (nextBtn) nextBtn.addEventListener("click", () => {
     if (sdbCurrentPage >= totalPages) return;
     sdbCurrentPage++;
-    renderStaffDbCards(sdbLastFiltered);
+    renderStaffDbTable(sdbLastFiltered);
     saveSdbFiltersToCache();
-    document.querySelector("#staffDbPanel .sdb-cards-grid")?.scrollTo?.({ top: 0 });
+    document.querySelector("#staffDbPanel .pdb-table-wrap")?.scrollTo?.({ top: 0 });
   });
 }
 
@@ -2932,10 +3029,11 @@ function wireStaffDbFilters(clubId) {
   if (sdbFiltersWired) return;
   sdbFiltersWired = true;
 
+  wireSdbSortableHeaders();
+
   document.getElementById("sdbSearchInput").addEventListener("input", () => applyStaffDbFilters());
   document.getElementById("sdbPosteSelect").addEventListener("change", () => applyStaffDbFilters());
   document.getElementById("sdbContractSelect").addEventListener("change", () => applyStaffDbFilters());
-  document.getElementById("sdbSortSelect").addEventListener("change", () => applyStaffDbFilters());
   ["sdbAgeMinInput", "sdbAgeMaxInput", "sdbSalMinInput", "sdbSalMaxInput"].forEach(id => {
     document.getElementById(id).addEventListener("change", () => applyStaffDbFilters());
   });
@@ -2977,26 +3075,28 @@ function wireStaffDbFilters(clubId) {
     document.getElementById("sdbAgeMaxInput").value = "";
     document.getElementById("sdbSalMinInput").value = "";
     document.getElementById("sdbSalMaxInput").value = "";
-    document.getElementById("sdbSortSelect").value = "reputation";
     sdbNationValue = "";
     sdbCategoryValue = "";
     document.querySelectorAll("#sdbCategoryFilters .staff-role-chip").forEach(c => {
       c.classList.toggle("active", (c.getAttribute("data-category") || "") === "");
     });
     updateSdbNationTriggerLabel();
+    sdbSortKey = null;
+    sdbSortDir = "asc";
+    updateSdbSortHeaderIndicators();
     applyStaffDbFilters();
   });
 
-  document.getElementById("sdbCardsGrid").addEventListener("click", (e) => {
+  document.getElementById("sdbTableBody").addEventListener("click", (e) => {
     const clubLink = e.target.closest(".pdb-club-link");
     if (clubLink) {
       const clickedClubId = clubLink.getAttribute("data-club-id");
       if (clickedClubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clickedClubId)}`;
       return;
     }
-    const card = e.target.closest(".staff-member-card[data-staff-id]");
-    if (!card) return;
-    const staffId = card.getAttribute("data-staff-id");
+    const row = e.target.closest("tr[data-staff-id]");
+    if (!row) return;
+    const staffId = row.getAttribute("data-staff-id");
     const member = sdbAllStaff.find(s => String(s.id) === String(staffId));
     if (member) openStaffModal(member, false, null);
   });
