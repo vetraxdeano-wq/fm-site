@@ -506,6 +506,30 @@
   }
   .pdb-attr-step:hover { background: var(--accent-dim); color: var(--text); border-color: var(--accent-dim); }
   .pdb-attr-step:active { filter: brightness(1.15); }
+  .pdb-attr-step.pdb-value-step { width: 32px; font-size: 10px; }
+
+  .pdb-value-range-field { grid-column: 1 / -1; }
+  .pdb-value-range { display: flex; align-items: center; gap: 8px; }
+  .pdb-value-range > span { color: var(--text-dim); font-size: 11px; flex: 0 0 auto; }
+  .pdb-value-input-group { display: flex; align-items: center; gap: 4px; flex: 1 1 0; min-width: 0; }
+  .pdb-value-combo { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+  .pdb-value-combo input[type="number"] { width: 100%; padding-right: 20px; }
+  .pdb-value-presets-btn {
+    position: absolute; right: 1px; top: 1px; bottom: 1px;
+    width: 18px; padding: 0; background: transparent; border: none;
+    color: var(--text-dim); font-size: 9px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pdb-value-presets-btn:hover { color: var(--text); }
+  .pdb-value-presets-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+    background: #14171d; border: 1px solid var(--border); border-radius: 8px;
+    max-height: 220px; overflow-y: auto; box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+  }
+  .pdb-value-preset-option {
+    padding: 6px 10px; font-size: 12px; color: var(--text); cursor: pointer; white-space: nowrap;
+  }
+  .pdb-value-preset-option:hover { background: var(--accent-dim); }
 
   .fm-stat-row {
     display: flex; justify-content: space-between; align-items: baseline;
@@ -1630,6 +1654,21 @@ function openPdbIdb() {
 // IndexedDB indisponible...), on log simplement et on continue normalement —
 // la seule consequence est de retomber sur un rechargement complet la
 // prochaine fois.
+// Sauvegarde "au fur et a mesure" pendant le chargement en arriere-plan :
+// sans ca, si l'utilisateur quitte la page avant la fin des dizaines de
+// milliers de joueurs, rien n'est memorise et tout repart de zero au retour.
+// On throttle les ecritures (l'IDB est asynchrone et pas gratuit) plutot que
+// de sauvegarder a chaque lot recu.
+let pdbLastCacheSaveAt = 0;
+const PDB_CACHE_SAVE_INTERVAL_MS = 3000;
+
+function maybeSavePdbPlayersToCache(clubId, force = false) {
+  const now = Date.now();
+  if (!force && now - pdbLastCacheSaveAt < PDB_CACHE_SAVE_INTERVAL_MS) return;
+  pdbLastCacheSaveAt = now;
+  savePdbPlayersToCache(clubId);
+}
+
 async function savePdbPlayersToCache(clubId) {
   try {
     const db = await openPdbIdb();
@@ -1812,23 +1851,31 @@ function wirePlayersDbFilters(clubId) {
     applyPlayersDbFilters(clubId);
   });
 
-  // Boutons +1/-1 a cote de chaque attribut, pour ajuster le seuil sans avoir
-  // a taper chaque valeur a la main. Delegue sur le conteneur (statique dans
-  // le DOM) plutot que sur chaque input, car buildAdvancedFiltersModal peut
-  // regenerer le contenu (ex: quand la liste des personnalites se complete).
+  // Boutons +1/-1 (et +1M/-1M pour la valeur marchande) a cote des champs de
+  // filtre, pour ajuster un seuil sans avoir a taper chaque valeur a la main.
+  // Delegue sur le conteneur (statique dans le DOM) plutot que sur chaque
+  // input, car buildAdvancedFiltersModal peut regenerer le contenu (ex: quand
+  // la liste des personnalites se complete).
   document.getElementById("pdbFiltersModalBody").addEventListener("click", (e) => {
     const stepBtn = e.target.closest(".pdb-attr-step");
     if (!stepBtn) return;
     const input = document.getElementById(stepBtn.dataset.attrTarget);
     if (!input) return;
-    const min = Number(input.min) || 1;
-    const max = Number(input.max) || 20;
+    const min = input.min !== "" ? Number(input.min) : 1;
+    const max = input.max !== "" ? Number(input.max) : 20;
     const step = Number(stepBtn.dataset.step);
-    let current = input.value === "" ? (step > 0 ? min - 1 : min) : Number(input.value);
-    if (!Number.isFinite(current)) current = min - 1;
-    let next = Math.min(max, Math.max(min, current + step));
+    let current = input.value === "" ? (step > 0 ? min - step : min) : Number(input.value);
+    if (!Number.isFinite(current)) current = min - step;
+    let next = Math.min(max, Math.max(min, Math.round((current + step) * 100) / 100));
     input.value = next;
     input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
+  // Deroulant de montants presets + fermeture au clic exterieur, pour les
+  // champs Min/Max de valeur marchande.
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".pdb-value-combo") || e.target.closest(".pdb-value-presets-btn")) return;
+    document.querySelectorAll(".pdb-value-presets-menu").forEach(m => m.classList.add("hidden"));
   });
 
   document.getElementById("pdbMoreFiltersBtn").addEventListener("click", () => openAdvancedFiltersModal());
@@ -2006,6 +2053,7 @@ async function loadPlayersDb(clubId) {
     restorePdbFiltersFromCache();
     updatePdbSortHeaderIndicators();
     applyPlayersDbFilters(clubId, { resetPage: false });
+    maybeSavePdbPlayersToCache(clubId, true);
 
     // 2) Reste des joueurs, en arriere-plan, par lots.
     const remainingStarts = [];
@@ -2020,6 +2068,7 @@ async function loadPlayersDb(clubId) {
         await refreshPdbClubLookups(batchPlayers, clubId);
         populatePlayersDbFilterOptions();
         applyPlayersDbFilters(clubId, { resetPage: false });
+        maybeSavePdbPlayersToCache(clubId);
       });
     }
 
@@ -2033,7 +2082,7 @@ async function loadPlayersDb(clubId) {
     // Chargement complet : on memorise la liste pour les prochains passages
     // sur cette page (retour depuis une fiche joueur, etc.). Ne bloque pas
     // l'affichage, se fait en arriere-plan.
-    savePdbPlayersToCache(clubId);
+    maybeSavePdbPlayersToCache(clubId, true);
   } catch (e) {
     console.error(e);
     if (!pdbAllPlayers.length) {
@@ -2415,6 +2464,31 @@ function renderPdbPagination(totalCount, totalPages) {
 
 // ---- Popup "+ Ajouter des filtres" -----------------------------------
 
+// ---- Filtre "Valeur marchande" : saisie en M€ plutot qu'en euros bruts (plus
+// facile que de compter les zeros), avec boutons +1M/-1M et une liste
+// deroulante de montants presets (repris des memes paliers que l'affichage
+// en fourchette de la colonne "Valeur marchande" du tableau, pour rester
+// coherent avec le reste de l'appli).
+function renderPdbValuePresetsMenuHtml(targetId) {
+  return PDB_VALEUR_BRACKETS.map(v => `
+    <div class="pdb-value-preset-option" data-value-target="${targetId}" data-preset="${v}">${escapeHtml(formatMoneyShort(v))}</div>
+  `).join("");
+}
+
+function renderPdbValueFieldHtml(id, placeholder) {
+  return `
+    <div class="pdb-value-input-group">
+      <button type="button" class="pdb-attr-step pdb-value-step" data-step="-1" data-attr-target="${id}" aria-label="Diminuer d'1 M€">−1M</button>
+      <div class="pdb-value-combo">
+        <input type="number" id="${id}" step="0.1" min="0" max="999" placeholder="${placeholder}">
+        <button type="button" class="pdb-value-presets-btn" data-menu-target="${id}" aria-label="Montants prédéfinis" tabindex="-1">▾</button>
+        <div class="pdb-value-presets-menu hidden" id="${id}Menu">${renderPdbValuePresetsMenuHtml(id)}</div>
+      </div>
+      <button type="button" class="pdb-attr-step pdb-value-step" data-step="1" data-attr-target="${id}" aria-label="Augmenter d'1 M€">+1M</button>
+    </div>
+  `;
+}
+
 function buildAdvancedFiltersModal() {
   if (pdbAdvModalBuilt) return;
   pdbAdvModalBuilt = true;
@@ -2449,12 +2523,12 @@ function buildAdvancedFiltersModal() {
             <input type="number" id="pdbAdvRepMax" min="0" placeholder="Max">
           </div>
         </div>
-        <div class="pdb-range-field">
-          <label>Valeur marchande (€)</label>
-          <div class="pdb-range-inputs">
-            <input type="number" id="pdbAdvValMin" min="0" placeholder="Min">
+        <div class="pdb-range-field pdb-value-range-field">
+          <label>Valeur marchande (M€)</label>
+          <div class="pdb-value-range">
+            ${renderPdbValueFieldHtml("pdbAdvValMin", "Min")}
             <span>–</span>
-            <input type="number" id="pdbAdvValMax" min="0" placeholder="Max">
+            ${renderPdbValueFieldHtml("pdbAdvValMax", "Max")}
           </div>
         </div>
         <div class="pdb-select-field">
@@ -2497,12 +2571,80 @@ function buildAdvancedFiltersModal() {
 
   document.getElementById("pdbFiltersModalBody").innerHTML = generalHtml + groupsHtml;
 
+  // Tous les champs (generaux et attributs) sauvegardent l'etat des filtres
+  // des qu'ils sont modifies, meme sans cliquer sur "Appliquer" : au retour
+  // sur la page, rien n'est perdu. Ca ne declenche pas le filtrage de la
+  // table lui-meme (qui reste sur Appliquer/Croix pour les champs generaux,
+  // immediat pour les attributs), juste la memorisation.
+  const PDB_ADV_GENERAL_FIELDS = [
+    ["pdbAdvAgeMin", "ageMin", "number"], ["pdbAdvAgeMax", "ageMax", "number"],
+    ["pdbAdvTailleMin", "tailleMin", "number"], ["pdbAdvTailleMax", "tailleMax", "number"],
+    ["pdbAdvRepMin", "repMin", "number"], ["pdbAdvRepMax", "repMax", "number"],
+    ["pdbAdvPiedFort", "piedFort", "text"], ["pdbAdvPersonnalite", "personnalite", "text"],
+  ];
+  PDB_ADV_GENERAL_FIELDS.forEach(([id, key, type]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
+      if (type === "number") {
+        const v = el.value === "" ? null : Number(el.value);
+        pdbAdvancedFilters[key] = Number.isFinite(v) ? v : null;
+      } else {
+        pdbAdvancedFilters[key] = el.value;
+      }
+      savePdbFiltersToCache();
+    });
+  });
+
+  // Champs Min/Max de valeur marchande : saisis en M€, convertis en euros
+  // pour pdbAdvancedFilters (playerPassesAdvancedFilters compare toujours des
+  // euros bruts). Chaque champ a son propre menu de montants presets.
+  ["pdbAdvValMin", "pdbAdvValMax"].forEach(id => {
+    const input = document.getElementById(id);
+    const menu = document.getElementById(`${id}Menu`);
+    const key = id === "pdbAdvValMin" ? "valMin" : "valMax";
+    if (!input || !menu) return;
+
+    input.addEventListener("change", () => {
+      const v = input.value === "" ? null : Math.round(Number(input.value) * 1000000);
+      pdbAdvancedFilters[key] = Number.isFinite(v) ? v : null;
+      savePdbFiltersToCache();
+    });
+    input.addEventListener("focus", () => {
+      document.querySelectorAll(".pdb-value-presets-menu").forEach(m => { if (m !== menu) m.classList.add("hidden"); });
+      menu.classList.remove("hidden");
+    });
+
+    menu.querySelectorAll(".pdb-value-preset-option").forEach(opt => {
+      // mousedown (pas click) pour agir avant le blur de l'input qui
+      // masquerait le menu en premier.
+      opt.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const presetMillions = Number(opt.dataset.preset) / 1000000;
+        input.value = Number.isInteger(presetMillions) ? presetMillions : Math.round(presetMillions * 100) / 100;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        menu.classList.add("hidden");
+      });
+    });
+
+    const presetsBtn = document.querySelector(`.pdb-value-presets-btn[data-menu-target="${id}"]`);
+    if (presetsBtn) {
+      presetsBtn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const wasHidden = menu.classList.contains("hidden");
+        document.querySelectorAll(".pdb-value-presets-menu").forEach(m => m.classList.add("hidden"));
+        if (wasHidden) { menu.classList.remove("hidden"); input.focus(); }
+      });
+    }
+  });
+
   // Les attributs se filtrent immediatement (au blur) pour eviter d'avoir a
   // rouvrir chaque section ; les champs generaux passent par Appliquer/Croix.
   document.querySelectorAll("#pdbFiltersModalBody [data-attr]").forEach(input => {
     input.addEventListener("change", () => {
       const v = input.value === "" ? null : Number(input.value);
       pdbAdvancedFilters.attrs[input.dataset.attr] = Number.isFinite(v) ? v : null;
+      savePdbFiltersToCache();
     });
   });
 }
@@ -2515,8 +2657,13 @@ function populateAdvancedFiltersInputs() {
   document.getElementById("pdbAdvTailleMax").value = af.tailleMax ?? "";
   document.getElementById("pdbAdvRepMin").value = af.repMin ?? "";
   document.getElementById("pdbAdvRepMax").value = af.repMax ?? "";
-  document.getElementById("pdbAdvValMin").value = af.valMin ?? "";
-  document.getElementById("pdbAdvValMax").value = af.valMax ?? "";
+  const toMillions = (euros) => {
+    if (euros == null) return "";
+    const m = euros / 1000000;
+    return Number.isInteger(m) ? m : Math.round(m * 100) / 100;
+  };
+  document.getElementById("pdbAdvValMin").value = toMillions(af.valMin);
+  document.getElementById("pdbAdvValMax").value = toMillions(af.valMax);
   document.getElementById("pdbAdvPiedFort").value = af.piedFort ?? "";
   document.getElementById("pdbAdvPersonnalite").value = af.personnalite ?? "";
   document.querySelectorAll("#pdbFiltersModalBody [data-attr]").forEach(input => {
@@ -2530,14 +2677,18 @@ function readAdvancedFiltersFromInputs() {
     const v = document.getElementById(id).value;
     return v === "" ? null : Number(v);
   };
+  const numMillions = (id) => {
+    const v = document.getElementById(id).value;
+    return v === "" ? null : Math.round(Number(v) * 1000000);
+  };
   pdbAdvancedFilters.ageMin = num("pdbAdvAgeMin");
   pdbAdvancedFilters.ageMax = num("pdbAdvAgeMax");
   pdbAdvancedFilters.tailleMin = num("pdbAdvTailleMin");
   pdbAdvancedFilters.tailleMax = num("pdbAdvTailleMax");
   pdbAdvancedFilters.repMin = num("pdbAdvRepMin");
   pdbAdvancedFilters.repMax = num("pdbAdvRepMax");
-  pdbAdvancedFilters.valMin = num("pdbAdvValMin");
-  pdbAdvancedFilters.valMax = num("pdbAdvValMax");
+  pdbAdvancedFilters.valMin = numMillions("pdbAdvValMin");
+  pdbAdvancedFilters.valMax = numMillions("pdbAdvValMax");
   pdbAdvancedFilters.piedFort = document.getElementById("pdbAdvPiedFort").value;
   pdbAdvancedFilters.personnalite = document.getElementById("pdbAdvPersonnalite").value;
   // Les attributs (pdbAdvancedFilters.attrs) sont deja tenus a jour en direct.
