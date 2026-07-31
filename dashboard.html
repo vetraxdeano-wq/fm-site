@@ -527,6 +527,10 @@
   }
   .pdb-attr-picker-btn:hover, .pdb-attr-picker-clear-btn:hover { border-color: var(--accent-dim); color: var(--text); }
   .pdb-attr-picker-clear-btn { margin-left: auto; margin-right: 10px; }
+  .pdb-attr-picker-btn.pdb-attr-picker-btn-active {
+    background: var(--accent); border-color: var(--accent); color: #14171d; font-weight: 700;
+  }
+  .pdb-attr-picker-btn.pdb-attr-picker-btn-active:hover { filter: brightness(1.08); border-color: var(--accent); color: #14171d; }
 
   .pdb-attr-picker-modal { max-width: 900px; }
   .pdb-attr-picker-grid {
@@ -543,15 +547,21 @@
   .pdb-attr-picker-item input[type="checkbox"] { accent-color: var(--gold); width: 15px; height: 15px; flex: 0 0 auto; }
   .pdb-attr-picker-footer { justify-content: space-between; flex-wrap: wrap; }
   .pdb-attr-picker-count { color: var(--text-dim); font-size: 12px; margin-right: auto; }
-  .pdb-attr-picker-min-field { display: flex; align-items: center; gap: 8px; }
+  .pdb-attr-picker-min-field {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(74, 222, 128, 0.1); border: 1px solid var(--accent-dim);
+    border-radius: 8px; padding: 6px 12px;
+  }
   .pdb-attr-picker-min-field label {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim);
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent);
+    font-weight: 700;
   }
   .pdb-attr-picker-min-field input[type="number"] {
-    width: 56px; background: #14171d; border: 1px solid var(--border); color: var(--text);
-    border-radius: 6px; padding: 6px 8px; font-size: 13px; font-family: inherit; outline: none; text-align: center;
+    width: 50px; background: #14171d; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 14px; font-weight: 700; font-family: inherit;
+    outline: none; text-align: center;
   }
-  .pdb-attr-picker-min-field input[type="number"]:focus { border-color: var(--accent-dim); }
+  .pdb-attr-picker-min-field input[type="number"]:focus { border-color: var(--accent); }
 
   .pdb-value-range { display: flex; align-items: center; gap: 8px; }
   .pdb-value-range > span { color: var(--text-dim); font-size: 11px; flex: 0 0 auto; }
@@ -886,7 +896,11 @@
               <span class="pdb-attr-picker-count" id="pdbAttrPickerCount">0 attribut sélectionné</span>
               <div class="pdb-attr-picker-min-field">
                 <label for="pdbAttrPickerMin">Note minimum</label>
-                <input type="number" id="pdbAttrPickerMin" min="1" max="20" placeholder="—">
+                <div class="pdb-attr-input-group">
+                  <button type="button" class="pdb-attr-step" data-step="-1" data-attr-target="pdbAttrPickerMin" aria-label="Diminuer">−1</button>
+                  <input type="number" id="pdbAttrPickerMin" min="1" max="20" placeholder="—">
+                  <button type="button" class="pdb-attr-step" data-step="1" data-attr-target="pdbAttrPickerMin" aria-label="Augmenter">+1</button>
+                </div>
               </div>
               <button class="pdb-apply-btn" id="pdbAttrPickerApplyBtn" type="button">Appliquer aux attributs sélectionnés</button>
             </div>
@@ -1013,23 +1027,48 @@ const NATION_CONTINENT_GROUPS = {
     "suede", "norvege", "finlande", "islande", "bosnie-herzegovine", "slovaquie",
     "slovenie", "albanie", "macedoine du nord", "montenegro", "luxembourg", "chypre",
     "malte", "lituanie", "lettonie", "estonie", "bielorussie", "moldavie", "kosovo",
-    "andorre", "saint-marin", "feroe",
+    "andorre", "saint-marin", "feroe", "monaco", "liechtenstein", "gibraltar",
+    "groenland",
   ],
   "amerique du sud": [
     "bresil", "argentine", "uruguay", "chili", "colombie", "perou", "equateur",
-    "paraguay", "bolivie", "venezuela",
+    "paraguay", "bolivie", "venezuela", "guyana", "suriname", "guyane",
   ],
-  "amerique du nord": ["mexique", "etats-unis", "canada"],
+  "amerique du nord": [
+    "mexique", "etats-unis", "canada", "costa rica", "panama", "honduras",
+    "guatemala", "salvador", "el salvador", "nicaragua", "cuba", "jamaique",
+    "haiti", "republique dominicaine", "trinite-et-tobago", "bahamas", "barbade",
+    "antigua-et-barbuda", "porto rico", "curacao", "bermudes", "belize",
+    "grenade", "dominique", "sainte-lucie", "saint-vincent-et-les-grenadines",
+    "saint-christophe-et-nieves", "aruba", "iles caimans",
+  ],
   "asie": [
     "japon", "coree du sud", "chine", "arabie saoudite", "qatar", "israel", "iran",
     "irak", "inde", "indonesie", "thailande", "vietnam", "singapour", "georgie",
-    "armenie", "azerbaidjan", "kazakhstan",
+    "armenie", "azerbaidjan", "kazakhstan", "coree du nord", "pakistan",
+    "bangladesh", "sri lanka", "nepal", "birmanie", "myanmar", "cambodge", "laos",
+    "philippines", "malaisie", "brunei", "mongolie", "ouzbekistan", "kirghizistan",
+    "tadjikistan", "turkmenistan", "afghanistan", "syrie", "liban", "jordanie",
+    "koweit", "bahrein", "emirats arabes unis", "oman", "yemen", "palestine",
+    "taiwan", "hong kong", "macao", "maldives", "bhoutan", "timor oriental",
   ],
   "afrique": [
     "maroc", "algerie", "tunisie", "senegal", "cote d'ivoire", "cameroun", "nigeria",
-    "ghana", "egypte", "afrique du sud",
+    "ghana", "egypte", "afrique du sud", "mali", "burkina faso", "guinee",
+    "guinee-bissau", "guinee equatoriale", "benin", "togo", "niger", "tchad",
+    "republique democratique du congo", "congo", "gabon", "angola", "mozambique",
+    "zambie", "zimbabwe", "malawi", "tanzanie", "kenya", "ouganda", "rwanda",
+    "burundi", "ethiopie", "somalie", "soudan", "soudan du sud", "libye",
+    "mauritanie", "gambie", "sierra leone", "liberia", "cap-vert",
+    "sao tome-et-principe", "comores", "madagascar", "maurice", "seychelles",
+    "namibie", "botswana", "lesotho", "eswatini", "djibouti", "erythree",
+    "centrafrique",
   ],
-  "oceanie": ["australie", "nouvelle-zelande"],
+  "oceanie": [
+    "australie", "nouvelle-zelande", "fidji", "vanuatu", "nouvelle-caledonie",
+    "tahiti", "polynesie francaise", "iles salomon", "samoa", "tonga",
+    "papouasie-nouvelle-guinee", "guam", "kiribati",
+  ],
 };
 
 const NATION_KEY_TO_CONTINENT = {};
@@ -1040,7 +1079,8 @@ Object.entries(NATION_CONTINENT_GROUPS).forEach(([continent, keys]) => {
 function normalizeNationKey(name) {
   return (name || "")
     .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // enleve les accents
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // enleve les accents
+    .replace(/[\u2018\u2019\u02bc]/g, "'"); // uniformise les apostrophes
 }
 
 function flagCodeForNation(name) {
@@ -1923,6 +1963,7 @@ function restorePdbFiltersFromCache() {
   }
   syncMiniRangeInputsFromAdvanced();
   updateMoreFiltersButtonLabel();
+  updateAttrPickerBtnLabel();
 
   pdbSortKey = state.sortKey || null;
   pdbSortDir = state.sortDir || "asc";
@@ -2034,6 +2075,7 @@ function wirePlayersDbFilters(clubId) {
     resetAdvancedFilters();
     syncMiniRangeInputsFromAdvanced();
     updateMoreFiltersButtonLabel();
+    updateAttrPickerBtnLabel();
     applyPlayersDbFilters(clubId);
   });
 
@@ -2075,6 +2117,7 @@ function wirePlayersDbFilters(clubId) {
     populateAdvancedFiltersInputs();
     syncMiniRangeInputsFromAdvanced();
     updateMoreFiltersButtonLabel();
+    updateAttrPickerBtnLabel();
     applyPlayersDbFilters(clubId);
   });
 
@@ -2084,6 +2127,19 @@ function wirePlayersDbFilters(clubId) {
   });
   document.getElementById("pdbAttrPickerApplyBtn").addEventListener("click", () => applyAttrPickerSelection());
   document.getElementById("pdbAttrPickerClearBtn").addEventListener("click", () => clearAllAttrPickerFilters());
+  document.getElementById("pdbAttrPickerOverlay").addEventListener("click", (e) => {
+    const stepBtn = e.target.closest(".pdb-attr-step");
+    if (!stepBtn) return;
+    const input = document.getElementById(stepBtn.dataset.attrTarget);
+    if (!input) return;
+    const min = input.min !== "" ? Number(input.min) : 1;
+    const max = input.max !== "" ? Number(input.max) : 20;
+    const step = Number(stepBtn.dataset.step);
+    let current = input.value === "" ? (step > 0 ? min - step : min) : Number(input.value);
+    if (!Number.isFinite(current)) current = min - step;
+    let next = Math.min(max, Math.max(min, Math.round((current + step) * 100) / 100));
+    input.value = next;
+  });
 
   document.getElementById("pdbTableBody").addEventListener("click", (e) => {
     const clubLink = e.target.closest(".pdb-club-link");
@@ -2815,6 +2871,7 @@ function buildAdvancedFiltersModal() {
   document.getElementById("pdbFiltersModalBody").innerHTML = generalHtml + attrGroupsHeaderHtml + groupsHtml;
 
   document.getElementById("pdbAttrPickerBtn").addEventListener("click", () => openAttrPickerModal());
+  updateAttrPickerBtnLabel();
 
   // Tous les champs (generaux et attributs) sauvegardent l'etat des filtres
   // des qu'ils sont modifies, meme sans cliquer sur "Appliquer" : au retour
@@ -2888,6 +2945,7 @@ function buildAdvancedFiltersModal() {
     input.addEventListener("change", () => {
       const v = input.value === "" ? null : Number(input.value);
       pdbAdvancedFilters.attrs[input.dataset.attr] = Number.isFinite(v) ? v : null;
+      updateAttrPickerBtnLabel();
       savePdbFiltersToCache();
     });
   });
@@ -2927,6 +2985,22 @@ function updateAttrPickerCount() {
     `${n} attribut${n > 1 ? "s" : ""} sélectionné${n > 1 ? "s" : ""}`;
 }
 
+// Le bouton "Choisir des attributs" se transforme en "Attributs sélectionnés
+// (X)" et passe en vert des qu'au moins un attribut a une note minimum
+// active, tout en restant cliquable pour rouvrir la popup et modifier.
+function updateAttrPickerBtnLabel() {
+  const btn = document.getElementById("pdbAttrPickerBtn");
+  if (!btn) return;
+  const n = Object.values(pdbAdvancedFilters.attrs).filter(v => v != null).length;
+  if (n > 0) {
+    btn.textContent = `Attributs sélectionnés (${n})`;
+    btn.classList.add("pdb-attr-picker-btn-active");
+  } else {
+    btn.textContent = "Choisir des attributs";
+    btn.classList.remove("pdb-attr-picker-btn-active");
+  }
+}
+
 function openAttrPickerModal() {
   buildAttrPickerBody();
   // Pre-coche les attributs qui ont deja une note minimum active, pour
@@ -2961,6 +3035,7 @@ function applyAttrPickerSelection() {
     input.value = v == null ? "" : v;
   });
   updateMoreFiltersButtonLabel();
+  updateAttrPickerBtnLabel();
   savePdbFiltersToCache();
   closeAttrPickerModal();
 }
@@ -2971,6 +3046,7 @@ function clearAllAttrPickerFilters() {
   document.querySelectorAll("#pdbFiltersModalBody [data-attr]").forEach(input => { input.value = ""; });
   updateAttrPickerCount();
   updateMoreFiltersButtonLabel();
+  updateAttrPickerBtnLabel();
   savePdbFiltersToCache();
 }
 
