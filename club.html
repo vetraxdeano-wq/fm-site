@@ -620,15 +620,24 @@ function formatRealDate(date) {
 // ===================== NAVIGATION (sidebar + sous-onglets) =====================
 const FM_NAV_ITEMS = [
   { key: "accueil", icon: "🏠", label: "Accueil", href: "dashboard.html" },
-  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
+  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: "dashboard.html" },
   { key: "effectif", icon: "👥", label: "Effectif", href: "squad.html" },
-  { key: "staff", icon: "💼", label: "Staff", href: null },
-  { key: "tactique", icon: "♟️", label: "Tactique", href: null },
-  { key: "datacenter", icon: "📊", label: "Data Center", href: null },
+  { key: "staff", icon: "💼", label: "Staff", href: "dashboard.html" },
+  { key: "tactique", icon: "♟️", label: "Tactique", href: "dashboard.html" },
+  { key: "datacenter", icon: "📊", label: "Data Center", href: "dashboard.html" },
   { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: "dashboard.html" },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
   { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
 ];
+// Onglets qui vivent sur dashboard.html : on precise lequel ouvrir via
+// `?view=...` (voir FM_VIEW_PARAM_TO_KEY cote dashboard.html).
+const FM_NAV_VIEW_PARAM = {
+  basejoueurs: "bdd",
+  messagerie: "messagerie",
+  staff: "staff",
+  tactique: "tactique",
+  datacenter: "datacenter",
+};
 
 function renderFmSidebar(navClubId) {
   const el = document.getElementById("fmSidebar");
@@ -647,7 +656,8 @@ function renderFmSidebar(navClubId) {
         // Le menu de gauche ramene toujours vers son propre club (comme
         // dans dashboard.html / squad.html), meme quand on consulte le
         // profil d'un autre club.
-        const extra = item.key === "basejoueurs" ? "&view=bdd" : "";
+        const viewParam = FM_NAV_VIEW_PARAM[item.key];
+        const extra = viewParam ? `&view=${viewParam}` : "";
         window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(navClubId)}${extra}`;
       } else {
         toast(`${item.label} arrive bientôt !`);
