@@ -2125,11 +2125,22 @@ const FM_NAV_ITEMS = [
   { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
 ];
 
+// Correspondance entre le parametre d'URL `?view=` (utilise par les liens
+// venant de club.html / squad.html / fiche.html) et la clef d'onglet a
+// activer au chargement de cette page.
+const FM_VIEW_PARAM_TO_KEY = {
+  bdd: "basejoueurs",
+  messagerie: "messagerie",
+  staff: "staff",
+  tactique: "tactique",
+  datacenter: "datacenter",
+};
+
 function renderFmSidebar(gameClubId) {
   const el = document.getElementById("fmSidebar");
-  const wantsPlayersDb = params.get("view") === "bdd";
+  const initialKey = FM_VIEW_PARAM_TO_KEY[params.get("view")] || "accueil";
   el.innerHTML = FM_NAV_ITEMS.map(item => `
-    <div class="fm-nav-item ${item.key === (wantsPlayersDb ? "basejoueurs" : "accueil") ? "active" : ""}" data-key="${item.key}">
+    <div class="fm-nav-item ${item.key === initialKey ? "active" : ""}" data-key="${item.key}">
       <span class="fm-nav-icon">${item.icon}</span>
       <span>${item.label}</span>
     </div>
@@ -7563,11 +7574,20 @@ async function showMyClub(gameClubId, canChange) {
   renderInbox();
   updateInboxBadge();
 
-  // Arrivee depuis un lien "Base de donnees de joueurs" d'une autre page
-  // (club.html, squad.html, fiche.html...) : on ouvre directement cet
-  // onglet plutot que l'accueil.
-  if (params.get("view") === "bdd") {
+  // Arrivee depuis un lien d'une autre page (club.html, squad.html,
+  // fiche.html...) avec un onglet cible precise en query string : on ouvre
+  // directement cet onglet plutot que l'accueil.
+  const initialView = params.get("view");
+  if (initialView === "bdd") {
     showFmPlayersDbView(gameClubId);
+  } else if (initialView === "messagerie") {
+    showFmInboxView();
+  } else if (initialView === "staff") {
+    showFmStaffView(gameClubId);
+  } else if (initialView === "tactique") {
+    showFmTactiqueView(gameClubId);
+  } else if (initialView === "datacenter") {
+    showFmDatacenterView();
   }
 }
 
