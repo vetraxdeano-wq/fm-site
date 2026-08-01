@@ -1022,6 +1022,16 @@
   .gd-home-mini-label { color: var(--text-dim); flex-shrink: 0; }
   .gd-home-mini-name { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* ---- Data Center (placeholder, sous-onglet a venir) ---- */
+  .fm-datacenter-view { width: 100%; height: 100%; }
+  .fm-datacenter-empty {
+    height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 8px; color: var(--text-dim);
+  }
+  .fm-datacenter-empty .big-icon { font-size: 34px; opacity: 0.7; margin-bottom: 4px; }
+  .fm-datacenter-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .fm-datacenter-text { font-size: 13px; max-width: 360px; line-height: 1.5; }
+
   /* ---- Boite de reception (sous-onglet, vue liste + detail) ---- */
   .fm-inbox-view {
     width: 100%; height: 100%; display: flex; gap: 16px; min-height: 0;
@@ -1479,6 +1489,14 @@
 
         <div class="tac-subtab-panel hidden" id="tacDynamiquePanel">
           <div id="tacDynamiqueContent"></div>
+        </div>
+      </div>
+
+      <div class="fm-datacenter-view hidden" id="fmDatacenterView">
+        <div class="tac-card fm-datacenter-empty">
+          <div class="big-icon">📊</div>
+          <div class="fm-datacenter-title">Data Center</div>
+          <div class="fm-datacenter-text">Cette section est en construction — les statistiques et analyses arrivent bientôt.</div>
         </div>
       </div>
     </div>
@@ -2091,9 +2109,10 @@ async function pickClub(gameClubId, btnEl) {
   }
 }
 
-// Icones (emoji) pour les onglets du menu vertical. Seul "Accueil" (et
-// "Effectif") sont branches a une vraie page pour l'instant ; les autres
-// affichent un toast "bientot disponible" en attendant d'etre construits.
+// Icones (emoji) pour les onglets du menu vertical. "Accueil", "Effectif",
+// "Boite de reception", "Staff", "Tactique" et "Data Center" (placeholder en
+// attendant son contenu) sont branches ; les autres affichent un toast
+// "bientot disponible" en attendant d'etre construits.
 const FM_NAV_ITEMS = [
   { key: "accueil", icon: "🏠", label: "Accueil", href: null },
   { key: "messagerie", icon: "📬", label: "Boîte de réception", href: null },
@@ -2152,6 +2171,12 @@ function renderFmSidebar(gameClubId) {
         showFmTactiqueView(gameClubId);
         return;
       }
+      if (item.key === "datacenter") {
+        el.querySelectorAll(".fm-nav-item").forEach(r => r.classList.remove("active"));
+        row.classList.add("active");
+        showFmDatacenterView();
+        return;
+      }
       if (item.href) {
         window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
       } else {
@@ -2167,8 +2192,22 @@ function showFmHomeView() {
   document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.add("hidden");
+  document.getElementById("fmDatacenterView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "PAGE D'ACCUEIL";
+}
+
+// Onglet Data Center : accessible depuis le menu, contenu a construire
+// plus tard (voir le placeholder dans le HTML, #fmDatacenterView).
+function showFmDatacenterView() {
+  document.getElementById("fmHomeView").classList.add("hidden");
+  document.getElementById("fmPlayersDbView").classList.add("hidden");
+  document.getElementById("fmStaffView").classList.add("hidden");
+  document.getElementById("fmInboxView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
+  document.getElementById("fmDatacenterView").classList.remove("hidden");
+  const input = document.getElementById("fmSearchInput");
+  if (input) input.placeholder = "DATA CENTER";
 }
 
 // ---- Staff (sous-onglet) --------------------------------------------------
@@ -3140,6 +3179,7 @@ async function showFmTactiqueView(clubId) {
   document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.remove("hidden");
+  document.getElementById("fmDatacenterView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "TACTIQUE";
   tacCurrentClubId = clubId;
@@ -4070,6 +4110,7 @@ async function showFmStaffView(clubId) {
   document.getElementById("fmStaffView").classList.remove("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.add("hidden");
+  document.getElementById("fmDatacenterView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "STAFF";
 
@@ -5710,6 +5751,7 @@ async function showFmPlayersDbView(clubId) {
   document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.add("hidden");
+  document.getElementById("fmDatacenterView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BASE DE DONNÉES";
 
@@ -7409,6 +7451,7 @@ function showFmInboxView() {
   document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.remove("hidden");
   document.getElementById("fmTactiqueView").classList.add("hidden");
+  document.getElementById("fmDatacenterView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BOÎTE DE RÉCEPTION";
   renderFmInboxList();
