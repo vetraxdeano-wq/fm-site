@@ -871,6 +871,90 @@
   }
   .sdb-empty-cell { color: var(--text-dim); font-size: 13px; padding: 30px 10px; text-align: center; }
 
+  /* ---- Tactique (onglet) : terrain + panneau de consignes ---- */
+  .fm-tactic-view {
+    display: grid; grid-template-columns: 300px 1fr 260px; gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
+    .fm-tactic-view { grid-template-columns: 1fr; }
+  }
+  .tac-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .tac-card h3 {
+    margin: 0 0 12px; font-size: 13px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .tac-coach-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .tac-coach-avatar {
+    width: 42px; height: 42px; border-radius: 50%; background: #1c2029;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    border: 1px solid var(--border); flex-shrink: 0;
+  }
+  .tac-coach-name { font-weight: 700; font-size: 14px; }
+  .tac-coach-sub { font-size: 12px; color: var(--text-dim); }
+  .tac-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+  .tac-row:last-child { border-bottom: none; }
+  .tac-row .tac-label { color: var(--text-dim); }
+  .tac-row .tac-value { font-weight: 600; text-align: right; }
+  .tac-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .tac-badge.preferee { background: rgba(74,222,128,0.15); color: var(--accent); border: 1px solid var(--accent-dim); }
+  .tac-badge.deuxieme_preferee { background: rgba(251,191,36,0.15); color: var(--gold); border: 1px solid #7a5c0f; }
+  .tac-badge.adaptee { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid #7a1f1f; }
+  .tac-explain { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin-top: 8px; }
+  .tac-mentality-scale { display: flex; gap: 3px; margin-top: 6px; }
+  .tac-mentality-dot { flex: 1; height: 6px; border-radius: 3px; background: #1c2029; border: 1px solid var(--border); }
+  .tac-mentality-dot.on { background: var(--gold); border-color: var(--gold); }
+  .tac-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tac-chip { font-size: 11.5px; background: #14171d; border: 1px solid var(--border); padding: 4px 9px; border-radius: 999px; }
+  .tac-pitch-wrap { display: flex; flex-direction: column; gap: 10px; }
+  .tac-pitch {
+    position: relative; width: 100%; aspect-ratio: 68 / 100;
+    background:
+      linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px) 0 0/100% 12.5%,
+      repeating-linear-gradient(180deg, #1c3d24 0, #1c3d24 10%, #193a21 10%, #193a21 20%);
+    border: 2px solid rgba(255,255,255,0.25); border-radius: 10px; overflow: hidden;
+  }
+  .tac-pitch::before {
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+    background: rgba(255,255,255,0.25); transform: translateX(-50%);
+  }
+  .tac-pitch::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 22%; aspect-ratio: 1/1;
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; transform: translate(-50%,-50%);
+  }
+  .tac-slot {
+    position: absolute; transform: translate(-50%, -50%); width: 66px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: default;
+  }
+  .tac-slot-dot {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--panel);
+    border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--text);
+  }
+  .tac-slot.empty .tac-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
+  .tac-slot.weak .tac-slot-dot { border-color: var(--gold); }
+  .tac-slot-name { font-size: 10.5px; font-weight: 600; background: rgba(0,0,0,0.55); border-radius: 4px; padding: 1px 4px; max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tac-slot-ca { font-size: 9.5px; color: var(--gold); background: rgba(0,0,0,0.55); border-radius: 4px; padding: 0 4px; }
+  .tac-legend { font-size: 11px; color: var(--text-dim); display: flex; gap: 14px; flex-wrap: wrap; }
+  .tac-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .tac-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 2px solid var(--accent); }
+  .tac-legend i.weak { border-color: var(--gold); }
+  .tac-legend i.empty { border-color: var(--danger); background: rgba(239,68,68,0.15); }
+  .tac-bench { max-height: 480px; overflow-y: auto; }
+  .tac-bench-item { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .tac-bench-item:last-child { border-bottom: none; }
+  .tac-bench-name { font-weight: 600; }
+  .tac-bench-poste { color: var(--text-dim); font-size: 11px; }
+  .tac-bench-ca { color: var(--gold); font-weight: 700; font-size: 11.5px; }
+  .tac-bench-injured { color: var(--danger); font-size: 10.5px; }
+  .tac-recalc-btn { margin-top: 10px; width: 100%; }
+
   /* ---- Boite de reception (sous-onglet, vue liste + detail) ---- */
   .fm-inbox-view {
     width: 100%; height: 100%; display: flex; gap: 16px; min-height: 0;
@@ -1298,6 +1382,24 @@
             <span class="big-icon">✉️</span>
             Sélectionne un message dans la liste pour l'ouvrir.
           </div>
+        </div>
+      </div>
+
+      <div class="fm-tactic-view hidden" id="fmTactiqueView">
+        <div id="tacCoachPanel"></div>
+        <div class="tac-card tac-pitch-wrap">
+          <h3>Terrain</h3>
+          <div class="tac-pitch" id="tacPitch"></div>
+          <div class="tac-legend">
+            <span><i></i>Poste naturel</span>
+            <span><i class="weak"></i>Poste d'adaptation</span>
+            <span><i class="empty"></i>Aucun joueur disponible</span>
+          </div>
+          <button type="button" class="secondary tac-recalc-btn" id="tacRecalcBtn">🔄 Recalculer la tactique</button>
+        </div>
+        <div class="tac-card">
+          <h3>Effectif restant</h3>
+          <div class="tac-bench" id="tacBench"></div>
         </div>
       </div>
     </div>
@@ -1965,6 +2067,12 @@ function renderFmSidebar(gameClubId) {
         showFmStaffView(gameClubId);
         return;
       }
+      if (item.key === "tactique") {
+        el.querySelectorAll(".fm-nav-item").forEach(r => r.classList.remove("active"));
+        row.classList.add("active");
+        showFmTactiqueView(gameClubId);
+        return;
+      }
       if (item.href) {
         window.location.href = `${item.href}?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}`;
       } else {
@@ -1979,6 +2087,7 @@ function showFmHomeView() {
   document.getElementById("fmPlayersDbView").classList.add("hidden");
   document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "PAGE D'ACCUEIL";
 }
@@ -2277,13 +2386,428 @@ async function fetchClubStaffMembers(clubId) {
   if (refs.length > 0) {
     const { data: staffRows, error: sErr } = await supabaseClient
       .from("staff")
-      .select("id, nationalite, age, personnalite, eval_joueurs, eval_potentiel, formation_jeunes, niveau_tactique, niveau_defense, niveau_attaque, determination, professionnalisme, qualification_preparateur, formation_preferee, deuxieme_formation_preferee, style_tactique, style_jeu, type_pressing, type_marquage, mentalite, connaissance_tactique")
+      .select("id, nationalite, age, personnalite, eval_joueurs, eval_potentiel, formation_jeunes, niveau_tactique, niveau_defense, niveau_attaque, determination, professionnalisme, qualification_preparateur, formation_preferee, deuxieme_formation_preferee, style_tactique, style_jeu, type_pressing, type_marquage, mentalite, connaissance_tactique, adaptabilite_2")
       .in("id", refs);
     if (sErr) console.error(sErr);
     (staffRows || []).forEach(s => { staffByRef[s.id] = s; });
   }
 
   return gameStaffRows.map(r => ({ ...r, ...(staffByRef[r.staff_ref] || {}) }));
+}
+
+// =============================================================================
+// ---- Tactique (onglet) -----------------------------------------------------
+// =============================================================================
+// Construit, a partir de l'entraineur "Equipe A" du club et de son effectif
+// (game_players), la tactique reellement jouable : formation retenue (1ere ou
+// 2e preferee de l'entraineur, ou une formation "adaptee" a defaut), joueurs
+// places sur chaque poste du systeme (au mieux de leurs postes naturels), et
+// consignes (mentalite/style/pressing/marquage) reprises du profil de
+// l'entraineur. Le resultat est persiste dans la table `tactiques` (une ligne
+// par game_club_id) pour etre reutilise plus tard par la simulation de matchs.
+
+// ---- Parsing des postes joueurs (format FM : "D/AL/M (DG)", "MD", "GB"...) ----
+// Chaque poste "brut" est un ou plusieurs roles separes par "/", suivis
+// eventuellement d'un groupe de cotes entre parentheses (D=droite, G=gauche,
+// C=centre). Sans parentheses (ex: "MD" = milieu defensif, "GB" = gardien),
+// le poste est toujours central.
+function tacParsePosteToken(token) {
+  const t = (token || "").trim();
+  const m = t.match(/^([A-Zé]+(?:\/[A-Zé]+)*)\s*(?:\(([A-Z]+)\))?$/i);
+  if (!m) return null;
+  const roles = m[1].split("/").map(r => r.trim().toUpperCase()).filter(Boolean);
+  const sides = m[2] ? m[2].split("").map(c => c.toUpperCase()) : ["C"];
+  return { roles, sides };
+}
+// Retourne, pour un joueur, la liste ordonnee (du plus naturel au moins
+// naturel) de ses postes parses, a partir de sa colonne `postes` (jsonb) ou
+// a defaut de `poste_brut` (ex: "D (C), MD").
+function tacPlayerPostes(player) {
+  let raw = Array.isArray(player.postes) ? player.postes : null;
+  if (!raw || raw.length === 0) {
+    raw = (player.poste_brut || "").split(",").map(s => s.trim()).filter(Boolean);
+  }
+  return raw.map(tacParsePosteToken).filter(Boolean);
+}
+// Ordre de proximite entre familles de roles, utilise pour evaluer un
+// "depannage" hors poste naturel (ex: un MC qui depanne en MD).
+const TAC_ROLE_ORDER = ["GB", "D", "MD", "M", "MO", "AL", "BT"];
+function tacRoleDistance(r1, r2) {
+  if (r1 === r2) return 0;
+  const i1 = TAC_ROLE_ORDER.indexOf(r1), i2 = TAC_ROLE_ORDER.indexOf(r2);
+  if (i1 === -1 || i2 === -1) return 9;
+  return Math.abs(i1 - i2);
+}
+// Score d'adequation joueur/poste : 3 = poste naturel prioritaire, 2 = poste
+// naturel secondaire, 1 = depannage plausible (role adjacent ou meme role
+// mais mauvais cote), 0 = incompatible (dernier recours seulement).
+function tacFitScore(player, slotRole, slotSide) {
+  const postes = tacPlayerPostes(player);
+  let best = 0;
+  postes.forEach((p, idx) => {
+    const sideOk = p.sides.includes(slotSide) || p.sides.includes("C") && slotSide === "C";
+    p.roles.forEach(role => {
+      const dist = tacRoleDistance(role, slotRole);
+      if (dist === 0 && sideOk) best = Math.max(best, idx === 0 ? 3 : 2);
+      else if (dist === 0 && !sideOk) best = Math.max(best, 1);
+      else if (dist === 1) best = Math.max(best, sideOk ? 1 : 0.5);
+    });
+  });
+  return best;
+}
+
+// ---- Catalogue des formations -------------------------------------------
+// Les 11 systemes presents dans les donnees entraineurs (formation_preferee /
+// deuxieme_formation_preferee), chacun avec ses postes places sur le terrain
+// (x/y en %, y=0 cage adverse, y=100 cage du club). Cle = libelle exact tel
+// que stocke en base.
+function tacSlot(id, label, role, side, x, y) { return { id, label, role, side, x, y }; }
+const TAC_FORMATIONS = {
+  "4-4-2": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("mg", "MG", "M", "G", 14, 52), tacSlot("mc1", "MC", "M", "C", 38, 54), tacSlot("mc2", "MC", "M", "C", 62, 54), tacSlot("md", "MD", "M", "D", 86, 52),
+    tacSlot("bt1", "BU", "BT", "C", 38, 14), tacSlot("bt2", "BU", "BT", "C", 62, 14),
+  ],
+  "4-4-2 Diamant Axial": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("mdef", "MD", "MD", "C", 50, 66),
+    tacSlot("mg", "MC", "M", "C", 26, 50), tacSlot("md2", "MC", "M", "C", 74, 50),
+    tacSlot("moc", "MOC", "MO", "C", 50, 34),
+    tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12),
+  ],
+  "4-2-3-1 MD MO Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 38, 62), tacSlot("md2", "MD", "MD", "C", 62, 62),
+    tacSlot("mog", "MOG", "MO", "G", 18, 36), tacSlot("moc", "MOC", "MO", "C", 50, 32), tacSlot("mod", "MOD", "MO", "D", 82, 36),
+    tacSlot("bt1", "BU", "BT", "C", 50, 12),
+  ],
+  "4-2-2-2 MD MO Axial": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 38, 62), tacSlot("md2", "MD", "MD", "C", 62, 62),
+    tacSlot("moc1", "MOC", "MO", "C", 40, 34), tacSlot("moc2", "MOC", "MO", "C", 60, 34),
+    tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12),
+  ],
+  "4-2-4 MD Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 38, 58), tacSlot("md2", "MD", "MD", "C", 62, 58),
+    tacSlot("alg", "ALG", "AL", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12), tacSlot("ald", "ALD", "AL", "D", 86, 16),
+  ],
+  "4-3-2-1 MD MO Axial": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 25, 62), tacSlot("md2", "MD", "MD", "C", 50, 66), tacSlot("md3", "MD", "MD", "C", 75, 62),
+    tacSlot("moc1", "MOC", "MO", "C", 40, 34), tacSlot("moc2", "MOC", "MO", "C", 60, 34),
+    tacSlot("bt1", "BU", "BT", "C", 50, 12),
+  ],
+  "4-3-3 MD Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 25, 60), tacSlot("md2", "MD", "MD", "C", 50, 64), tacSlot("md3", "MD", "MD", "C", 75, 60),
+    tacSlot("alg", "ALG", "AL", "G", 16, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "AL", "D", 84, 16),
+  ],
+  "5-2-1-2 MD MO": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("md1", "MD", "MD", "C", 35, 58), tacSlot("md2", "MD", "MD", "C", 65, 58),
+    tacSlot("moc", "MOC", "MO", "C", 50, 36),
+    tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12),
+  ],
+  "5-2-2-1 MD MO": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("md1", "MD", "MD", "C", 35, 58), tacSlot("md2", "MD", "MD", "C", 65, 58),
+    tacSlot("mog", "MOG", "MO", "G", 30, 34), tacSlot("mod", "MOD", "MO", "D", 70, 34),
+    tacSlot("bt1", "BU", "BT", "C", 50, 12),
+  ],
+  "5-2-3 MD Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("md1", "MD", "MD", "C", 35, 58), tacSlot("md2", "MD", "MD", "C", 65, 58),
+    tacSlot("alg", "ALG", "AL", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "AL", "D", 86, 16),
+  ],
+  "5-3-2 MD AL": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("mdef", "MD", "MD", "C", 50, 64), tacSlot("mg", "MC", "M", "C", 30, 54), tacSlot("md2", "MC", "M", "C", 70, 54),
+    tacSlot("bt1", "BU", "BT", "C", 38, 14), tacSlot("bt2", "BU", "BT", "C", 62, 14),
+  ],
+};
+// Wingbacks en defense a 5 : les ailiers (AL) depannent naturellement ces
+// couloirs, on l'ajoute donc comme role alternatif accepte pour ces slots.
+["5-2-1-2 MD MO", "5-2-2-1 MD MO", "5-2-3 MD Jeu large", "5-3-2 MD AL"].forEach(key => {
+  TAC_FORMATIONS[key].forEach(slot => {
+    if (slot.id === "dg" || slot.id === "dd") slot.altRole = "AL";
+  });
+});
+function tacFitScoreForSlot(player, slot) {
+  let score = tacFitScore(player, slot.role, slot.side);
+  if (slot.altRole) score = Math.max(score, tacFitScore(player, slot.altRole, slot.side) * 0.9);
+  return score;
+}
+
+// ---- Affectation des joueurs aux postes d'une formation -------------------
+// Algorithme glouton : les postes les plus contraints (gardien, defense,
+// puis vers l'attaque) sont pourvus en premier avec le meilleur joueur
+// disponible (meilleur score d'adequation, puis meilleur niveau CA).
+function tacAssignFormation(effectif, slots) {
+  const pool = [...effectif];
+  const used = new Set();
+  const assigned = slots.map(slot => {
+    let best = null, bestScore = -1, bestCa = -1;
+    pool.forEach(p => {
+      if (used.has(p.id)) return;
+      const score = tacFitScoreForSlot(p, slot);
+      const ca = Number(p.niveau_actuel) || 0;
+      if (score > bestScore || (score === bestScore && ca > bestCa)) {
+        best = p; bestScore = score; bestCa = ca;
+      }
+    });
+    if (best) used.add(best.id);
+    return { slot, player: best, score: best ? bestScore : 0 };
+  });
+  const outfield = assigned.filter(a => a.slot.role !== "GB");
+  const coverage = outfield.length
+    ? outfield.reduce((s, a) => s + Math.min(a.score, 3) / 3, 0) / outfield.length
+    : 0;
+  const holes = assigned.filter(a => !a.player).length;
+  return { assigned, coverage, holes, bench: pool.filter(p => !used.has(p.id)) };
+}
+
+// ---- Choix de la formation selon le profil de l'entraineur ----------------
+// Le coach essaie d'abord son systeme prefere. S'il n'a pas assez de
+// joueurs adequats (couverture < seuil), il tente sa 2e formation preferee.
+// Un entraineur avec une bonne connaissance tactique / adaptabilite saura,
+// en dernier recours, choisir librement dans tout le catalogue le systeme le
+// mieux adapte a l'effectif ; un entraineur rigide s'entete sur sa formation
+// de coeur meme si elle est sous-optimale.
+const TAC_MIN_COVERAGE = 0.55;
+const TAC_CRITICAL_COVERAGE = 0.35;
+function tacChooseFormation(coach, effectif) {
+  const adaptability = ((Number(coach?.connaissance_tactique) || 10) + (Number(coach?.adaptabilite_2) || 10)) / 2; // ~0-20
+  const preferee = coach?.formation_preferee && TAC_FORMATIONS[coach.formation_preferee] ? coach.formation_preferee : null;
+  const deuxieme = coach?.deuxieme_formation_preferee && TAC_FORMATIONS[coach.deuxieme_formation_preferee] ? coach.deuxieme_formation_preferee : null;
+
+  const evalFor = key => ({ key, ...tacAssignFormation(effectif, TAC_FORMATIONS[key]) });
+  const resPreferee = preferee ? evalFor(preferee) : null;
+
+  if (resPreferee && resPreferee.coverage >= TAC_MIN_COVERAGE && resPreferee.holes === 0) {
+    return { source: "preferee", formation: preferee, result: resPreferee, reason: "L'effectif couvre correctement le système favori de l'entraîneur." };
+  }
+
+  const resDeuxieme = deuxieme ? evalFor(deuxieme) : null;
+  if (resDeuxieme && resDeuxieme.coverage >= TAC_MIN_COVERAGE && resDeuxieme.holes === 0) {
+    return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori ne colle pas à l'effectif : bascule sur le second système préféré de l'entraîneur." };
+  }
+
+  // Ni l'un ni l'autre ne convient bien : un entraineur adaptable explore tout
+  // le catalogue pour trouver le meilleur compromis ; un entraineur rigide
+  // (faible connaissance tactique / adaptabilite) reste sur sa formation
+  // fetiche sauf si elle est vraiment intenable pour l'effectif.
+  if (adaptability >= 12) {
+    let bestKey = preferee || deuxieme || Object.keys(TAC_FORMATIONS)[0];
+    let bestRes = resPreferee || resDeuxieme || evalFor(bestKey);
+    Object.keys(TAC_FORMATIONS).forEach(key => {
+      const r = evalFor(key);
+      if (r.holes < bestRes.holes || (r.holes === bestRes.holes && r.coverage > bestRes.coverage)) {
+        bestKey = key; bestRes = r;
+      }
+    });
+    const source = bestKey === preferee ? "preferee" : bestKey === deuxieme ? "deuxieme_preferee" : "adaptee";
+    return {
+      source, formation: bestKey, result: bestRes,
+      reason: source === "adaptee"
+        ? "Ni le système favori ni le second n'étaient jouables : l'entraîneur (bon niveau tactique) a choisi le système qui exploite au mieux l'effectif disponible."
+        : "Bascule sur le système le plus jouable parmi les deux préférés de l'entraîneur.",
+    };
+  }
+
+  // Entraineur peu adaptable : force la formation preferee (ou la 2e a
+  // defaut) sauf situation vraiment critique.
+  if (resPreferee && (resPreferee.coverage >= TAC_CRITICAL_COVERAGE || !resDeuxieme)) {
+    return { source: "preferee", formation: preferee, result: resPreferee, reason: "Entraîneur peu flexible : il impose son système favori malgré un effectif imparfaitement adapté." };
+  }
+  if (resDeuxieme) {
+    return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori était injouable ; l'entraîneur (peu adaptable) se replie sur son second choix." };
+  }
+  // Aucune formation preferee connue (donnee manquante) : formation par defaut.
+  const fallbackKey = "4-4-2";
+  return { source: "adaptee", formation: fallbackKey, result: evalFor(fallbackKey), reason: "Aucune formation préférée connue pour cet entraîneur : système standard appliqué par défaut." };
+}
+
+// ---- Chargement effectif + entraineur, rendu et persistance ---------------
+let tacLoadedForClub = null;
+let tacCurrentResult = null; // { coach, choice } du dernier calcul, pour recalcul rapide
+
+const TAC_MENTALITY_SCALE = ["Très prudent", "Prudent", "Équilibré", "Offensive", "Aventureux"];
+const TAC_SOURCE_LABEL = { preferee: "1ère formation préférée", deuxieme_preferee: "2e formation préférée", adaptee: "Formation adaptée" };
+
+async function fetchClubTacticEffectif(clubId) {
+  const { data, error } = await supabaseClient
+    .from("game_players")
+    .select("id, nom, poste_brut, postes, niveau_actuel, potentiel, blessure_jours, categorie")
+    .eq("game_id", gameId)
+    .eq("game_club_id", clubId)
+    .eq("categorie", "equipe_a");
+  if (error) { console.error(error); return []; }
+  return (data || []).filter(p => !(Number(p.blessure_jours) > 0));
+}
+
+async function showFmTactiqueView(clubId) {
+  document.getElementById("fmHomeView").classList.add("hidden");
+  document.getElementById("fmPlayersDbView").classList.add("hidden");
+  document.getElementById("fmStaffView").classList.add("hidden");
+  document.getElementById("fmInboxView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.remove("hidden");
+  const input = document.getElementById("fmSearchInput");
+  if (input) input.placeholder = "TACTIQUE";
+
+  const btn = document.getElementById("tacRecalcBtn");
+  if (!btn.dataset.wired) {
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => computeAndRenderTactic(clubId, { force: true }));
+  }
+
+  if (tacLoadedForClub === clubId && tacCurrentResult) {
+    renderTacticResult(tacCurrentResult);
+    return;
+  }
+  document.getElementById("tacCoachPanel").innerHTML = `<div class="tac-card"><div class="fm-empty">Chargement...</div></div>`;
+  await computeAndRenderTactic(clubId, { force: false });
+}
+
+async function computeAndRenderTactic(clubId, { force }) {
+  const [staffMembers, effectif] = await Promise.all([
+    staffViewLoadedForClub === clubId ? Promise.resolve(staffViewMembers) : fetchClubStaffMembers(clubId),
+    fetchClubTacticEffectif(clubId),
+  ]);
+  const coachRows = staffMembers.filter(m => COACH_TEAM_POSTES.includes((m.poste || "").trim()));
+  const resolved = resolveTeamCoaches(coachRows);
+  const coach = resolved.equipe_a;
+
+  if (!coach) {
+    document.getElementById("tacCoachPanel").innerHTML = `<div class="tac-card"><div class="fm-empty">Aucun entraîneur "Équipe A" n'est en poste : impossible de définir une tactique.</div></div>`;
+    document.getElementById("tacPitch").innerHTML = "";
+    document.getElementById("tacBench").innerHTML = "";
+    return;
+  }
+
+  const choice = tacChooseFormation(coach, effectif);
+  tacLoadedForClub = clubId;
+  tacCurrentResult = { coach, choice, effectif, clubId };
+  renderTacticResult(tacCurrentResult);
+  persistTactique(clubId, coach, choice);
+}
+
+function tacMentalityIndex(label) {
+  const i = TAC_MENTALITY_SCALE.indexOf(label);
+  return i === -1 ? 2 : i;
+}
+
+function renderTacticResult({ coach, choice }) {
+  const { source, formation, result, reason } = choice;
+  document.getElementById("tacCoachPanel").innerHTML = tacCoachPanelHtml(coach, source, formation, reason);
+  tacRenderPitch(TAC_FORMATIONS[formation], result.assigned);
+  tacRenderBench(result.bench);
+}
+
+function tacCoachPanelHtml(coach, source, formation, reason) {
+  const mentality = coach.mentalite || "Équilibré";
+  const mIdx = tacMentalityIndex(mentality);
+  const dots = TAC_MENTALITY_SCALE.map((_, i) => `<div class="tac-mentality-dot ${i <= mIdx ? "on" : ""}"></div>`).join("");
+  const chips = [
+    coach.style_tactique && coach.style_tactique !== "-" ? coach.style_tactique : null,
+    coach.type_pressing ? `Pressing : ${coach.type_pressing}` : null,
+    coach.type_marquage ? `Marquage : ${coach.type_marquage}` : null,
+  ].filter(Boolean).map(c => `<span class="tac-chip">${escapeHtml(c)}</span>`).join("");
+
+  return `
+    <div class="tac-card">
+      <h3>Entraîneur</h3>
+      <div class="tac-coach-head">
+        <div class="tac-coach-avatar">🧑‍🏫</div>
+        <div>
+          <div class="tac-coach-name">${escapeHtml(coach.nom || "-")}</div>
+          <div class="tac-coach-sub">${coach.nationalite ? escapeHtml(nationLabel(coach.nationalite)) : ""}${coach.age ? ` · ${coach.age} ans` : ""}</div>
+        </div>
+      </div>
+      <div class="tac-row"><span class="tac-label">Formation utilisée</span><span class="tac-value">${escapeHtml(formation)}</span></div>
+      <div class="tac-row"><span class="tac-label">Origine</span><span class="tac-value"><span class="tac-badge ${source}">${TAC_SOURCE_LABEL[source]}</span></span></div>
+      <div class="tac-row"><span class="tac-label">Connaissance tactique</span><span class="tac-value">${Number.isFinite(Number(coach.connaissance_tactique)) ? coach.connaissance_tactique + "/20" : "-"}</span></div>
+      <div class="tac-row"><span class="tac-label">Adaptabilité</span><span class="tac-value">${Number.isFinite(Number(coach.adaptabilite_2)) ? coach.adaptabilite_2 + "/20" : "-"}</span></div>
+      <div class="tac-row"><span class="tac-label">Niveau attaque / défense</span><span class="tac-value">${coach.niveau_attaque ?? "-"} / ${coach.niveau_defense ?? "-"}</span></div>
+      <div class="tac-explain">${escapeHtml(reason)}</div>
+      <h3 style="margin-top:16px;">Mentalité</h3>
+      <div class="tac-row"><span class="tac-label">${escapeHtml(mentality)}</span></div>
+      <div class="tac-mentality-scale">${dots}</div>
+      <div class="tac-chips">${chips}</div>
+    </div>
+  `;
+}
+
+function tacRenderPitch(slots, assigned) {
+  const el = document.getElementById("tacPitch");
+  el.innerHTML = assigned.map(a => {
+    const s = a.slot;
+    const cls = !a.player ? "empty" : (a.score < 2 ? "weak" : "");
+    const initials = a.player ? escapeHtml((a.player.nom || "").split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase()) : "?";
+    return `
+      <div class="tac-slot ${cls}" style="left:${s.x}%; top:${s.y}%;" title="${a.player ? escapeHtml(a.player.nom) : "Aucun joueur disponible"} — ${escapeHtml(s.label)}">
+        <div class="tac-slot-dot">${initials}</div>
+        <div class="tac-slot-name">${a.player ? escapeHtml(a.player.nom) : s.label}</div>
+        ${a.player ? `<div class="tac-slot-ca">CA ${a.player.niveau_actuel ?? "-"}</div>` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+function tacRenderBench(bench) {
+  const el = document.getElementById("tacBench");
+  if (!bench.length) { el.innerHTML = `<div class="fm-empty">Effectif entièrement titularisé.</div>`; return; }
+  const sorted = [...bench].sort((a, b) => (Number(b.niveau_actuel) || 0) - (Number(a.niveau_actuel) || 0));
+  el.innerHTML = sorted.map(p => `
+    <div class="tac-bench-item">
+      <div>
+        <div class="tac-bench-name">${escapeHtml(p.nom)}</div>
+        <div class="tac-bench-poste">${escapeHtml(p.poste_brut || "-")}</div>
+      </div>
+      <div class="tac-bench-ca">${p.niveau_actuel ?? "-"}</div>
+    </div>
+  `).join("");
+}
+
+// Persiste la tactique calculee (une ligne par club) pour la future
+// simulation de matchs. Echec silencieux (log console) : ca ne doit jamais
+// bloquer l'affichage cote utilisateur.
+async function persistTactique(clubId, coach, choice) {
+  const compositions = choice.result.assigned.map(a => ({
+    slot_id: a.slot.id, label: a.slot.label, role: a.slot.role, side: a.slot.side,
+    x: a.slot.x, y: a.slot.y,
+    player_id: a.player ? a.player.id : null,
+    player_nom: a.player ? a.player.nom : null,
+    fit_score: a.player ? a.score : 0,
+  }));
+  const row = {
+    game_id: gameId,
+    game_club_id: clubId,
+    formation: choice.formation,
+    formation_source: choice.source,
+    mentalite: coach.mentalite || null,
+    style_tactique: coach.style_tactique || null,
+    type_pressing: coach.type_pressing || null,
+    type_marquage: coach.type_marquage || null,
+    connaissance_tactique: Number.isFinite(Number(coach.connaissance_tactique)) ? Number(coach.connaissance_tactique) : null,
+    coach_staff_ref: coach.staff_ref || null,
+    coach_nom: coach.nom || null,
+    compositions,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabaseClient.from("tactiques").upsert(row, { onConflict: "game_club_id" });
+  if (error) console.error("persistTactique:", error);
 }
 
 function renderStaffAttrChips(member, dept, locked) {
@@ -2591,6 +3115,7 @@ async function showFmStaffView(clubId) {
   document.getElementById("fmPlayersDbView").classList.add("hidden");
   document.getElementById("fmStaffView").classList.remove("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "STAFF";
 
@@ -4230,6 +4755,7 @@ async function showFmPlayersDbView(clubId) {
   document.getElementById("fmPlayersDbView").classList.remove("hidden");
   document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BASE DE DONNÉES";
 
@@ -5928,6 +6454,7 @@ function showFmInboxView() {
   document.getElementById("fmPlayersDbView").classList.add("hidden");
   document.getElementById("fmStaffView").classList.add("hidden");
   document.getElementById("fmInboxView").classList.remove("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "BOÎTE DE RÉCEPTION";
   renderFmInboxList();
