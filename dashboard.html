@@ -2314,16 +2314,19 @@ function renderStaffColumns() {
 
   el.innerHTML = Object.entries(depts).map(([dept, info]) => {
     const members = staffViewMembers.filter(m => staffDepartmentFor(m.poste) === dept);
-    // Groupes par role (les plus fournis en premier), membres tries par plus
-    // gros salaire mensuel en tete au sein de chaque groupe.
-    const { roles, groups } = groupStaffByRole(members);
-    const ordered = roles.flatMap(role => groups[role]);
+    // Aperçu de colonne : les 3 plus gros salaires mensuels, sans regroupement
+    // par rôle (le détail groupé par rôle reste disponible dans la modale).
+    const ordered = [...members].sort((a, b) => {
+      const sa = Number.isFinite(Number(a.salaire_actuel)) ? Number(a.salaire_actuel) : -Infinity;
+      const sb = Number.isFinite(Number(b.salaire_actuel)) ? Number(b.salaire_actuel) : -Infinity;
+      return sb !== sa ? sb - sa : (a.nom || "").localeCompare(b.nom || "", "fr");
+    });
     const preview = ordered.slice(0, STAFF_COL_PREVIEW_MAX);
     const remaining = ordered.length - preview.length;
 
     const membersHtml = ordered.length > 0
       ? preview.map(m => staffMemberCardHtml(m, dept, locked, { showTactical: true })).join("")
-        + (remaining > 0 ? `<button type="button" class="staff-col-more-btn" data-dept="${dept}">+${remaining} de plus… (voir le détail)</button>` : "")
+        + (remaining > 0 ? `<button type="button" class="staff-col-more-btn" data-dept="${dept}">+${remaining}…</button>` : "")
       : `<div class="staff-col-empty">Aucun membre dans ce secteur.</div>`;
     return `
       <div class="staff-column" data-dept="${dept}">
