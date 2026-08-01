@@ -2619,7 +2619,8 @@ function tacAssignFormation(effectif, slots) {
 // d'adaptabilite rapproche progressivement le coach de l'optimum objectif.
 const TAC_CRITICAL_COVERAGE = 0.35; // en-deca : systeme juge injouable, meme un coach rigide en change
 const TAC_MAX_SWITCH_MARGIN = 0.35; // marge de couverture (echelle 0-1) qu'un coach totalement rigide exige avant de lacher son systeme de reference
-const TAC_IDENTITY_WEIGHT = 0.12; // poids de l'identite du coach dans le score qui departage les formations du catalogue
+const TAC_IDENTITY_WEIGHT = 0.18; // poids de l'identite/du style du coach dans le score qui departage les formations du catalogue : entre systemes qui couvrent tous correctement l'effectif (peu ou pas de trous), c'est ce facteur qui doit trancher en priorite plutot qu'un ecart marginal de couverture
+const TAC_BENCH_DEPTH_WEIGHT = 0.30; // poids de la profondeur de banc (cf. tacBenchDepthPenalty) dans ce meme score de depart
 // Adaptabilite du coach (~0-20) : moyenne de sa connaissance tactique et de
 // son adaptabilite. Utilisee a la fois pour choisir la formation (marge de
 // bascule vers le catalogue) et pour doser l'ajustement des consignes de jeu
@@ -2683,6 +2684,39 @@ function tacFormationAffinity(key, identity) {
   return Math.max(-1, Math.min(1, raw));
 }
 
+// Profondeur de banc d'une formation : au-dela de savoir si les 11 titulaires
+// couvrent l'effectif (holes/coverage), un systeme n'est vraiment "sain" que
+// si les remplacants permettent aussi de tourner/depanner en cours de saison.
+// Pour chaque groupe de role reellement utilise par la formation (D, MD, M,
+// MO, BT...), on compte combien de joueurs du banc restent capables de le
+// couvrir naturellement (score >= 2 : poste naturel principal ou secondaire,
+// cf. tacFitScore). Deux cas penalises :
+//  - 0 remplacant capable pour un role utilise en titulaire : trou potentiel
+//    des la premiere blessure/suspension, penalite lourde (doublee si le
+//    poste est occupe par 2 titulaires ou plus, ex. une paire d'attaquants).
+//  - remplacants presents mais moins nombreux que necessaire pour tourner
+//    sur un poste double (ex. 2 BT titulaires, seulement 1 BU sur le banc) :
+//    penalite plus legere, proportionnelle au manque.
+// C'est ce mecanisme qui permet, par exemple, de preferer une formation a un
+// seul attaquant de pointe plutot qu'a deux si le banc ne compte aucun
+// buteur de rechange, meme si la formation a 2 attaquants "couvre" les 11
+// postes sur le papier.
+function tacBenchDepthPenalty(slots, assignedResult) {
+  const roleCounts = {};
+  slots.forEach(s => {
+    if (s.role === "GB") return; // le gardien remplaçant est gere a part (staff/effectif dedie), pas dans ce calcul de rotation de champ
+    roleCounts[s.role] = (roleCounts[s.role] || 0) + 1;
+  });
+  const bench = assignedResult.bench;
+  let penalty = 0;
+  Object.entries(roleCounts).forEach(([role, count]) => {
+    const backups = bench.filter(p => tacFitScoreForSlot(p, { role, side: "C" }) >= 2).length;
+    if (backups === 0) penalty += 0.12 * Math.min(count, 2);
+    else if (backups < count - 1) penalty += 0.04 * (count - 1 - backups);
+  });
+  return penalty;
+}
+
 function tacChooseFormation(coach, effectif) {
   const adaptability = tacCoachAdaptability(coach);
   const identity = tacCoachFormationIdentity(coach);
@@ -2694,9 +2728,14 @@ function tacChooseFormation(coach, effectif) {
   // l'identite du coach : a couverture egale ou proche, la forme la plus
   // proche de sa philosophie l'emporte.
   const evalFor = key => {
-    const base = tacAssignFormation(effectif, TAC_FORMATIONS[key]);
+    const slots = TAC_FORMATIONS[key];
+    const base = tacAssignFormation(effectif, slots);
     const affinity = tacFormationAffinity(key, identity);
-    return { key, ...base, affinity, combined: base.coverage + TAC_IDENTITY_WEIGHT * affinity };
+    const benchPenalty = tacBenchDepthPenalty(slots, base);
+    return {
+      key, ...base, affinity, benchPenalty,
+      combined: base.coverage + TAC_IDENTITY_WEIGHT * affinity - TAC_BENCH_DEPTH_WEIGHT * benchPenalty,
+    };
   };
 
   // Meilleure formation du catalogue pour CE coach precis (l'identite est
@@ -2762,6 +2801,8 @@ function tacChooseFormation(coach, effectif) {
   const source = bestKey === preferee ? "preferee" : bestKey === deuxieme ? "deuxieme_preferee" : "adaptee";
   let reason;
   if (seedUnplayable) reason = "Le système de référence était injouable avec l'effectif actuel : l'entraîneur en change, quel que soit son niveau d'adaptabilité.";
+  else if (seedRes.holes === 0 && bestRes.benchPenalty + 0.05 < seedRes.benchPenalty)
+    reason = `Système de référence jouable en titulaires, mais banc trop juste sur certains postes (peu ou pas de remplaçants naturels) : l'entraîneur privilégie un système mieux couvert en profondeur, quitte à s'écarter légèrement de son système favori.`;
   else reason = `Système plus adapté, à la fois à l'effectif et à l'identité du coach (adaptabilité ${adaptability.toFixed(1)}/20, marge de bascule requise ${Math.round(switchMargin * 100)} pt de couverture).`;
   return { source, formation: bestKey, result: bestRes, reason };
 }
