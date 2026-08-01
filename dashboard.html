@@ -2705,20 +2705,24 @@ function tacChooseFormation(coach, effectif) {
   return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori était injouable ; l'entraîneur (peu adaptable) se replie sur son second choix." };
 }
 
-// ---- Consignes de jeu (passes / rythme / projection / approche) -----------
-// Au-dela de la formation, quatre curseurs differencient reellement deux
-// tactiques qui partagent le meme systeme, et alimentent le moteur de
-// simulation : le type de passe recherche, le rythme impose au jeu, la
-// projection vers l'avant a la recuperation du ballon, et l'approche
-// generale (possession / contre-attaque). Comme pour le choix de formation,
-// un coach adaptable (adaptability >= 12) batit ces consignes sur le profil
-// reel de son onze de depart ; un coach rigide les impose depuis sa propre
-// philosophie (niveau d'attaque/defense, mentalite), sans se soucier de
+// ---- Consignes de jeu (avec et sans ballon) --------------------------------
+// Au-dela de la formation, une serie de curseurs differencient reellement
+// deux tactiques qui partagent le meme systeme, et alimentent le moteur de
+// simulation :
+//  - avec ballon : type de passe, rythme, projection a la recuperation,
+//    approche generale (possession / contre-attaque), largeur du jeu,
+//    relance du gardien ;
+//  - sans ballon : hauteur du bloc defensif, frequence de declenchement du
+//    pressing, intensite du pressing (jusqu'a presser le gardien adverse).
+// Comme pour le choix de formation, un coach adaptable (adaptability >= 12)
+// part de sa propre identite et ne s'en ecarte que la ou l'effectif reel
+// l'impose ; un coach rigide impose ses consignes depuis sa seule
+// philosophie (niveau attaque/defense, mentalite), sans se soucier de
 // l'effectif dont il dispose.
-function tacAvgAttrs(assigned, keys) {
+function tacAvgAttrsFiltered(assigned, predicate, keys) {
   const vals = [];
   assigned.forEach(a => {
-    if (!a.player || a.slot.role === "GB") return;
+    if (!a.player || !predicate(a)) return;
     keys.forEach(k => {
       const v = Number(a.player[k]);
       if (Number.isFinite(v)) vals.push(v);
@@ -2726,18 +2730,35 @@ function tacAvgAttrs(assigned, keys) {
   });
   return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 10; // valeur neutre a defaut
 }
+function tacAvgAttrs(assigned, keys) {
+  return tacAvgAttrsFiltered(assigned, a => a.slot.role !== "GB", keys);
+}
 
-// Scores construits a partir du profil reel des titulaires (technique/passes
-// vs physique/vitesse vs sens du placement) : le coach adapte ses consignes
-// a ce que son effectif sait faire.
+// Scores construits a partir du profil reel des titulaires : le coach ajuste
+// ses consignes a ce que son effectif sait vraiment faire.
 function tacInstructionScoresFromEffectif(assigned, mIdx) {
+  const m = mIdx / 4 * 20; // mentalite ramenee sur une echelle ~0-20
   const possessionSkill = tacAvgAttrs(assigned, ["technique", "passes", "vision_du_jeu", "prise_de_balle", "jeu_collectif"]);
   const physicalSkill = tacAvgAttrs(assigned, ["vitesse", "acceleration", "endurance", "volume_de_jeu"]);
   const transitionSkill = tacAvgAttrs(assigned, ["decisions", "anticipation", "agressivite"]);
+  const pressIntensitySkill = tacAvgAttrs(assigned, ["agressivite", "tacles", "decisions"]);
+  const staminaSkill = tacAvgAttrs(assigned, ["endurance", "volume_de_jeu"]);
+  const defSkill = tacAvgAttrsFiltered(assigned, a => a.slot.role === "D", ["vitesse", "acceleration", "placement", "anticipation"]);
+  const wideSkill = tacAvgAttrsFiltered(assigned, a => a.slot.role !== "GB" && a.slot.side !== "C", ["centres", "dribbles"]);
+  const centralSkill = tacAvgAttrsFiltered(assigned, a => a.slot.role !== "GB" && a.slot.side === "C", ["technique", "passes"]);
+  const gk = assigned.find(a => a.slot.role === "GB" && a.player);
+  const gkBuild = gk
+    ? tacAvgAttrsFiltered([gk], () => true, ["relance_a_la_main", "sorties_dans_les_pieds"]) - (Number(gk.player.degagement) || 10)
+    : 0;
   return {
     possessionBias: possessionSkill - physicalSkill,
-    tempo: physicalSkill * 0.7 + (mIdx / 4 * 20) * 0.3,
+    tempo: physicalSkill * 0.7 + m * 0.3,
     transition: transitionSkill * 0.6 + physicalSkill * 0.4,
+    lineHeight: defSkill * 0.6 + m * 0.4,
+    pressFreq: staminaSkill * 0.6 + m * 0.4,
+    pressIntensity: pressIntensitySkill * 0.6 + m * 0.4,
+    widthBias: wideSkill - centralSkill,
+    gkBuild,
   };
 }
 
@@ -2747,10 +2768,16 @@ function tacInstructionScoresFromEffectif(assigned, mIdx) {
 function tacInstructionScoresFromCoach(coach, mIdx) {
   const att = Number(coach.niveau_attaque) || 10;
   const def = Number(coach.niveau_defense) || 10;
+  const m = mIdx / 4 * 20;
   return {
     possessionBias: def - att,
-    tempo: att * 0.5 + (mIdx / 4 * 20) * 0.5,
-    transition: att * 0.6 + (mIdx / 4 * 20) * 0.4,
+    tempo: att * 0.5 + m * 0.5,
+    transition: att * 0.6 + m * 0.4,
+    lineHeight: att * 0.6 + m * 0.4,
+    pressFreq: att * 0.5 + m * 0.5,
+    pressIntensity: def * 0.6 + m * 0.4,
+    widthBias: (m - 10) * 0.6,
+    gkBuild: def - att,
   };
 }
 
@@ -2774,6 +2801,31 @@ function tacLabelApproche(passesLabel, projectionLabel) {
   if (passesLabel === "Courtes" && projectionLabel === "Conservation") return "Possession";
   return "Équilibré";
 }
+function tacLabelLigne(lineHeight) {
+  if (lineHeight >= 13) return "Haute";
+  if (lineHeight <= 8) return "Basse";
+  return "Médiane";
+}
+function tacLabelPressFreq(pressFreq) {
+  if (pressFreq >= 13) return "Systématique";
+  if (pressFreq <= 8) return "Rare";
+  return "Ponctuel";
+}
+function tacLabelPressIntensity(pressIntensity) {
+  if (pressIntensity >= 13) return "Élevée";
+  if (pressIntensity <= 8) return "Faible";
+  return "Modérée";
+}
+function tacLabelLargeur(widthBias) {
+  if (widthBias >= 2) return "Jeu large";
+  if (widthBias <= -2) return "Axial";
+  return "Équilibré";
+}
+function tacLabelRelanceGardien(gkBuild) {
+  if (gkBuild >= 2) return "Construite (repart de la défense)";
+  if (gkBuild <= -2) return "Longue (balance devant)";
+  return "Mixte";
+}
 
 // Un coach adaptable ne calque pas ses consignes sur l'effectif : il part de
 // sa propre identite (coachScores) et ne s'en ecarte que la ou l'effectif
@@ -2783,19 +2835,21 @@ function tacLabelApproche(passesLabel, projectionLabel) {
 // entierement (MAX_SHIFT_FACTOR plafonne la bascule) — et d'autant plus
 // franchement qu'il est adaptable (le facteur grandit avec l'adaptabilite,
 // nul pile au seuil qui separe coach rigide et adaptable, pour une
-// transition continue entre les deux profils).
+// transition continue entre les deux profils). S'applique uniformement a
+// tous les curseurs (avec et sans ballon).
 function tacBlendCoachIdentity(coachScores, effectifScores, adaptability) {
   const DEADBAND = 2.5; // ecart tolere (echelle ~0-20) sans remise en cause
   const MAX_SHIFT_FACTOR = 0.6; // ne bascule jamais entierement sur l'effectif
   const factor = Math.min(1, Math.max(0, (adaptability - 12) / 8)) * MAX_SHIFT_FACTOR;
-  const blend = key => {
+  const blended = {};
+  Object.keys(coachScores).forEach(key => {
     const coachVal = coachScores[key], effVal = effectifScores[key];
     const gap = effVal - coachVal;
-    if (Math.abs(gap) <= DEADBAND) return coachVal;
+    if (Math.abs(gap) <= DEADBAND) { blended[key] = coachVal; return; }
     const excess = gap - Math.sign(gap) * DEADBAND;
-    return coachVal + excess * factor;
-  };
-  return { possessionBias: blend("possessionBias"), tempo: blend("tempo"), transition: blend("transition") };
+    blended[key] = coachVal + excess * factor;
+  });
+  return blended;
 }
 
 function tacComputeInstructions(coach, adaptability, assigned) {
@@ -2806,7 +2860,7 @@ function tacComputeInstructions(coach, adaptability, assigned) {
   if (adapte) {
     const effectifScores = tacInstructionScoresFromEffectif(assigned, mIdx);
     scores = tacBlendCoachIdentity(coachScores, effectifScores, adaptability);
-    reason = "Le coach garde sa philosophie de base, mais l'ajuste là où le profil réel des titulaires (technique/passes vs physique/vitesse) l'impose vraiment.";
+    reason = "Le coach garde sa philosophie de base, mais l'ajuste là où le profil réel des titulaires (technique/physique, défenseurs, ailiers, gardien) l'impose vraiment.";
   } else {
     scores = coachScores;
     reason = "Consignes imposées par la philosophie du coach (niveau attaque/défense, mentalité), sans tenir compte de l'effectif.";
@@ -2816,9 +2870,20 @@ function tacComputeInstructions(coach, adaptability, assigned) {
   const rythme = tacLabelRythme(scores.tempo);
   const projection = tacLabelProjection(scores.transition, scores.possessionBias);
   const approche = tacLabelApproche(passes, projection);
+  const ligne = tacLabelLigne(scores.lineHeight);
+  const pressingFrequence = tacLabelPressFreq(scores.pressFreq);
+  const pressingIntensite = tacLabelPressIntensity(scores.pressIntensity);
+  const largeur = tacLabelLargeur(scores.widthBias);
+  const relanceGardien = tacLabelRelanceGardien(scores.gkBuild);
+  // Le pressing ne remonte "jusqu'au gardien" que si les trois curseurs
+  // qui le composent sont tous au maximum : ligne haute, declenchement
+  // systematique et forte intensite.
+  const pressingSurGardien = ligne === "Haute" && pressingFrequence === "Systématique" && pressingIntensite === "Élevée";
 
   return {
     passes, rythme, projection, approche,
+    ligne, pressingFrequence, pressingIntensite, pressingSurGardien,
+    largeur, relanceGardien,
     origin: adapte ? "adaptees" : "imposees",
     reason,
   };
@@ -2835,7 +2900,7 @@ const TAC_SOURCE_LABEL = { preferee: "1ère formation préférée", deuxieme_pre
 async function fetchClubTacticEffectif(clubId) {
   const { data, error } = await supabaseClient
     .from("game_players")
-    .select("id, nom, poste_brut, postes, niveau_actuel, potentiel, blessure_jours, statut, categorie, technique, passes, vision_du_jeu, prise_de_balle, jeu_collectif, vitesse, acceleration, endurance, volume_de_jeu, decisions, anticipation, agressivite")
+    .select("id, nom, poste_brut, postes, niveau_actuel, potentiel, blessure_jours, statut, categorie, technique, passes, vision_du_jeu, prise_de_balle, jeu_collectif, vitesse, acceleration, endurance, volume_de_jeu, decisions, anticipation, agressivite, tacles, placement, centres, dribbles, relance_a_la_main, sorties_dans_les_pieds, degagement")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId)
     .eq("categorie", "equipe_a");
@@ -2917,12 +2982,19 @@ function tacCoachPanelHtml(coach, source, formation, reason, instructions) {
   ].filter(Boolean).map(c => `<span class="tac-chip">${escapeHtml(c)}</span>`).join("");
 
   const instructionsHtml = instructions ? `
-      <h3 style="margin-top:16px;">Consignes de jeu</h3>
+      <h3 style="margin-top:16px;">Consignes avec ballon</h3>
       <div class="tac-row"><span class="tac-label">Origine</span><span class="tac-value"><span class="tac-badge ${instructions.origin}">${TAC_INSTRUCTION_ORIGIN_LABEL[instructions.origin]}</span></span></div>
       <div class="tac-row"><span class="tac-label">Passes</span><span class="tac-value">${escapeHtml(instructions.passes)}</span></div>
       <div class="tac-row"><span class="tac-label">Rythme</span><span class="tac-value">${escapeHtml(instructions.rythme)}</span></div>
       <div class="tac-row"><span class="tac-label">Projection à la récupération</span><span class="tac-value">${escapeHtml(instructions.projection)}</span></div>
       <div class="tac-row"><span class="tac-label">Approche</span><span class="tac-value">${escapeHtml(instructions.approche)}</span></div>
+      <div class="tac-row"><span class="tac-label">Largeur du jeu</span><span class="tac-value">${escapeHtml(instructions.largeur)}</span></div>
+      <div class="tac-row"><span class="tac-label">Relance gardien</span><span class="tac-value">${escapeHtml(instructions.relanceGardien)}</span></div>
+      <h3 style="margin-top:16px;">Consignes sans ballon</h3>
+      <div class="tac-row"><span class="tac-label">Bloc défensif</span><span class="tac-value">${escapeHtml(instructions.ligne)}</span></div>
+      <div class="tac-row"><span class="tac-label">Déclenchement pressing</span><span class="tac-value">${escapeHtml(instructions.pressingFrequence)}</span></div>
+      <div class="tac-row"><span class="tac-label">Intensité pressing</span><span class="tac-value">${escapeHtml(instructions.pressingIntensite)}</span></div>
+      <div class="tac-row"><span class="tac-label">Pressing jusqu'au gardien</span><span class="tac-value">${instructions.pressingSurGardien ? "Oui" : "Non"}</span></div>
       <div class="tac-explain">${escapeHtml(instructions.reason)}</div>
   ` : "";
 
