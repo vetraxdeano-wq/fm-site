@@ -726,7 +726,7 @@ function labelForToken(base, side) {
   const sideNames = { G: "Gauche", C: "Central(e)", D: "Droit" };
   if (base === "GB") return "Gardien (GB)";
   const code = base + (side || "");
-  return `${names[base] || base} ${side ? sideNames[side] || "" : ""} (${code}${side || ""})`.replace(/\s+/g," ").trim();
+  return `${names[base] || base} ${side ? sideNames[side] || "" : ""} (${code})`.replace(/\s+/g," ").trim();
 }
 
 function attrValClass(v) {
@@ -907,7 +907,7 @@ function bootSVG(levelLabel) {
 }
 
 // ---------- Petit terrain de postes (cliquable) ----------
-const BASE_TO_ROW = { D: 0, AL: 1, MD: 2, M: 3, MO: 4, BT: 5 };
+const BASE_TO_ROW = { D: 0, AL: 1, MD: 1, M: 2, MO: 3, BT: 4 };
 const COL_FROM_LETTER = { G: 0, C: 1, D: 2 };
 const LETTER_FROM_COL = ["G", "C", "D"];
 function parsePosteToken(token) {
@@ -921,12 +921,21 @@ function parsePosteToken(token) {
 }
 // Base "par défaut" pour explorer une case même si le joueur n'y joue pas.
 function defaultBaseForCell(row, col) {
+  const side = LETTER_FROM_COL[col];
   if (row === 0) return "D";
-  if (row === 1) return "AL";
-  if (row === 2) return "MD";
-  if (row === 3) return "M";
-  if (row === 4) return "MO";
+  if (row === 1) return side === "C" ? "MD" : "AL";
+  if (row === 2) return "M";
+  if (row === 3) return "MO";
   return "BT";
+}
+// MD et BT n'existent jamais avec un cote (G/D) dans les donnees : meme si
+// la case cliquee est sur une colonne laterale de leur ligne, on force un
+// cote central pour ne pas fabriquer un poste qui n'existe pas ("Milieu
+// defensif Droit", "Buteur Gauche"...).
+const CENTER_ONLY_BASES = new Set(["MD", "BT"]);
+function defaultSideForCell(row, col) {
+  const base = defaultBaseForCell(row, col);
+  return CENTER_ONLY_BASES.has(base) ? "C" : LETTER_FROM_COL[col];
 }
 
 let pitchCellTokens = null; // grille [row][col] -> tableau de {base, side}
@@ -949,7 +958,7 @@ function handlePitchCellClick(row, col) {
   }
   const tokens = (pitchCellTokens && pitchCellTokens[row] && pitchCellTokens[row][col] && pitchCellTokens[row][col].length)
     ? pitchCellTokens[row][col]
-    : [{ base: defaultBaseForCell(row, col), side: LETTER_FROM_COL[col] }];
+    : [{ base: defaultBaseForCell(row, col), side: defaultSideForCell(row, col) }];
   selectPositionByTokens(tokens);
 }
 function handlePitchGKClick() {
@@ -970,8 +979,8 @@ function handlePitchGKClick() {
 }
 
 function pitchSVG(postes) {
-  const grid = [[false, false, false], [false, false, false], [false, false, false], [false, false, false], [false, false, false], [false, false, false]];
-  const cellTokens = [[[], [], []], [[], [], []], [[], [], []], [[], [], []], [[], [], []], [[], [], []]];
+  const grid = [[false, false, false], [false, false, false], [false, false, false], [false, false, false], [false, false, false]];
+  const cellTokens = [[[], [], []], [[], [], []], [[], [], []], [[], [], []], [[], [], []]];
   let isGK = false;
   (postes || []).forEach(token => {
     const parsed = parsePosteToken(token);
@@ -991,12 +1000,12 @@ function pitchSVG(postes) {
   pitchCellTokens = cellTokens;
   pitchGKActive = isGK;
 
-  const w = 200, h = 320;
+  const w = 200, h = 290;
   const colX = [44, 100, 156];
-  const rowY = [255, 214, 173, 132, 91, 50];
+  const rowY = [232, 187, 142, 97, 52];
 
   let cells = "";
-  for (let r = 0; r < 6; r++) {
+  for (let r = 0; r < 5; r++) {
     for (let c = 0; c < 3; c++) {
       const active = grid[r][c];
       cells += `<rect class="pitch-cell" data-cellkey="${r}-${c}" onclick="handlePitchCellClick(${r},${c})"
