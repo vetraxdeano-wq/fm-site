@@ -120,16 +120,17 @@
 
   /* Sous-onglets de la page club (Infos club / Effectif) */
   .fm-subtabs {
-    display: flex; gap: 4px; padding: 10px 24px 0; background: var(--panel);
+    display: flex; gap: 4px; padding: 10px 24px 0 4px; background: var(--panel);
     border-bottom: 1px solid var(--border); flex: 0 0 auto;
   }
   .fm-subtab {
-    display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 13px;
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px; font-size: 13px;
     font-weight: 700; color: var(--text-dim); cursor: pointer; border-bottom: 3px solid transparent;
     user-select: none;
   }
   .fm-subtab:hover { color: var(--text); }
   .fm-subtab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .fm-subtab-icon { width: 18px; text-align: center; flex-shrink: 0; }
 
   .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding: 20px 24px; }
 
@@ -657,13 +658,13 @@ function renderFmSubtabs(viewedClubId) {
   const el = document.getElementById("fmSubtabs");
   el.innerHTML = `
     <div class="fm-subtab active" data-key="infosclub">
-      <span>🛡️</span><span>Infos club</span>
+      <span class="fm-subtab-icon">🛡️</span><span>Infos club</span>
     </div>
     <div class="fm-subtab" data-key="effectif">
-      <span>👥</span><span>Effectif</span>
+      <span class="fm-subtab-icon">👥</span><span>Effectif</span>
     </div>
     <div class="fm-subtab" data-key="staff">
-      <span>💼</span><span>Staff</span>
+      <span class="fm-subtab-icon">💼</span><span>Staff</span>
     </div>
   `;
   el.querySelector('[data-key="effectif"]').addEventListener("click", () => {
