@@ -209,6 +209,11 @@
   .squad-subtab-icon { font-size: 15px; line-height: 1; }
   .squad-subtab-btn:hover { color: var(--text); }
   .squad-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
+  .squad-subtab-count {
+    background: rgba(255,255,255,0.08); color: var(--text-dim); font-size: 11px;
+    font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  }
+  .squad-subtab-btn.active .squad-subtab-count { background: rgba(251,191,36,0.18); color: var(--gold); }
   .fm-squad-card-header {
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
     padding: 14px 18px; border-bottom: 1px solid var(--border); flex: 0 0 auto;
@@ -288,9 +293,9 @@
     <div class="fm-content-wrap">
       <div class="fm-squad-card">
         <div class="squad-subtab-bar" id="squadSubtabBar">
-          <button type="button" class="squad-subtab-btn active" data-subtab="equipe_a"><span class="squad-subtab-icon">🏟️</span>Équipe A</button>
-          <button type="button" class="squad-subtab-btn" data-subtab="reserve"><span class="squad-subtab-icon">🔁</span>Réserve</button>
-          <button type="button" class="squad-subtab-btn" data-subtab="u18"><span class="squad-subtab-icon">🌱</span>U18</button>
+          <button type="button" class="squad-subtab-btn active" data-subtab="equipe_a"><span class="squad-subtab-icon">🏟️</span>Équipe A <span class="squad-subtab-count">0</span></button>
+          <button type="button" class="squad-subtab-btn" data-subtab="reserve"><span class="squad-subtab-icon">🔁</span>Réserve <span class="squad-subtab-count">0</span></button>
+          <button type="button" class="squad-subtab-btn" data-subtab="u18"><span class="squad-subtab-icon">🌱</span>U18 <span class="squad-subtab-count">0</span></button>
         </div>
         <div class="fm-squad-card-header">
           <span class="title" id="fmSquadTitle">Effectif</span>
@@ -876,9 +881,13 @@ let activeMyClubSortState = myClubSortState;
 // affiches du tout : on ne connait pas ces infos sur un effectif adverse).
 let isOwnClubView = true;
 
+function playersInActiveSquadSubtab() {
+  return myClubPlayers.filter(p => (p.categorie || "equipe_a") === activeSquadSubtab);
+}
+
 function renderMyClubBody() {
   const body = document.getElementById("myClubBody");
-  const sorted = sortPlayers(myClubPlayers, MYCLUB_COLUMNS, activeMyClubSortState);
+  const sorted = sortPlayers(playersInActiveSquadSubtab(), MYCLUB_COLUMNS, activeMyClubSortState);
 
   body.innerHTML = sorted.map(p => {
     const note = p.note_moyenne_saison === null || p.note_moyenne_saison === undefined
@@ -914,9 +923,10 @@ function renderMyClubBody() {
 
 // ---- Sous-onglets de l'effectif : "Équipe A" / "Réserve" / "U18" ----
 // Sur le meme principe que les sous-onglets de l'onglet Staff du dashboard.
-// La base de donnees ne distingue pas encore les joueurs par categorie
-// d'equipe : "Équipe A" affiche donc l'effectif actuel (tout le monde),
-// et "Réserve" / "U18" restent vides en attendant que cette donnee existe.
+// Filtre reellement sur game_players.categorie : "u18" est assignee
+// automatiquement a la creation de la partie (joueurs "Jnr", ou <=18 ans
+// avec un CA encore modeste) ; "reserve" reste vide tant qu'aucun
+// mouvement manuel (promotion/retrogradation) n'a ete effectue.
 let activeSquadSubtab = "equipe_a";
 let squadSubtabsWired = false;
 
@@ -937,24 +947,34 @@ function resetSquadSubtabToEquipeA() {
   document.querySelectorAll(".squad-subtab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-subtab") === "equipe_a"));
 }
 
+function updateSquadSubtabCounts() {
+  const counts = { equipe_a: 0, reserve: 0, u18: 0 };
+  myClubPlayers.forEach(p => {
+    const cat = p.categorie || "equipe_a";
+    if (counts[cat] !== undefined) counts[cat]++;
+  });
+  document.querySelectorAll(".squad-subtab-btn").forEach(btn => {
+    const cat = btn.getAttribute("data-subtab");
+    const countEl = btn.querySelector(".squad-subtab-count");
+    if (countEl) countEl.textContent = counts[cat] ?? 0;
+  });
+}
+
 function applySquadSubtabVisibility() {
   const scrollWrap = document.querySelector(".fm-squad-card .table-scroll");
   const noPlayersEmptyEl = document.getElementById("myClubEmpty");
   const categoryEmptyEl = document.getElementById("myClubCategoryEmpty");
+  const inCategory = playersInActiveSquadSubtab();
 
-  if (activeSquadSubtab !== "equipe_a") {
+  renderMyClubBody();
+
+  if (inCategory.length === 0) {
     scrollWrap.style.display = "none";
-    noPlayersEmptyEl.classList.add("hidden");
     categoryEmptyEl.classList.remove("hidden");
-    return;
-  }
-
-  categoryEmptyEl.classList.add("hidden");
-  if (myClubPlayers.length === 0) {
-    scrollWrap.style.display = "none";
-    noPlayersEmptyEl.classList.remove("hidden");
+    noPlayersEmptyEl.classList.add("hidden");
   } else {
     scrollWrap.style.display = "";
+    categoryEmptyEl.classList.add("hidden");
     noPlayersEmptyEl.classList.add("hidden");
   }
 }
@@ -978,10 +998,10 @@ function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
 
   wireSquadSubtabs();
   resetSquadSubtabToEquipeA();
+  updateSquadSubtabCounts();
 
   const isSortable = col => isOwnClub || (col.key !== "niveau_actuel" && col.key !== "potentiel");
   initSortableHeaders(document.querySelector("#myClubView .squad-table thead"), MYCLUB_COLUMNS, activeMyClubSortState, renderMyClubBody, isSortable);
-  renderMyClubBody();
   applySquadSubtabVisibility();
 }
 
@@ -1056,7 +1076,7 @@ async function loadSquad() {
       id, nom, age, nationalite, poste_brut, statut_special, salaire_actuel,
       contrat_expire, valeur_marchande_actuelle, reputation_mondiale,
       niveau_actuel, potentiel, buts_saison, passes_decisives_saison,
-      matchs_joues_saison, note_moyenne_saison
+      matchs_joues_saison, note_moyenne_saison, categorie
     `)
     .eq("game_id", gameId)
     .eq("game_club_id", gameClubId)
