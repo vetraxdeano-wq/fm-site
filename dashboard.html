@@ -2608,42 +2608,106 @@ function tacAssignFormation(effectif, slots) {
 }
 
 // ---- Choix de la formation selon le profil de l'entraineur ----------------
-// Le coach essaie d'abord son systeme prefere. S'il n'a pas assez de
-// joueurs adequats (couverture < seuil), il tente sa 2e formation preferee.
-// Un entraineur avec une bonne connaissance tactique / adaptabilite saura,
-// en dernier recours, choisir librement dans tout le catalogue le systeme le
-// mieux adapte a l'effectif ; un entraineur rigide s'entete sur sa formation
-// de coeur meme si elle est sous-optimale.
-const TAC_MIN_COVERAGE = 0.55;
-const TAC_CRITICAL_COVERAGE = 0.35;
+// Le coach evalue son systeme prefere, son second choix, et le meilleur
+// systeme du catalogue compte tenu a la fois de l'effectif ET de sa propre
+// identite tactique (cf. tacFormationAffinity, plus bas). Il ne s'ecarte de
+// son systeme de reference (le meilleur de ses deux favoris) que si
+// l'alternative est meilleure d'une marge suffisante — marge qui retrecit
+// continument avec son adaptabilite : un coach tres rigide exige une
+// amelioration enorme pour bouger, un coach tres adaptable suit la moindre
+// amelioration. Il n'y a plus de palier binaire : chaque point
+// d'adaptabilite rapproche progressivement le coach de l'optimum objectif.
+const TAC_CRITICAL_COVERAGE = 0.35; // en-deca : systeme juge injouable, meme un coach rigide en change
+const TAC_MAX_SWITCH_MARGIN = 0.35; // marge de couverture (echelle 0-1) qu'un coach totalement rigide exige avant de lacher son systeme de reference
+const TAC_IDENTITY_WEIGHT = 0.12; // poids de l'identite du coach dans le score qui departage les formations du catalogue
 // Adaptabilite du coach (~0-20) : moyenne de sa connaissance tactique et de
-// son adaptabilite. Utilisee a la fois pour choisir la formation (explorer
-// le catalogue ou imposer le systeme fetiche) et pour decider si les
-// consignes de jeu (passes/rythme/projection/approche) sont ajustees a
-// l'effectif ou imposees par la philosophie du coach.
+// son adaptabilite. Utilisee a la fois pour choisir la formation (marge de
+// bascule vers le catalogue) et pour doser l'ajustement des consignes de jeu
+// (passes/rythme/projection/approche) a l'effectif reel.
 function tacCoachAdaptability(coach) {
   return ((Number(coach?.connaissance_tactique) || 10) + (Number(coach?.adaptabilite_2) || 10)) / 2; // ~0-20
 }
 
+// Profil "de forme" d'une formation, independant de tout effectif : plus
+// offensive (plus d'attaquants/offensifs que de defenseurs) ou plus
+// defensive, plus large (lateraux/ailiers) ou plus axiale. Calcule une fois
+// pour tout le catalogue.
+function tacFormationShapeStats(slots) {
+  let def = 0, att = 0, wide = 0;
+  slots.forEach(s => {
+    if (s.role === "D") def++;
+    else if (s.role === "BT") att += 1;
+    else if (s.role === "MO") att += 0.5;
+    if (s.side !== "C") wide++;
+  });
+  return { offensiveness: att - def, width: wide / slots.length };
+}
+const TAC_FORMATION_STATS = Object.fromEntries(
+  Object.entries(TAC_FORMATIONS).map(([key, slots]) => [key, tacFormationShapeStats(slots)])
+);
+const TAC_FORMATION_STATS_MEAN = (() => {
+  const vals = Object.values(TAC_FORMATION_STATS);
+  return {
+    offensiveness: vals.reduce((s, v) => s + v.offensiveness, 0) / vals.length,
+    width: vals.reduce((s, v) => s + v.width, 0) / vals.length,
+  };
+})();
+
+// Tendance "de forme" du coach lui-meme, independamment de l'effectif du
+// moment : deduite de son niveau attaque/defense, de sa mentalite et de son
+// style tactique (memes deltas que TAC_STYLE_PROFILES, pour rester coherent
+// avec le badge affiche). Sert a garder une empreinte du coach dans le choix
+// de formation meme quand il explore librement le catalogue — sans quoi
+// deux coachs tres differents mais tous deux adaptables convergeraient vers
+// exactement la meme formation "objectivement optimale" pour l'effectif, en
+// ignorant totalement qui ils sont.
+function tacCoachFormationIdentity(coach) {
+  const att = Number(coach?.niveau_attaque) || 10;
+  const def = Number(coach?.niveau_defense) || 10;
+  const m = tacMentalityIndex(coach?.mentalite || "Équilibré") / 4 * 20;
+  const styleDelta = TAC_STYLE_PROFILES[coach?.style_tactique] || {};
+  return {
+    offensiveness: (att - def) * 0.4 + (m - 10) * 0.3 + (styleDelta.lineHeight || 0) * 0.3 + (styleDelta.pressIntensity || 0) * 0.2,
+    width: (styleDelta.widthBias || 0) + (m - 10) * 0.15,
+  };
+}
+// Affinite (bornee a ±1) entre une formation du catalogue et l'identite du
+// coach. Poids volontairement modeste (TAC_IDENTITY_WEIGHT) : elle ne fait
+// jamais gagner une formation nettement moins couvrante, mais departage les
+// cas proches et empeche la convergence pure sur l'effectif.
+function tacFormationAffinity(key, identity) {
+  const stats = TAC_FORMATION_STATS[key];
+  const offDiff = stats.offensiveness - TAC_FORMATION_STATS_MEAN.offensiveness;
+  const widDiff = stats.width - TAC_FORMATION_STATS_MEAN.width;
+  const raw = identity.offensiveness * offDiff * 0.05 + identity.width * widDiff * 0.3;
+  return Math.max(-1, Math.min(1, raw));
+}
+
 function tacChooseFormation(coach, effectif) {
   const adaptability = tacCoachAdaptability(coach);
+  const identity = tacCoachFormationIdentity(coach);
   const preferee = coach?.formation_preferee && TAC_FORMATIONS[coach.formation_preferee] ? coach.formation_preferee : null;
   const deuxieme = coach?.deuxieme_formation_preferee && TAC_FORMATIONS[coach.deuxieme_formation_preferee] ? coach.deuxieme_formation_preferee : null;
 
-  const evalFor = key => ({ key, ...tacAssignFormation(effectif, TAC_FORMATIONS[key]) });
+  // Chaque formation est notee sur sa couverture reelle de l'effectif (cf.
+  // tacAssignFormation), corrigee marginalement par son affinite avec
+  // l'identite du coach : a couverture egale ou proche, la forme la plus
+  // proche de sa philosophie l'emporte.
+  const evalFor = key => {
+    const base = tacAssignFormation(effectif, TAC_FORMATIONS[key]);
+    const affinity = tacFormationAffinity(key, identity);
+    return { key, ...base, affinity, combined: base.coverage + TAC_IDENTITY_WEIGHT * affinity };
+  };
 
-  // Recherche du meilleur systeme sur tout le catalogue : place chaque joueur
-  // a son meilleur poste possible (formation par formation, cf.
-  // tacAssignFormation) et retient celle qui minimise les trous / maximise la
-  // couverture. Utilise à la fois quand aucune preference n'est connue pour
-  // l'entraineur, et quand un entraineur adaptable doit s'ecarter de ses
-  // preferences car l'effectif ne s'y prete pas.
-  function bestFromCatalog(seedKey, seedRes) {
-    let bestKey = seedKey || Object.keys(TAC_FORMATIONS)[0];
-    let bestRes = seedRes || evalFor(bestKey);
+  // Meilleure formation du catalogue pour CE coach precis (l'identite est
+  // deja integree via `combined`) : deux coachs differents peuvent donc
+  // aboutir a des "meilleures formations" differentes sur le meme effectif.
+  function bestFromCatalog() {
+    let bestKey = Object.keys(TAC_FORMATIONS)[0];
+    let bestRes = evalFor(bestKey);
     Object.keys(TAC_FORMATIONS).forEach(key => {
       const r = evalFor(key);
-      if (r.holes < bestRes.holes || (r.holes === bestRes.holes && r.coverage > bestRes.coverage)) {
+      if (r.holes < bestRes.holes || (r.holes === bestRes.holes && r.combined > bestRes.combined)) {
         bestKey = key; bestRes = r;
       }
     });
@@ -2651,59 +2715,55 @@ function tacChooseFormation(coach, effectif) {
   }
 
   // Cas limite : aucune formation preferee connue en base pour cet
-  // entraineur (donnee manquante). Plutot que d'imposer un systeme par
-  // defaut arbitraire, il cherche directement a optimiser l'effectif
-  // disponible : chaque joueur est place a son meilleur poste, tous systemes
-  // confondus.
+  // entraineur (donnee manquante). Il n'a pas de reference dont s'ecarter :
+  // il part directement sur la meilleure formation du catalogue (effectif +
+  // identite).
   if (!preferee && !deuxieme) {
-    const { bestKey, bestRes } = bestFromCatalog(null, null);
+    const { bestKey, bestRes } = bestFromCatalog();
     return {
       source: "adaptee", formation: bestKey, result: bestRes,
-      reason: "Aucun système favori connu pour cet entraîneur : il cherche lui-même la meilleure exploitation possible de l'effectif, en plaçant chaque joueur à son meilleur poste.",
+      reason: "Aucun système favori connu pour cet entraîneur : il cherche lui-même la meilleure exploitation possible de l'effectif, en tenant compte de sa propre identité tactique.",
     };
   }
 
   const resPreferee = preferee ? evalFor(preferee) : null;
   const resDeuxieme = deuxieme ? evalFor(deuxieme) : null;
 
-  // Entraineur adaptable : explore systematiquement tout le catalogue, meme
-  // si son systeme favori est deja parfaitement jouable, pour verifier qu'il
-  // n'existe pas mieux avec l'effectif du moment. bestFromCatalog est seede
-  // avec le meilleur des deux systemes preferes et ne bascule qu'en cas
-  // d'amelioration stricte (a egalite, la preference du coach l'emporte) :
-  // un entraineur rigide (faible connaissance tactique / adaptabilite), lui,
-  // n'explore jamais et reste sur sa formation fetiche sauf si elle est
-  // vraiment intenable pour l'effectif.
-  if (adaptability >= 12) {
-    const preferSeedOnPreferee = resPreferee && (!resDeuxieme
-      || resPreferee.holes < resDeuxieme.holes
-      || (resPreferee.holes === resDeuxieme.holes && resPreferee.coverage >= resDeuxieme.coverage));
-    const seedKey = preferSeedOnPreferee ? preferee : deuxieme;
-    const seedRes = preferSeedOnPreferee ? resPreferee : resDeuxieme;
-    const { bestKey, bestRes } = bestFromCatalog(seedKey, seedRes);
-    const source = bestKey === preferee ? "preferee" : bestKey === deuxieme ? "deuxieme_preferee" : "adaptee";
-    let reason;
-    if (source === "preferee") reason = "L'effectif couvre correctement le système favori de l'entraîneur (vérifié face à tout le catalogue).";
-    else if (source === "deuxieme_preferee") reason = "Le second système préféré de l'entraîneur s'avère plus adapté à l'effectif que son premier choix.";
-    else reason = "Aucun des deux systèmes préférés n'était optimal : l'entraîneur (bon niveau tactique) a exploré tout le catalogue pour placer chaque joueur à son meilleur poste.";
-    return { source, formation: bestKey, result: bestRes, reason };
+  // Systeme de reference : le meilleur des deux favoris (couverture +
+  // identite) — celui dont le coach s'ecartera le plus difficilement.
+  const preferSeedOnPreferee = resPreferee && (!resDeuxieme
+    || resPreferee.holes < resDeuxieme.holes
+    || (resPreferee.holes === resDeuxieme.holes && resPreferee.combined >= resDeuxieme.combined));
+  const seedKey = preferSeedOnPreferee ? preferee : deuxieme;
+  const seedRes = preferSeedOnPreferee ? resPreferee : resDeuxieme;
+  const seedSource = preferSeedOnPreferee ? "preferee" : "deuxieme_preferee";
+
+  // Filet de securite independant de l'adaptabilite : un systeme injouable
+  // (trous) ou franchement sous-dimensionne pour l'effectif est abandonne
+  // par n'importe quel coach, meme le plus rigide.
+  const seedUnplayable = seedRes.holes > 0 || seedRes.coverage < TAC_CRITICAL_COVERAGE;
+
+  // Marge de couverture necessaire pour que le coach lache son systeme de
+  // reference au profit d'autre chose dans le catalogue : continue avec
+  // l'adaptabilite (0-20), nulle a 20, maximale (TAC_MAX_SWITCH_MARGIN) a 0.
+  const switchMargin = seedUnplayable ? 0 : TAC_MAX_SWITCH_MARGIN * (1 - adaptability / 20);
+
+  const { bestKey, bestRes } = bestFromCatalog();
+  const catalogWins = bestRes.holes < seedRes.holes
+    || (bestRes.holes === seedRes.holes && bestRes.combined > seedRes.combined + switchMargin);
+
+  if (!catalogWins) {
+    const reason = seedSource === "preferee"
+      ? "L'effectif (et le profil du coach) couvrent correctement son système favori : pas de raison suffisante d'en changer."
+      : "Le système favori ne convient pas assez : bascule sur le second système préféré de l'entraîneur.";
+    return { source: seedSource, formation: seedKey, result: seedRes, reason };
   }
 
-  // Entraineur peu adaptable : n'explore jamais le catalogue, se contente de
-  // ses deux systemes preferes.
-  if (resPreferee && resPreferee.coverage >= TAC_MIN_COVERAGE && resPreferee.holes === 0) {
-    return { source: "preferee", formation: preferee, result: resPreferee, reason: "L'effectif couvre correctement le système favori de l'entraîneur." };
-  }
-  if (resDeuxieme && resDeuxieme.coverage >= TAC_MIN_COVERAGE && resDeuxieme.holes === 0) {
-    return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori ne colle pas à l'effectif : bascule sur le second système préféré de l'entraîneur." };
-  }
-
-  // Entraineur peu adaptable : force la formation preferee (ou la 2e a
-  // defaut) sauf situation vraiment critique.
-  if (resPreferee && (resPreferee.coverage >= TAC_CRITICAL_COVERAGE || !resDeuxieme)) {
-    return { source: "preferee", formation: preferee, result: resPreferee, reason: "Entraîneur peu flexible : il impose son système favori malgré un effectif imparfaitement adapté." };
-  }
-  return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori était injouable ; l'entraîneur (peu adaptable) se replie sur son second choix." };
+  const source = bestKey === preferee ? "preferee" : bestKey === deuxieme ? "deuxieme_preferee" : "adaptee";
+  let reason;
+  if (seedUnplayable) reason = "Le système de référence était injouable avec l'effectif actuel : l'entraîneur en change, quel que soit son niveau d'adaptabilité.";
+  else reason = `Système plus adapté, à la fois à l'effectif et à l'identité du coach (adaptabilité ${adaptability.toFixed(1)}/20, marge de bascule requise ${Math.round(switchMargin * 100)} pt de couverture).`;
+  return { source, formation: bestKey, result: bestRes, reason };
 }
 
 // ---- Consignes de jeu (avec et sans ballon) --------------------------------
@@ -2792,26 +2852,35 @@ const TAC_PRESSING_TYPE_DELTA = {
 // attaque/defense, mentalite, style tactique, type de pressing) : consignes
 // imposees, sans lien avec la qualite reelle de l'effectif. style_tactique
 // et type_pressing sont les memes valeurs que celles affichees en badge sur
-// le panneau coach : elles doivent donc peser sur le calcul, sous peine de
-// generer des consignes contre-intuitives par rapport a l'identite affichee.
+// le panneau coach : ce sont des choix de philosophie DELIBERES, donc ils
+// doivent rester le principal moteur des consignes. niveau_attaque /
+// niveau_defense / mentalite ne sont que des niveaux de competence bruts —
+// s'ils pesaient autant (voire plus) que le style choisi, un coach au badge
+// "Tiki-Taka" mais tres offensif (att haut, def bas) pouvait se retrouver
+// avec des passes labellisees "Direct", contredisant frontalement son style
+// affiche. TAC_STYLE_WEIGHT amplifie donc l'effet du style_tactique tandis
+// que la base att/def/mentalite est ramenee a un role de modulation
+// secondaire (BASE_WEIGHT), pour que badge et consignes restent coherents.
+const TAC_STYLE_WEIGHT = 1.6;
 function tacInstructionScoresFromCoach(coach, mIdx) {
   const att = Number(coach.niveau_attaque) || 10;
   const def = Number(coach.niveau_defense) || 10;
   const m = mIdx / 4 * 20;
+  const BASE_WEIGHT = 0.35; // att/def/mentalite : modulation secondaire, pas le moteur principal
   const scores = {
-    possessionBias: def - att,
-    tempo: att * 0.5 + m * 0.5,
-    transition: att * 0.6 + m * 0.4,
-    lineHeight: att * 0.6 + m * 0.4,
-    pressFreq: att * 0.5 + m * 0.5,
-    pressIntensity: def * 0.6 + m * 0.4,
+    possessionBias: (def - att) * BASE_WEIGHT,
+    tempo: (att * 0.5 + m * 0.5) * (BASE_WEIGHT + 0.3),
+    transition: (att * 0.6 + m * 0.4) * (BASE_WEIGHT + 0.3),
+    lineHeight: (att * 0.6 + m * 0.4) * (BASE_WEIGHT + 0.3),
+    pressFreq: (att * 0.5 + m * 0.5) * (BASE_WEIGHT + 0.3),
+    pressIntensity: (def * 0.6 + m * 0.4) * (BASE_WEIGHT + 0.3),
     widthBias: (m - 10) * 0.6,
-    gkBuild: def - att,
+    gkBuild: (def - att) * BASE_WEIGHT,
   };
   const styleDelta = TAC_STYLE_PROFILES[coach.style_tactique] || {};
   const pressDelta = TAC_PRESSING_TYPE_DELTA[coach.type_pressing] || {};
   Object.keys(scores).forEach(key => {
-    scores[key] += (styleDelta[key] || 0) + (pressDelta[key] || 0);
+    scores[key] += (styleDelta[key] || 0) * TAC_STYLE_WEIGHT + (pressDelta[key] || 0);
   });
   return scores;
 }
@@ -2867,15 +2936,17 @@ function tacLabelRelanceGardien(gkBuild) {
 // l'impose vraiment. En dessous de DEADBAND, l'ecart entre ce qu'il voudrait
 // et ce que permet l'effectif est trop faible pour justifier un changement :
 // il garde sa philosophie telle quelle. Au-dela, il corrige, mais jamais
-// entierement (MAX_SHIFT_FACTOR plafonne la bascule) — et d'autant plus
-// franchement qu'il est adaptable (le facteur grandit avec l'adaptabilite,
-// nul pile au seuil qui separe coach rigide et adaptable, pour une
-// transition continue entre les deux profils). S'applique uniformement a
-// tous les curseurs (avec et sans ballon).
+// entierement (MAX_SHIFT_FACTOR plafonne la bascule). Le facteur de bascule
+// est desormais lineaire sur TOUTE l'echelle d'adaptabilite (0 a 20), sans
+// palier : un coach a 2/20 et un coach a 11/20 ne se comportent plus de
+// facon strictement identique (l'ancien seuil fixe a 12 les mettait tous
+// les deux a "zero ajustement"), chaque point d'adaptabilite rapproche
+// continument le coach du profil dicte par son effectif. S'applique
+// uniformement a tous les curseurs (avec et sans ballon).
 function tacBlendCoachIdentity(coachScores, effectifScores, adaptability) {
   const DEADBAND = 2.5; // ecart tolere (echelle ~0-20) sans remise en cause
   const MAX_SHIFT_FACTOR = 0.6; // ne bascule jamais entierement sur l'effectif
-  const factor = Math.min(1, Math.max(0, (adaptability - 12) / 8)) * MAX_SHIFT_FACTOR;
+  const factor = Math.min(1, Math.max(0, adaptability / 20)) * MAX_SHIFT_FACTOR;
   const blended = {};
   Object.keys(coachScores).forEach(key => {
     const coachVal = coachScores[key], effVal = effectifScores[key];
@@ -2890,16 +2961,16 @@ function tacBlendCoachIdentity(coachScores, effectifScores, adaptability) {
 function tacComputeInstructions(coach, adaptability, assigned) {
   const mIdx = tacMentalityIndex(coach.mentalite || "Équilibré"); // 0..4
   const coachScores = tacInstructionScoresFromCoach(coach, mIdx);
+  const effectifScores = tacInstructionScoresFromEffectif(assigned, mIdx);
+  const scores = tacBlendCoachIdentity(coachScores, effectifScores, adaptability);
+  // Le "seuil adaptable" n'existe plus que comme repere descriptif pour le
+  // badge affiche (au-dela de 12/20, on considere que l'ajustement est
+  // assez marque pour le mentionner) : le calcul lui-meme est continu, ce
+  // seuil ne cree plus aucune discontinuite de comportement.
   const adapte = adaptability >= 12;
-  let scores, reason;
-  if (adapte) {
-    const effectifScores = tacInstructionScoresFromEffectif(assigned, mIdx);
-    scores = tacBlendCoachIdentity(coachScores, effectifScores, adaptability);
-    reason = "Le coach garde sa philosophie de base, mais l'ajuste là où le profil réel des titulaires (technique/physique, défenseurs, ailiers, gardien) l'impose vraiment.";
-  } else {
-    scores = coachScores;
-    reason = "Consignes imposées par la philosophie du coach (niveau attaque/défense, mentalité), sans tenir compte de l'effectif.";
-  }
+  const reason = adaptability >= 12
+    ? "Le coach garde sa philosophie de base, mais l'ajuste là où le profil réel des titulaires (technique/physique, défenseurs, ailiers, gardien) l'impose vraiment."
+    : `Le coach reste proche de sa philosophie de base (niveau attaque/défense, mentalité) ; l'effectif ne pèse qu'à la marge (adaptabilité ${adaptability.toFixed(1)}/20).`;
 
   const passes = tacLabelPasses(scores.possessionBias);
   const rythme = tacLabelRythme(scores.tempo);
