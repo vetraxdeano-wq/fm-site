@@ -919,6 +919,11 @@
   .tac-mentality-dot.on { background: var(--gold); border-color: var(--gold); }
   .tac-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .tac-chip { font-size: 11.5px; background: #14171d; border: 1px solid var(--border); padding: 4px 9px; border-radius: 999px; }
+  .tac-note {
+    flex: 0 0 auto; font-size: 11.5px; font-style: italic; color: var(--text-dim);
+    line-height: 1.4; background: rgba(251,191,36,0.06); border: 1px solid #7a5c0f;
+    border-left: 3px solid var(--gold); border-radius: 6px; padding: 7px 10px; margin: -2px 0 2px;
+  }
   .tac-pitch-wrap { display: flex; flex-direction: column; gap: 10px; overflow: hidden !important; }
   .tac-pitch-wrap .tac-pitch { flex: 1 1 auto; }
   .tac-pitch {
@@ -1409,6 +1414,7 @@
         <div id="tacCoachPanel"></div>
         <div class="tac-card tac-pitch-wrap">
           <h3>Terrain</h3>
+          <div class="tac-note">11 type dans l'esprit de l'entraîneur — changements évidemment possibles de match en match selon la condition physique, les blessures et les choix du coach.</div>
           <div class="tac-pitch" id="tacPitch"></div>
           <div class="tac-legend">
             <span><i></i>Poste naturel</span>
