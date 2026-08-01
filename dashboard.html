@@ -2763,14 +2763,42 @@ function tacInstructionScoresFromEffectif(assigned, mIdx) {
   };
 }
 
-// Scores construits uniquement a partir du profil intrinseque du coach
-// (niveau attaque/defense, mentalite) : consignes imposees, sans lien avec
-// la qualite reelle de l'effectif.
+// Deltas appliques aux scores de base du coach selon son "style_tactique"
+// (valeurs reellement presentes en base). Sur la meme echelle ~0-20 que les
+// scores (att/def/mentalite) : evite que le style affiche en badge soit
+// deconnecte des consignes reellement calculees.
+const TAC_STYLE_PROFILES = {
+  "Catenaccio": { possessionBias: -3, tempo: -3, transition: -2, lineHeight: -6, pressFreq: -2, pressIntensity: -1, widthBias: -2 },
+  "Contre-attaques directes": { possessionBias: -5, tempo: 1, transition: 5, lineHeight: -2, widthBias: 0 },
+  "Contre-attaques fluides": { possessionBias: -2, tempo: 2, transition: 4, widthBias: 1 },
+  "Contrôle de la possession": { possessionBias: 5, tempo: -1, transition: -3, lineHeight: 2, pressFreq: 1, widthBias: -1 },
+  "Gegenpress": { possessionBias: 1, tempo: 4, transition: 3, lineHeight: 5, pressFreq: 6, pressIntensity: 6 },
+  "Jeu sur les ailes": { tempo: 1, transition: 1, lineHeight: 1, widthBias: 6 },
+  "Jeu ultra-défensif": { possessionBias: -3, tempo: -3, transition: -2, lineHeight: -7, pressFreq: -4, pressIntensity: -3, widthBias: -1 },
+  "Longs ballons devant": { possessionBias: -6, tempo: 1, transition: 1, gkBuild: -6 },
+  "Tiki-Taka": { possessionBias: 6, tempo: -1, transition: -4, lineHeight: 3, pressFreq: 2, pressIntensity: 1, widthBias: -2 },
+  "Tiki-Taka vertical": { possessionBias: 4, tempo: 3, transition: 1, lineHeight: 3, pressFreq: 2, pressIntensity: 1 },
+  "-": {},
+};
+// Deltas selon "type_pressing" (frequence de declenchement voulue par le
+// coach) : pese directement sur pressFreq, independamment du reste.
+const TAC_PRESSING_TYPE_DELTA = {
+  "Moins souvent": { pressFreq: -5, pressIntensity: -1 },
+  "Équilibré": {},
+  "Plus souvent": { pressFreq: 5, pressIntensity: 1 },
+};
+
+// Scores construits a partir du profil intrinseque du coach (niveau
+// attaque/defense, mentalite, style tactique, type de pressing) : consignes
+// imposees, sans lien avec la qualite reelle de l'effectif. style_tactique
+// et type_pressing sont les memes valeurs que celles affichees en badge sur
+// le panneau coach : elles doivent donc peser sur le calcul, sous peine de
+// generer des consignes contre-intuitives par rapport a l'identite affichee.
 function tacInstructionScoresFromCoach(coach, mIdx) {
   const att = Number(coach.niveau_attaque) || 10;
   const def = Number(coach.niveau_defense) || 10;
   const m = mIdx / 4 * 20;
-  return {
+  const scores = {
     possessionBias: def - att,
     tempo: att * 0.5 + m * 0.5,
     transition: att * 0.6 + m * 0.4,
@@ -2780,6 +2808,12 @@ function tacInstructionScoresFromCoach(coach, mIdx) {
     widthBias: (m - 10) * 0.6,
     gkBuild: def - att,
   };
+  const styleDelta = TAC_STYLE_PROFILES[coach.style_tactique] || {};
+  const pressDelta = TAC_PRESSING_TYPE_DELTA[coach.type_pressing] || {};
+  Object.keys(scores).forEach(key => {
+    scores[key] += (styleDelta[key] || 0) + (pressDelta[key] || 0);
+  });
+  return scores;
 }
 
 function tacLabelPasses(possessionBias) {
@@ -2880,11 +2914,15 @@ function tacComputeInstructions(coach, adaptability, assigned) {
   // qui le composent sont tous au maximum : ligne haute, declenchement
   // systematique et forte intensite.
   const pressingSurGardien = ligne === "Haute" && pressingFrequence === "Systématique" && pressingIntensite === "Élevée";
+  // Le marquage (Zone / Sur l'homme / Mixte) est un choix direct du coach,
+  // pas une valeur calculee : on le reprend tel quel pour rester coherent
+  // avec le badge affiche sur son profil.
+  const marquage = coach.type_marquage || "Zone";
 
   return {
     passes, rythme, projection, approche,
     ligne, pressingFrequence, pressingIntensite, pressingSurGardien,
-    largeur, relanceGardien,
+    largeur, relanceGardien, marquage,
     origin: adapte ? "adaptees" : "imposees",
     reason,
   };
@@ -3003,6 +3041,7 @@ function tacCoachPanelHtml(coach, source, formation, reason, instructions) {
       <div class="tac-row"><span class="tac-label">Déclenchement pressing</span><span class="tac-value">${escapeHtml(instructions.pressingFrequence)}</span></div>
       <div class="tac-row"><span class="tac-label">Intensité pressing</span><span class="tac-value">${escapeHtml(instructions.pressingIntensite)}</span></div>
       <div class="tac-row"><span class="tac-label">Pressing jusqu'au gardien</span><span class="tac-value">${instructions.pressingSurGardien ? "Oui" : "Non"}</span></div>
+      <div class="tac-row"><span class="tac-label">Marquage</span><span class="tac-value">${escapeHtml(instructions.marquage)}</span></div>
       <div class="tac-explain">${escapeHtml(instructions.reason)}</div>
   ` : "";
 
