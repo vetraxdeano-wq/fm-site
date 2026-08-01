@@ -608,12 +608,12 @@ function fmValueSeed(key) {
   return (h >>> 0) / 4294967295; // 0..1
 }
 function valueRoundStep(n) {
-  if (n < 500000) return 50000;
-  if (n < 2000000) return 100000;
-  if (n < 10000000) return 500000;
-  if (n < 50000000) return 1000000;
-  if (n < 150000000) return 5000000;
-  return 10000000;
+  if (n < 500000) return 10000;
+  if (n < 2000000) return 25000;
+  if (n < 10000000) return 100000;
+  if (n < 50000000) return 250000;
+  if (n < 150000000) return 500000;
+  return 1000000;
 }
 // Valeur sentinelle utilisee en base pour marquer un joueur "pas a vendre".
 const NOT_FOR_SALE_VALUE = 349868667;
