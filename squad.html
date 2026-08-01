@@ -197,6 +197,18 @@
     flex: 1; min-width: 0; display: flex; flex-direction: column;
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
   }
+  .squad-subtab-bar {
+    display: flex; gap: 4px; flex: 0 0 auto; background: #14171d;
+    border-bottom: 1px solid var(--border); padding: 0 18px;
+  }
+  .squad-subtab-btn {
+    display: flex; align-items: center; gap: 8px; background: transparent; border: none;
+    border-bottom: 3px solid transparent; color: var(--text-dim);
+    padding: 14px 16px 11px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .squad-subtab-icon { font-size: 15px; line-height: 1; }
+  .squad-subtab-btn:hover { color: var(--text); }
+  .squad-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
   .fm-squad-card-header {
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
     padding: 14px 18px; border-bottom: 1px solid var(--border); flex: 0 0 auto;
@@ -275,6 +287,11 @@
     <div class="fm-sidebar" id="fmSidebar"></div>
     <div class="fm-content-wrap">
       <div class="fm-squad-card">
+        <div class="squad-subtab-bar" id="squadSubtabBar">
+          <button type="button" class="squad-subtab-btn active" data-subtab="equipe_a"><span class="squad-subtab-icon">🏟️</span>Équipe A</button>
+          <button type="button" class="squad-subtab-btn" data-subtab="reserve"><span class="squad-subtab-icon">🔁</span>Réserve</button>
+          <button type="button" class="squad-subtab-btn" data-subtab="u18"><span class="squad-subtab-icon">🌱</span>U18</button>
+        </div>
         <div class="fm-squad-card-header">
           <span class="title" id="fmSquadTitle">Effectif</span>
           <span class="fm-legend">
@@ -306,6 +323,7 @@
           </table>
         </div>
         <div id="myClubEmpty" class="empty-state hidden">Aucun joueur trouvé pour ce club.</div>
+        <div id="myClubCategoryEmpty" class="empty-state hidden">Aucun joueur dans cette catégorie pour l'instant.</div>
       </div>
     </div>
   </div>
@@ -894,6 +912,53 @@ function renderMyClubBody() {
   });
 }
 
+// ---- Sous-onglets de l'effectif : "Équipe A" / "Réserve" / "U18" ----
+// Sur le meme principe que les sous-onglets de l'onglet Staff du dashboard.
+// La base de donnees ne distingue pas encore les joueurs par categorie
+// d'equipe : "Équipe A" affiche donc l'effectif actuel (tout le monde),
+// et "Réserve" / "U18" restent vides en attendant que cette donnee existe.
+let activeSquadSubtab = "equipe_a";
+let squadSubtabsWired = false;
+
+function wireSquadSubtabs() {
+  if (squadSubtabsWired) return;
+  squadSubtabsWired = true;
+  document.querySelectorAll(".squad-subtab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeSquadSubtab = btn.getAttribute("data-subtab");
+      document.querySelectorAll(".squad-subtab-btn").forEach(b => b.classList.toggle("active", b === btn));
+      applySquadSubtabVisibility();
+    });
+  });
+}
+
+function resetSquadSubtabToEquipeA() {
+  activeSquadSubtab = "equipe_a";
+  document.querySelectorAll(".squad-subtab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-subtab") === "equipe_a"));
+}
+
+function applySquadSubtabVisibility() {
+  const scrollWrap = document.querySelector(".fm-squad-card .table-scroll");
+  const noPlayersEmptyEl = document.getElementById("myClubEmpty");
+  const categoryEmptyEl = document.getElementById("myClubCategoryEmpty");
+
+  if (activeSquadSubtab !== "equipe_a") {
+    scrollWrap.style.display = "none";
+    noPlayersEmptyEl.classList.add("hidden");
+    categoryEmptyEl.classList.remove("hidden");
+    return;
+  }
+
+  categoryEmptyEl.classList.add("hidden");
+  if (myClubPlayers.length === 0) {
+    scrollWrap.style.display = "none";
+    noPlayersEmptyEl.classList.remove("hidden");
+  } else {
+    scrollWrap.style.display = "";
+    noPlayersEmptyEl.classList.add("hidden");
+  }
+}
+
 function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   document.getElementById("genericView").classList.add("hidden");
   document.getElementById("myClubView").classList.remove("hidden");
@@ -910,20 +975,14 @@ function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   renderFmSidebar(myClub?.id ?? gameClubId);
 
   myClubPlayers = players || [];
-  const scrollWrap = document.querySelector(".fm-squad-card .table-scroll");
-  const emptyEl = document.getElementById("myClubEmpty");
 
-  if (myClubPlayers.length === 0) {
-    scrollWrap.style.display = "none";
-    emptyEl.classList.remove("hidden");
-    return;
-  }
-  scrollWrap.style.display = "";
-  emptyEl.classList.add("hidden");
+  wireSquadSubtabs();
+  resetSquadSubtabToEquipeA();
 
   const isSortable = col => isOwnClub || (col.key !== "niveau_actuel" && col.key !== "potentiel");
   initSortableHeaders(document.querySelector("#myClubView .squad-table thead"), MYCLUB_COLUMNS, activeMyClubSortState, renderMyClubBody, isSortable);
   renderMyClubBody();
+  applySquadSubtabVisibility();
 }
 
 // ===================== CHARGEMENT =====================
