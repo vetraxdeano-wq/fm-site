@@ -2560,19 +2560,18 @@ const TAC_FORMATIONS = {
   ],
   "5-3-2 MD AL": [
     tacSlot("gb", "GB", "GB", "C", 50, 94),
-    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("alg", "ALG", "AL", "G", 8, 62), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("ald", "ALD", "AL", "D", 92, 62),
     tacSlot("mdef", "MD", "MD", "C", 50, 64), tacSlot("mg", "MC", "M", "C", 30, 54), tacSlot("md2", "MC", "M", "C", 70, 54),
     tacSlot("bt1", "BU", "BT", "C", 38, 14), tacSlot("bt2", "BU", "BT", "C", 62, 14),
   ],
 };
-// DG/DD sont le poste naturel des Arrieres Lateraux (AL) : on l'ajoute comme
-// role alternatif accepte pour ces slots, dans TOUS les systemes (le role de
-// base reste "D", pour les defenseurs centraux capables de jouer large).
-Object.values(TAC_FORMATIONS).forEach(slots => {
-  slots.forEach(slot => {
-    if (slot.id === "dg" || slot.id === "dd") slot.altRole = "AL";
-  });
-});
+// AL (ailier / arriere lateral avance) n'est PAS le meme poste que D
+// (lateral) : c'est un cran plus haut sur le terrain (cf. TAC_ROLE_ORDER).
+// On ne lui donne donc plus de bonus artificiel sur les slots "D" : sa
+// proximite avec D est deja correctement geree par tacRoleDistance
+// (distance 1 => depannage plausible, jamais equivalent a un vrai D).
+// Les formations pensees pour des arrieres lateraux (ex. "5-3-2 MD AL")
+// utilisent directement role: "AL" sur leurs slots larges, cf. plus haut.
 function tacFitScoreForSlot(player, slot) {
   let score = tacFitScore(player, slot.role, slot.side);
   if (slot.altRole) score = Math.max(score, tacFitScore(player, slot.altRole, slot.side) * 0.9);
