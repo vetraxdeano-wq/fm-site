@@ -592,7 +592,22 @@ function formatMoneyShort(n) {
   if (Math.abs(n) >= 1000) return (n / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " k€";
   return new Intl.NumberFormat("fr-FR").format(n) + " €";
 }
-function roundStep(n) {
+// Fourchette pseudo-aleatoire mais deterministe : le "bruit" (largeur et
+// decalage de la fourchette) est derive d'un hash de l'id du joueur, pas
+// de Math.random(). Ca donne des fourchettes qui varient d'un joueur a
+// l'autre (pas toujours "50-75M" pile) tout en restant IDENTIQUES a
+// chaque affichage et sur les deux pages (fiche + BDD) pour un meme
+// joueur, puisque le calcul ne depend que de (valeur, id).
+function fmValueSeed(key) {
+  let h = 0x811c9dc5;
+  const s = String(key);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0) / 4294967295; // 0..1
+}
+function valueRoundStep(n) {
   if (n < 500000) return 50000;
   if (n < 2000000) return 100000;
   if (n < 10000000) return 500000;
@@ -600,12 +615,21 @@ function roundStep(n) {
   if (n < 150000000) return 5000000;
   return 10000000;
 }
-function valueRange(v) {
-  if (v === null || v === undefined) return "-";
-  const step = roundStep(v);
-  const low = Math.max(0, Math.round((v * 0.85) / step) * step);
-  const high = Math.round((v * 1.15) / step) * step;
-  if (low === high) return formatMoneyShort(low);
+// Valeur sentinelle utilisee en base pour marquer un joueur "pas a vendre".
+const NOT_FOR_SALE_VALUE = 349868667;
+function valueRange(v, id) {
+  const val = Number(v);
+  if (val === NOT_FOR_SALE_VALUE) return "Pas à vendre";
+  if (v === null || v === undefined || !Number.isFinite(val)) return "-";
+  if (val <= 0) return "Libre / négligeable";
+  const seedLo = fmValueSeed(`${id}-lo`);
+  const seedHi = fmValueSeed(`${id}-hi`);
+  const lowFrac = 0.72 + seedLo * 0.18;  // 0.72 - 0.90
+  const highFrac = 1.10 + seedHi * 0.30; // 1.10 - 1.40
+  const step = valueRoundStep(val);
+  const low = Math.max(0, Math.round((val * lowFrac) / step) * step);
+  let high = Math.round((val * highFrac) / step) * step;
+  if (high <= low) high = low + step;
   return `${formatMoneyShort(low)} - ${formatMoneyShort(high)}`;
 }
 
@@ -1367,7 +1391,7 @@ async function loadFiche() {
     <div class="contract-row"><span class="contract-label">Club</span><span class="contract-value">${escapeHtml(clubNom || "-")}</span></div>
     <div class="contract-row"><span class="contract-label">Salaire</span><span class="contract-value">${formatMoneyShort(gp.salaire_actuel)}${gp.salaire_actuel ? " / mois" : ""}</span></div>
     <div class="contract-row"><span class="contract-label">Fin de contrat</span><span class="contract-value ${isContractSoon(gp.contrat_expire) ? "contract-soon" : ""}">${formatDate(gp.contrat_expire)}</span></div>
-    <div class="contract-row"><span class="contract-label">Valeur estimée</span><span class="contract-value">${valueRange(gp.valeur_marchande_actuelle)}</span></div>
+    <div class="contract-row"><span class="contract-label">Valeur estimée</span><span class="contract-value">${valueRange(gp.valeur_marchande_actuelle, gp.id)}</span></div>
   `;
 
   // Condition (forme / moral / blessure) — données jusqu'ici inutilisées dans l'app
