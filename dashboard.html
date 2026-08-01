@@ -934,8 +934,8 @@
     .tac-pitch { height: auto; width: 100%; max-width: 420px; }
   }
   .tac-pitch::before {
-    content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
-    background: rgba(255,255,255,0.25); transform: translateX(-50%);
+    content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+    background: rgba(255,255,255,0.25); transform: translateY(-50%);
   }
   .tac-pitch::after {
     content: ""; position: absolute; left: 50%; top: 50%; width: 22%; aspect-ratio: 1/1;
@@ -2613,6 +2613,38 @@ function tacChooseFormation(coach, effectif) {
   const deuxieme = coach?.deuxieme_formation_preferee && TAC_FORMATIONS[coach.deuxieme_formation_preferee] ? coach.deuxieme_formation_preferee : null;
 
   const evalFor = key => ({ key, ...tacAssignFormation(effectif, TAC_FORMATIONS[key]) });
+
+  // Recherche du meilleur systeme sur tout le catalogue : place chaque joueur
+  // a son meilleur poste possible (formation par formation, cf.
+  // tacAssignFormation) et retient celle qui minimise les trous / maximise la
+  // couverture. Utilise à la fois quand aucune preference n'est connue pour
+  // l'entraineur, et quand un entraineur adaptable doit s'ecarter de ses
+  // preferences car l'effectif ne s'y prete pas.
+  function bestFromCatalog(seedKey, seedRes) {
+    let bestKey = seedKey || Object.keys(TAC_FORMATIONS)[0];
+    let bestRes = seedRes || evalFor(bestKey);
+    Object.keys(TAC_FORMATIONS).forEach(key => {
+      const r = evalFor(key);
+      if (r.holes < bestRes.holes || (r.holes === bestRes.holes && r.coverage > bestRes.coverage)) {
+        bestKey = key; bestRes = r;
+      }
+    });
+    return { bestKey, bestRes };
+  }
+
+  // Cas limite : aucune formation preferee connue en base pour cet
+  // entraineur (donnee manquante). Plutot que d'imposer un systeme par
+  // defaut arbitraire, il cherche directement a optimiser l'effectif
+  // disponible : chaque joueur est place a son meilleur poste, tous systemes
+  // confondus.
+  if (!preferee && !deuxieme) {
+    const { bestKey, bestRes } = bestFromCatalog(null, null);
+    return {
+      source: "adaptee", formation: bestKey, result: bestRes,
+      reason: "Aucun système favori connu pour cet entraîneur : il cherche lui-même la meilleure exploitation possible de l'effectif, en plaçant chaque joueur à son meilleur poste.",
+    };
+  }
+
   const resPreferee = preferee ? evalFor(preferee) : null;
 
   if (resPreferee && resPreferee.coverage >= TAC_MIN_COVERAGE && resPreferee.holes === 0) {
@@ -2625,23 +2657,17 @@ function tacChooseFormation(coach, effectif) {
   }
 
   // Ni l'un ni l'autre ne convient bien : un entraineur adaptable explore tout
-  // le catalogue pour trouver le meilleur compromis ; un entraineur rigide
-  // (faible connaissance tactique / adaptabilite) reste sur sa formation
-  // fetiche sauf si elle est vraiment intenable pour l'effectif.
+  // le catalogue pour trouver le meilleur compromis (cas typique d'un
+  // effectif tres desequilibre face a un entraineur tres adaptable) ; un
+  // entraineur rigide (faible connaissance tactique / adaptabilite) reste sur
+  // sa formation fetiche sauf si elle est vraiment intenable pour l'effectif.
   if (adaptability >= 12) {
-    let bestKey = preferee || deuxieme || Object.keys(TAC_FORMATIONS)[0];
-    let bestRes = resPreferee || resDeuxieme || evalFor(bestKey);
-    Object.keys(TAC_FORMATIONS).forEach(key => {
-      const r = evalFor(key);
-      if (r.holes < bestRes.holes || (r.holes === bestRes.holes && r.coverage > bestRes.coverage)) {
-        bestKey = key; bestRes = r;
-      }
-    });
+    const { bestKey, bestRes } = bestFromCatalog(preferee || deuxieme, resPreferee || resDeuxieme);
     const source = bestKey === preferee ? "preferee" : bestKey === deuxieme ? "deuxieme_preferee" : "adaptee";
     return {
       source, formation: bestKey, result: bestRes,
       reason: source === "adaptee"
-        ? "Ni le système favori ni le second n'étaient jouables : l'entraîneur (bon niveau tactique) a choisi le système qui exploite au mieux l'effectif disponible."
+        ? "Ni le système favori ni le second n'étaient jouables : l'entraîneur (bon niveau tactique) a exploré tout le catalogue pour placer chaque joueur à son meilleur poste."
         : "Bascule sur le système le plus jouable parmi les deux préférés de l'entraîneur.",
     };
   }
@@ -2651,12 +2677,7 @@ function tacChooseFormation(coach, effectif) {
   if (resPreferee && (resPreferee.coverage >= TAC_CRITICAL_COVERAGE || !resDeuxieme)) {
     return { source: "preferee", formation: preferee, result: resPreferee, reason: "Entraîneur peu flexible : il impose son système favori malgré un effectif imparfaitement adapté." };
   }
-  if (resDeuxieme) {
-    return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori était injouable ; l'entraîneur (peu adaptable) se replie sur son second choix." };
-  }
-  // Aucune formation preferee connue (donnee manquante) : formation par defaut.
-  const fallbackKey = "4-4-2";
-  return { source: "adaptee", formation: fallbackKey, result: evalFor(fallbackKey), reason: "Aucune formation préférée connue pour cet entraîneur : système standard appliqué par défaut." };
+  return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori était injouable ; l'entraîneur (peu adaptable) se replie sur son second choix." };
 }
 
 // ---- Chargement effectif + entraineur, rendu et persistance ---------------
