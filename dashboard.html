@@ -2898,15 +2898,22 @@ const TAC_MENTALITY_SCALE = ["Très prudent", "Prudent", "Équilibré", "Offensi
 const TAC_SOURCE_LABEL = { preferee: "1ère formation préférée", deuxieme_preferee: "2e formation préférée", adaptee: "Formation adaptée" };
 
 async function fetchClubTacticEffectif(clubId) {
+  // select("*") plutôt qu'une liste de colonnes nommées : si une colonne
+  // attendue (statut, un attribut FM...) n'existe pas encore côté Supabase,
+  // une liste nommée ferait échouer toute la requête (donc tout l'effectif,
+  // d'où les "?" partout sur le terrain). Avec "*", on récupère toutes les
+  // colonnes réellement présentes et les accès à une colonne absente
+  // (p.statut, p.vitesse, etc.) retournent simplement `undefined` côté JS,
+  // sans casser le chargement.
   const { data, error } = await supabaseClient
     .from("game_players")
-    .select("id, nom, poste_brut, postes, niveau_actuel, potentiel, blessure_jours, statut, categorie, technique, passes, vision_du_jeu, prise_de_balle, jeu_collectif, vitesse, acceleration, endurance, volume_de_jeu, decisions, anticipation, agressivite, tacles, placement, centres, dribbles, relance_a_la_main, sorties_dans_les_pieds, degagement")
+    .select("*")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId)
     .eq("categorie", "equipe_a");
   if (error) { console.error(error); return []; }
-  // Indisponibles pour la feuille de match : blessés et suspendus (statut "Sus").
-  return (data || []).filter(p => !(Number(p.blessure_jours) > 0) && p.statut !== "Sus");
+  // Indisponibles pour la feuille de match : blessés et suspendus (statut_special "Sus").
+  return (data || []).filter(p => !(Number(p.blessure_jours) > 0) && p.statut_special !== "Sus");
 }
 
 async function showFmTactiqueView(clubId) {
@@ -3080,6 +3087,17 @@ async function persistTactique(clubId, coach, choice, instructions) {
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabaseClient.from("tactiques").upsert(row, { onConflict: "game_club_id" });
+  if (error && error.code === "PGRST204" && /instructions/i.test(error.message || "")) {
+    // La colonne "instructions" (jsonb) n'existe pas encore cote Supabase :
+    // on retente sans ce champ pour ne pas perdre la persistance du reste
+    // (formation, composition...). Executer cote Supabase :
+    //   alter table tactiques add column instructions jsonb;
+    console.warn("persistTactique: colonne 'instructions' absente en base (voir alter table tactiques add column instructions jsonb;) — upsert sans ce champ.");
+    const { instructions: _drop, ...rowSansInstructions } = row;
+    const { error: error2 } = await supabaseClient.from("tactiques").upsert(rowSansInstructions, { onConflict: "game_club_id" });
+    if (error2) console.error("persistTactique:", error2);
+    return;
+  }
   if (error) console.error("persistTactique:", error);
 }
 
