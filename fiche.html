@@ -720,7 +720,7 @@ function getStatsKey(base, side) {
 }
 function labelForToken(base, side) {
   const names = {
-    D: "Défenseur", AL: "Ailier", MD: "Milieu défensif", M: "Milieu central",
+    D: "Défenseur", AL: "Arrière latéral", MD: "Milieu défensif", M: "Milieu central",
     MO: "Milieu offensif", BT: "Buteur", GB: "Gardien",
   };
   const sideNames = { G: "Gauche", C: "Central(e)", D: "Droit" };
@@ -928,14 +928,13 @@ function defaultBaseForCell(row, col) {
   if (row === 3) return "MO";
   return "BT";
 }
-// MD et BT n'existent jamais avec un cote (G/D) dans les donnees : meme si
-// la case cliquee est sur une colonne laterale de leur ligne, on force un
-// cote central pour ne pas fabriquer un poste qui n'existe pas ("Milieu
-// defensif Droit", "Buteur Gauche"...).
-const CENTER_ONLY_BASES = new Set(["MD", "BT"]);
-function defaultSideForCell(row, col) {
+// Certaines cases de la grille ne correspondent a aucun poste reel dans les
+// donnees (ex: Buteur Gauche/Droit n'existent pas, seul Buteur Central
+// existe). Ces cases-la ne sont pas cliquables et ne sont pas dessinees.
+function cellPositionExists(row, col) {
   const base = defaultBaseForCell(row, col);
-  return CENTER_ONLY_BASES.has(base) ? "C" : LETTER_FROM_COL[col];
+  if (base === "BT" && col !== COL_FROM_LETTER.C) return false;
+  return true;
 }
 
 let pitchCellTokens = null; // grille [row][col] -> tableau de {base, side}
@@ -943,6 +942,7 @@ let pitchGKActive = false;
 let selectedCellKey = null;
 
 function handlePitchCellClick(row, col) {
+  if (!cellPositionExists(row, col)) return;
   const key = `${row}-${col}`;
   const svg = document.getElementById("pitchHolder").querySelector("svg");
   if (svg) svg.querySelectorAll(".pitch-cell, .pitch-gk").forEach(el => el.classList.remove("selected"));
@@ -958,7 +958,7 @@ function handlePitchCellClick(row, col) {
   }
   const tokens = (pitchCellTokens && pitchCellTokens[row] && pitchCellTokens[row][col] && pitchCellTokens[row][col].length)
     ? pitchCellTokens[row][col]
-    : [{ base: defaultBaseForCell(row, col), side: defaultSideForCell(row, col) }];
+    : [{ base: defaultBaseForCell(row, col), side: LETTER_FROM_COL[col] }];
   selectPositionByTokens(tokens);
 }
 function handlePitchGKClick() {
@@ -1007,6 +1007,7 @@ function pitchSVG(postes) {
   let cells = "";
   for (let r = 0; r < 5; r++) {
     for (let c = 0; c < 3; c++) {
+      if (!cellPositionExists(r, c)) continue; // poste+cote inexistant : case absente, pas cliquable
       const active = grid[r][c];
       cells += `<rect class="pitch-cell" data-cellkey="${r}-${c}" onclick="handlePitchCellClick(${r},${c})"
         x="${colX[c] - 15}" y="${rowY[r] - 15}" width="30" height="30" rx="6"
