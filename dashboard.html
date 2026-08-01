@@ -1002,19 +1002,25 @@
   .gd-points ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .gd-points li { font-size: 12px; line-height: 1.4; color: var(--text); padding-left: 14px; position: relative; }
   .gd-points li::before { content: "•"; position: absolute; left: 0; color: var(--gold); }
-  .gd-bars { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
-  .gd-bar-row { display: flex; flex-direction: column; gap: 4px; }
-  .gd-bar-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
-  .gd-bar-head .label { color: var(--text-dim); }
-  .gd-bar-head .value { font-weight: 700; flex-shrink: 0; }
-  .gd-bar-track { height: 7px; border-radius: 4px; background: #1c2029; border: 1px solid var(--border); overflow: hidden; }
-  .gd-bar-fill { height: 100%; border-radius: 4px; }
-  .gd-bar-note { font-size: 10.5px; color: var(--text-dim); line-height: 1.4; }
+  .gd-player-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-content: start; overflow-y: auto; }
+  @media (max-width: 1200px) { .gd-player-cards { grid-template-columns: 1fr; } }
+  .gd-player-card h3 { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 0 10px; }
+  .gd-card-icon { font-size: 14px; line-height: 1; }
+  .gd-player-list { display: flex; flex-direction: column; gap: 8px; }
+  .gd-player-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); }
+  .gd-player-name { font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gd-player-poste { font-size: 10.5px; color: var(--text-dim); flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.03em; }
+  .gd-player-tag { font-size: 10.5px; color: var(--gold); flex-shrink: 0; font-weight: 600; }
   .gd-home-card { display: flex; align-items: center; gap: 14px; cursor: pointer; }
   .gd-home-card:hover .gd-home-label { color: var(--gold); }
   .gd-home-text { display: flex; flex-direction: column; gap: 2px; }
   .gd-home-label { font-weight: 700; font-size: 13px; }
   .gd-home-sub { font-size: 11px; color: var(--text-dim); }
+  .gd-home-mini-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .gd-home-mini-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .gd-home-mini-icon { flex-shrink: 0; }
+  .gd-home-mini-label { color: var(--text-dim); flex-shrink: 0; }
+  .gd-home-mini-name { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ---- Boite de reception (sous-onglet, vue liste + detail) ---- */
   .fm-inbox-view {
@@ -3345,7 +3351,7 @@ async function persistTactique(clubId, coach, choice, instructions) {
 // des barres) mais ne doivent JAMAIS etre montrees telles quelles a
 // l'utilisateur. Seuls des etats qualitatifs ("Très bon", "Bon", "Faible"...)
 // et quelques points marquants formules en texte libre sont affiches.
-// Voir renderGroupDynamicsDetail / gdStateLabel / gdHighlightPoints.
+// Voir renderGroupDynamicsDetail / gdHighlightPoints / gdPlayerListCard.
 
 // Regroupement (tres approximatif, a but de cohesion de vestiaire) des
 // nations par langue principale parlee dans le vestiaire. Reprend les cles
@@ -3421,7 +3427,7 @@ function gdStdDev(arr) {
 async function fetchGroupDynamicsEffectif(clubId) {
   const { data, error } = await supabaseClient
     .from("game_players")
-    .select("id, age, moral, leadership, nationalite, jour_arrivee_club")
+    .select("id, nom, poste_brut, age, moral, leadership, nationalite, jour_arrivee_club")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId)
     .eq("categorie", "equipe_a");
@@ -3516,6 +3522,25 @@ async function computeGroupDynamics(clubId, { force } = {}) {
   const maxLeadership = leaderships.length ? Math.max(...leaderships) : 0;
   const leadershipScore = gdClamp(Math.round(nbLeaders * 20 + (maxLeadership / 20) * 40), 0, 100);
 
+  // --- Tops nominatifs affiches a la place des composantes chiffrees : ---
+  // joueurs les plus heureux/malheureux (moral), leaders identifies
+  // (leadership >= seuil), vétérans et petites nouvelles recrues (anciennete
+  // au club). Uniquement nom + poste + etat qualitatif, jamais de chiffre.
+  const effectifAvecAnciennete = effectif.map(p => ({
+    ...p, arrivalsJours: Math.max(0, jourActuel - (Number(p.jour_arrivee_club) || 0)),
+  }));
+  const gdPickTop = (arr, key, dir, limit, filterFn) => {
+    let list = filterFn ? arr.filter(filterFn) : arr.slice();
+    list = list.filter(p => Number.isFinite(Number(p[key])));
+    list.sort((a, b) => dir === "desc" ? Number(b[key]) - Number(a[key]) : Number(a[key]) - Number(b[key]));
+    return list.slice(0, limit).map(p => ({ nom: p.nom, poste: p.poste_brut, moral: Number(p.moral), leadership: Number(p.leadership) }));
+  };
+  const topHeureux = gdPickTop(effectif, "moral", "desc", 3);
+  const topMalheureux = gdPickTop(effectif, "moral", "asc", 3);
+  const topLeaders = gdPickTop(effectif, "leadership", "desc", 3, p => Number(p.leadership) >= GD_LEADER_THRESHOLD);
+  const topVeterans = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "desc", 3);
+  const topNouveaux = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "asc", 3);
+
   const noteGlobale = gdClamp(Math.round(
     moralScore * GD_WEIGHTS.moral +
     ancienneteScore * GD_WEIGHTS.anciennete +
@@ -3535,6 +3560,7 @@ async function computeGroupDynamics(clubId, { force } = {}) {
     ancienneteMoyenneJours, ancienneteScore,
     nbLeaders, maxLeadership, leadershipScore,
     nbJoueurs: effectif.length,
+    topHeureux, topMalheureux, topLeaders, topVeterans, topNouveaux,
   };
 
   gdLoadedForClub = clubId;
@@ -3589,14 +3615,6 @@ function gdScoreLabel(note) {
   if (note >= 35) return "Fragile";
   return "Critique";
 }
-// Etat qualitatif d'une composante (jamais de chiffre affiche a l'ecran).
-function gdStateLabel(score) {
-  if (score >= 80) return "Très bon";
-  if (score >= 65) return "Bon";
-  if (score >= 50) return "Correct";
-  if (score >= 35) return "Faible";
-  return "Très faible";
-}
 // Ring purement visuel : le remplissage (--gd-pct) reste pilote par la note
 // interne, mais aucun chiffre n'est jamais affiche au centre — seul un
 // libelle qualitatif (gdScoreLabel) est montre a cote, dans la carte.
@@ -3604,17 +3622,6 @@ function gdRingHtml(note, { mini } = {}) {
   const color = gdScoreColor(note);
   return `
     <div class="gd-ring${mini ? " mini" : ""}" style="--gd-pct:${note}; --gd-color:${color};"></div>
-  `;
-}
-// Barre de composante : longueur pilotee par le score interne, mais seul un
-// etat qualitatif (gdStateLabel) est affiche, jamais de note chiffree.
-function gdBarRowHtml(label, score) {
-  const s = gdClamp(Math.round(score), 0, 100);
-  return `
-    <div class="gd-bar-row">
-      <div class="gd-bar-head"><span class="label">${escapeHtml(label)}</span><span class="value">${escapeHtml(gdStateLabel(s))}</span></div>
-      <div class="gd-bar-track"><div class="gd-bar-fill" style="width:${s}%; background:${gdScoreColor(s)};"></div></div>
-    </div>
   `;
 }
 
@@ -3641,6 +3648,40 @@ function gdHighlightPoints(r) {
   return points;
 }
 
+// Etat qualitatif du moral d'un joueur (jamais de chiffre affiche).
+function gdMoralTag(moral) {
+  const s = Number(moral);
+  if (!Number.isFinite(s)) return "";
+  if (s >= 80) return "Très heureux";
+  if (s >= 65) return "Heureux";
+  if (s >= 50) return "Neutre";
+  if (s >= 35) return "Inquiet";
+  return "Mécontent";
+}
+
+// Ligne joueur (nom + poste + etat qualitatif), reutilisee dans toutes les
+// listes nominatives de la vue detaillee et dans le widget Accueil.
+function gdPlayerRowHtml(p, tag) {
+  return `
+    <div class="gd-player-row">
+      <span class="gd-player-name">${escapeHtml(p.nom || "-")}</span>
+      ${p.poste ? `<span class="gd-player-poste">${escapeHtml(p.poste)}</span>` : ""}
+      ${tag ? `<span class="gd-player-tag">${escapeHtml(tag)}</span>` : ""}
+    </div>
+  `;
+}
+function gdPlayerListCard(title, icon, players, tagFn, emptyMsg) {
+  const body = players.length
+    ? `<div class="gd-player-list">${players.map(p => gdPlayerRowHtml(p, tagFn(p))).join("")}</div>`
+    : `<div class="fm-empty">${escapeHtml(emptyMsg)}</div>`;
+  return `
+    <div class="tac-card gd-player-card">
+      <h3>${icon ? `<span class="gd-card-icon">${icon}</span>` : ""}${escapeHtml(title)}</h3>
+      ${body}
+    </div>
+  `;
+}
+
 function renderGroupDynamicsDetail(r) {
   const el = document.getElementById("tacDynamiqueContent");
   if (!el) return;
@@ -3662,15 +3703,12 @@ function renderGroupDynamicsDetail(r) {
           </div>
         ` : ""}
       </div>
-      <div class="tac-card gd-bars">
-        <h3>Composantes</h3>
-        ${gdBarRowHtml("Moral moyen", r.moralScore)}
-        ${gdBarRowHtml("Ancienneté des joueurs", r.ancienneteScore)}
-        ${gdBarRowHtml("Stabilité du coach", r.coachScore)}
-        ${gdBarRowHtml("Présence de leaders", r.leadershipScore)}
-        ${gdBarRowHtml("Homogénéité d'âge", r.ageScore)}
-        ${gdBarRowHtml("Cohésion linguistique", r.langScore)}
-        ${gdBarRowHtml("Forme récente du club", r.formeScore)}
+      <div class="gd-player-cards">
+        ${gdPlayerListCard("Les plus heureux", "🙂", r.topHeureux, p => gdMoralTag(p.moral), "Pas assez de données.")}
+        ${gdPlayerListCard("Les plus malheureux", "☹️", r.topMalheureux, p => gdMoralTag(p.moral), "Pas assez de données.")}
+        ${gdPlayerListCard("Leaders du vestiaire", "⭐", r.topLeaders, () => "Leader", "Aucun leader identifié dans le vestiaire.")}
+        ${gdPlayerListCard("Vétérans du club", "🏅", r.topVeterans, () => "Au club depuis longtemps", "Pas assez de données.")}
+        ${gdPlayerListCard("Petites nouvelles recrues", "🆕", r.topNouveaux, () => "Nouvelle recrue", "Pas assez de données.")}
       </div>
     </div>
   `;
@@ -3687,7 +3725,9 @@ async function loadAndRenderGroupDynamicsDetail(clubId) {
 
 // Widget compact affiche sur la page d'accueil (remplace l'ancien module
 // "Entraînement", pas encore implemente). Cliquer dessus ouvre l'onglet
-// Tactique directement sur le sous-onglet Dynamique de groupe.
+// Tactique directement sur le sous-onglet Dynamique de groupe. En plus du
+// rond/libelle, on y affiche un apercu (joueur le plus heureux/malheureux
+// et un leader), tout comme dans la vue detaillee mais en version courte.
 async function renderGroupDynamicsHome(clubId) {
   const el = document.getElementById("fmGroupDynamics");
   if (!el) return;
@@ -3697,6 +3737,9 @@ async function renderGroupDynamicsHome(clubId) {
     el.innerHTML = `Effectif d'équipe première insuffisant pour calculer la dynamique de groupe.`;
     return;
   }
+  const miniRow = (icon, label, p) => p
+    ? `<div class="gd-home-mini-row"><span class="gd-home-mini-icon">${icon}</span><span class="gd-home-mini-label">${escapeHtml(label)}</span><span class="gd-home-mini-name">${escapeHtml(p.nom || "-")}</span></div>`
+    : "";
   el.innerHTML = `
     <div class="gd-home-card" id="gdHomeCard">
       ${gdRingHtml(r.noteGlobale, { mini: true })}
@@ -3704,6 +3747,11 @@ async function renderGroupDynamicsHome(clubId) {
         <div class="gd-home-label">${gdScoreLabel(r.noteGlobale)}</div>
         <div class="gd-home-sub">Voir le détail dans l'onglet Tactique</div>
       </div>
+    </div>
+    <div class="gd-home-mini-list">
+      ${miniRow("🙂", "Plus heureux", r.topHeureux[0])}
+      ${miniRow("☹️", "Plus malheureux", r.topMalheureux[0])}
+      ${miniRow("⭐", "Leader", r.topLeaders[0])}
     </div>
   `;
   const card = document.getElementById("gdHomeCard");
