@@ -699,20 +699,20 @@
 
   /* ---- Staff (sous-onglet) : 3 colonnes departement + fiches membres ---- */
   .fm-staff-view { width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; gap: 0; }
-  .staff-subtab-bar {
+  .staff-subtab-bar, .tac-subtab-bar {
     display: flex; gap: 4px; flex: 0 0 auto; background: #14171d;
     border-bottom: 1px solid var(--border); padding: 0 24px; margin: -16px -24px 18px;
   }
-  .staff-subtab-btn {
+  .staff-subtab-btn, .tac-subtab-btn {
     display: flex; align-items: center; gap: 8px; background: transparent; border: none;
     border-bottom: 3px solid transparent; color: var(--text-dim);
     padding: 14px 16px 11px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
   }
-  .staff-subtab-icon { font-size: 15px; line-height: 1; }
-  .staff-subtab-btn:hover { color: var(--text); }
-  .staff-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
-  .staff-subtab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .staff-subtab-panel.hidden { display: none; }
+  .staff-subtab-icon, .tac-subtab-icon { font-size: 15px; line-height: 1; }
+  .staff-subtab-btn:hover, .tac-subtab-btn:hover { color: var(--text); }
+  .staff-subtab-btn.active, .tac-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
+  .staff-subtab-panel, .tac-subtab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .staff-subtab-panel.hidden, .tac-subtab-panel.hidden { display: none; }
   .staff-columns {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start;
   }
@@ -871,20 +871,21 @@
   }
   .sdb-empty-cell { color: var(--text-dim); font-size: 13px; padding: 30px 10px; text-align: center; }
 
-  /* ---- Tactique (onglet) : terrain + panneau de consignes ---- */
-  .fm-tactic-view {
+  /* ---- Tactique (onglet) : sous-onglets + terrain + panneau de consignes ---- */
+  .fm-tactic-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .tac-formation-grid {
     display: grid; grid-template-columns: 260px 1fr 300px; gap: 16px;
     align-items: stretch; height: 100%; min-height: 0;
   }
-  .fm-tactic-view .tac-card { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
-  .fm-tactic-view .tac-card h3 { flex: 0 0 auto; }
-  .fm-tactic-view .tac-bench-card { overflow-y: visible; }
-  .fm-tactic-view .tac-bench-card .tac-bench { flex: 1 1 auto; }
+  .tac-formation-grid .tac-card { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+  .tac-formation-grid .tac-card h3 { flex: 0 0 auto; }
+  .tac-formation-grid .tac-bench-card { overflow-y: visible; }
+  .tac-formation-grid .tac-bench-card .tac-bench { flex: 1 1 auto; }
   #tacCoachPanel { display: flex; flex-direction: column; min-height: 0; height: 100%; }
   #tacCoachPanel .tac-card { flex: 1 1 auto; min-height: 0; height: 100%; }
   @media (max-width: 1100px) {
-    .fm-tactic-view { grid-template-columns: 1fr; height: auto; }
-    .fm-tactic-view .tac-card { overflow-y: visible; }
+    .tac-formation-grid { grid-template-columns: 1fr; height: auto; }
+    .tac-formation-grid .tac-card { overflow-y: visible; }
   }
   .tac-card {
     background: var(--panel); border: 1px solid var(--border);
@@ -981,6 +982,37 @@
   .tac-bench-ca { color: var(--gold); font-weight: 700; font-size: 11.5px; }
   .tac-bench-injured { color: var(--danger); font-size: 10.5px; }
   .tac-recalc-btn { margin-top: 10px; width: 100%; }
+
+  /* ---- Dynamique de groupe (sous-onglet Tactique + widget Accueil) ------- */
+  .gd-layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; height: 100%; }
+  @media (max-width: 900px) { .gd-layout { grid-template-columns: 1fr; height: auto; } }
+  .gd-score-card { align-items: center; text-align: center; gap: 10px; justify-content: center; }
+  .gd-ring {
+    position: relative; width: 128px; height: 128px; border-radius: 50%;
+    background: conic-gradient(var(--gd-color, var(--gold)) calc(var(--gd-pct, 0) * 1%), #1c2029 0);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin: 4px auto 2px;
+  }
+  .gd-ring::before { content: ""; position: absolute; inset: 10px; border-radius: 50%; background: var(--panel); }
+  .gd-ring-value { position: relative; z-index: 1; font-size: 26px; font-weight: 800; line-height: 1; }
+  .gd-ring-value small { display: block; font-size: 9.5px; font-weight: 600; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .gd-ring.mini { width: 52px; height: 52px; margin: 0; }
+  .gd-ring.mini::before { inset: 5px; }
+  .gd-ring.mini .gd-ring-value { font-size: 14px; }
+  .gd-label { font-weight: 700; font-size: 14px; }
+  .gd-sub { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+  .gd-bars { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  .gd-bar-row { display: flex; flex-direction: column; gap: 4px; }
+  .gd-bar-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+  .gd-bar-head .label { color: var(--text-dim); }
+  .gd-bar-head .value { font-weight: 700; flex-shrink: 0; }
+  .gd-bar-track { height: 7px; border-radius: 4px; background: #1c2029; border: 1px solid var(--border); overflow: hidden; }
+  .gd-bar-fill { height: 100%; border-radius: 4px; }
+  .gd-bar-note { font-size: 10.5px; color: var(--text-dim); line-height: 1.4; }
+  .gd-home-card { display: flex; align-items: center; gap: 14px; cursor: pointer; }
+  .gd-home-card:hover .gd-home-label { color: var(--gold); }
+  .gd-home-text { display: flex; flex-direction: column; gap: 2px; }
+  .gd-home-label { font-weight: 700; font-size: 13px; }
+  .gd-home-sub { font-size: 11px; color: var(--text-dim); }
 
   /* ---- Boite de reception (sous-onglet, vue liste + detail) ---- */
   .fm-inbox-view {
@@ -1113,8 +1145,8 @@
             <div id="fmInbox" class="fm-empty">Chargement...</div>
           </div>
           <div class="card">
-            <div class="fm-card-title"><span>Entraînement</span></div>
-            <div id="fmTraining" class="fm-empty">Chargement...</div>
+            <div class="fm-card-title"><span>Dynamique de groupe</span></div>
+            <div id="fmGroupDynamics" class="fm-empty">Chargement...</div>
           </div>
           <div class="card">
             <div class="fm-card-title"><span>Finances</span></div>
@@ -1413,21 +1445,32 @@
       </div>
 
       <div class="fm-tactic-view hidden" id="fmTactiqueView">
-        <div id="tacCoachPanel"></div>
-        <div class="tac-card tac-pitch-wrap">
-          <h3>Terrain</h3>
-          <div class="tac-note">11 type dans l'esprit de l'entraîneur — changements évidemment possibles de match en match selon la condition physique, les blessures et les choix du coach.</div>
-          <div class="tac-pitch" id="tacPitch"></div>
-          <div class="tac-legend">
-            <span><i></i>Poste naturel</span>
-            <span><i class="weak"></i>Poste d'adaptation</span>
-            <span><i class="empty"></i>Aucun joueur disponible</span>
-          </div>
-          <button type="button" class="secondary tac-recalc-btn" id="tacRecalcBtn">🔄 Recalculer la tactique</button>
+        <div class="tac-subtab-bar" id="tacSubtabBar">
+          <button type="button" class="tac-subtab-btn active" data-subtab="formation"><span class="tac-subtab-icon">♟️</span>Formation</button>
+          <button type="button" class="tac-subtab-btn" data-subtab="dynamique"><span class="tac-subtab-icon">🤝</span>Dynamique de groupe</button>
         </div>
-        <div class="tac-card tac-bench-card">
-          <h3>Effectif restant</h3>
-          <div class="tac-bench" id="tacBench"></div>
+
+        <div class="tac-subtab-panel tac-formation-grid" id="tacFormationPanel">
+          <div id="tacCoachPanel"></div>
+          <div class="tac-card tac-pitch-wrap">
+            <h3>Terrain</h3>
+            <div class="tac-note">11 type dans l'esprit de l'entraîneur — changements évidemment possibles de match en match selon la condition physique, les blessures et les choix du coach.</div>
+            <div class="tac-pitch" id="tacPitch"></div>
+            <div class="tac-legend">
+              <span><i></i>Poste naturel</span>
+              <span><i class="weak"></i>Poste d'adaptation</span>
+              <span><i class="empty"></i>Aucun joueur disponible</span>
+            </div>
+            <button type="button" class="secondary tac-recalc-btn" id="tacRecalcBtn">🔄 Recalculer la tactique</button>
+          </div>
+          <div class="tac-card tac-bench-card">
+            <h3>Effectif restant</h3>
+            <div class="tac-bench" id="tacBench"></div>
+          </div>
+        </div>
+
+        <div class="tac-subtab-panel hidden" id="tacDynamiquePanel">
+          <div id="tacDynamiqueContent"></div>
         </div>
       </div>
     </div>
@@ -2403,7 +2446,7 @@ async function fetchLeagueStaffStats(gid, nation, division) {
 async function fetchClubStaffMembers(clubId) {
   const { data: gameStaffRows, error: gsErr } = await supabaseClient
     .from("game_staff")
-    .select("id, staff_ref, nom, poste, salaire_actuel, contrat_expire, equipe_assignee, est_adjoint")
+    .select("id, staff_ref, nom, poste, salaire_actuel, contrat_expire, equipe_assignee, est_adjoint, jour_arrivee")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId);
   if (gsErr) { console.error(gsErr); return []; }
@@ -3066,6 +3109,23 @@ async function fetchClubTacticEffectif(clubId) {
   return (data || []).filter(p => !(Number(p.blessure_jours) > 0) && p.statut_special !== "Sus");
 }
 
+// Sous-onglet actuellement affiche dans l'onglet Tactique ("formation" ou
+// "dynamique") : conserve entre deux visites de l'onglet, et force-able
+// depuis l'exterieur (ex: clic sur le widget Dynamique de groupe de
+// l'accueil, voir renderGroupDynamicsHome).
+let tacActiveSubtab = "formation";
+let tacCurrentClubId = null;
+
+function showFmTacSubtab(key) {
+  tacActiveSubtab = key;
+  document.querySelectorAll(".tac-subtab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-subtab") === key));
+  document.getElementById("tacFormationPanel").classList.toggle("hidden", key !== "formation");
+  document.getElementById("tacDynamiquePanel").classList.toggle("hidden", key !== "dynamique");
+  if (key === "dynamique" && tacCurrentClubId) {
+    loadAndRenderGroupDynamicsDetail(tacCurrentClubId);
+  }
+}
+
 async function showFmTactiqueView(clubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
   document.getElementById("fmPlayersDbView").classList.add("hidden");
@@ -3074,12 +3134,21 @@ async function showFmTactiqueView(clubId) {
   document.getElementById("fmTactiqueView").classList.remove("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "TACTIQUE";
+  tacCurrentClubId = clubId;
 
   const btn = document.getElementById("tacRecalcBtn");
   if (!btn.dataset.wired) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => computeAndRenderTactic(clubId, { force: true }));
   }
+  const subtabBar = document.getElementById("tacSubtabBar");
+  if (!subtabBar.dataset.wired) {
+    subtabBar.dataset.wired = "1";
+    subtabBar.querySelectorAll(".tac-subtab-btn").forEach(b => {
+      b.addEventListener("click", () => showFmTacSubtab(b.getAttribute("data-subtab")));
+    });
+  }
+  showFmTacSubtab(tacActiveSubtab);
 
   if (tacLoadedForClub === clubId && tacCurrentResult) {
     renderTacticResult(tacCurrentResult);
@@ -3250,6 +3319,352 @@ async function persistTactique(clubId, coach, choice, instructions) {
     return;
   }
   if (error) console.error("persistTactique:", error);
+}
+
+// =============================================================================
+// ---- Dynamique de groupe (sous-onglet de Tactique + widget Accueil) -------
+// =============================================================================
+// Note de cohesion d'effectif (0-100), calculee UNIQUEMENT sur l'equipe
+// premiere (game_players.categorie = "equipe_a"), a partir de 7 composantes
+// ponderees :
+//   - Moral moyen de l'effectif                                  (25%)
+//   - Anciennete moyenne des joueurs au sein du club              (15%)
+//   - Stabilite du coach (temps a la tete de l'equipe premiere)   (15%)
+//   - Presence de leaders (stat "leadership" des joueurs, /20)    (15%)
+//   - Homogeneite d'age (ecart-type des ages)                     (10%)
+//   - Cohesion linguistique (regroupement approx. par nationalite)(10%)
+//   - Forme recente du club (points par match de la saison)       (10%)
+// Le resultat est persiste dans la table Supabase `dynamique_groupe` (une
+// ligne par club, upsert sur game_club_id) : la note ne doit jamais se
+// perdre entre deux sessions, meme si un recalcul cote client echoue.
+
+// Regroupement (tres approximatif, a but de cohesion de vestiaire) des
+// nations par langue principale parlee dans le vestiaire. Reprend les cles
+// normalisees de normalizeNationKey/nationDisplayName (definies plus haut,
+// section nationalites). Toute nation absente de cette table forme son
+// propre groupe (cle = son propre nom normalise) : deux joueurs d'une meme
+// nation non repertoriee ici restent donc correctement consideres comme
+// partageant une langue.
+const GD_LANGUAGE_GROUPS = {
+  francais: [
+    "france", "belgique", "luxembourg", "monaco", "cote d'ivoire", "senegal", "mali",
+    "cameroun", "congo", "republique democratique du congo", "gabon", "burkina faso",
+    "guinee", "guinee-bissau", "niger", "tchad", "benin", "togo", "centrafrique",
+    "madagascar", "comores", "guyane", "martinique", "guadeloupe", "reunion", "mayotte",
+    "haiti", "tahiti", "polynesie francaise", "nouvelle-caledonie",
+  ],
+  anglais: [
+    "angleterre", "ecosse", "pays de galles", "irlande du nord", "republique d'irlande",
+    "irlande", "etats-unis", "canada", "australie", "nouvelle-zelande", "afrique du sud",
+    "nigeria", "ghana", "jamaique", "trinite-et-tobago", "inde", "pakistan", "kenya",
+    "ouganda", "zambie", "zimbabwe", "malawi", "sierra leone", "liberia", "gambie",
+    "tanzanie", "singapour", "hong kong", "philippines", "namibie", "botswana",
+  ],
+  espagnol: [
+    "espagne", "mexique", "argentine", "uruguay", "chili", "colombie", "perou",
+    "equateur", "paraguay", "bolivie", "venezuela", "costa rica", "panama", "honduras",
+    "guatemala", "salvador", "nicaragua", "cuba", "republique dominicaine",
+    "guinee equatoriale",
+  ],
+  portugais: ["portugal", "bresil", "angola", "mozambique", "cap-vert", "sao tome-et-principe"],
+  allemand: ["allemagne", "autriche", "suisse"],
+  neerlandais: ["pays-bas"],
+  italien: ["italie", "saint-marin"],
+  russe: ["russie", "bielorussie", "kazakhstan", "kirghizistan", "tadjikistan", "ouzbekistan"],
+  arabe: [
+    "maroc", "algerie", "tunisie", "egypte", "arabie saoudite", "qatar", "irak", "syrie",
+    "liban", "jordanie", "emirats arabes unis", "oman", "yemen", "palestine", "libye",
+    "soudan", "mauritanie",
+  ],
+  turc: ["turquie"],
+  grec: ["grece", "chypre"],
+  slave: [
+    "pologne", "republique tcheque", "rep. tcheque", "slovaquie", "croatie", "serbie",
+    "bosnie-herzegovine", "slovenie", "macedoine du nord", "montenegro", "bulgarie", "ukraine",
+  ],
+  scandinave: ["suede", "norvege", "danemark", "islande", "finlande"],
+};
+const GD_NATION_KEY_TO_LANG = {};
+Object.entries(GD_LANGUAGE_GROUPS).forEach(([lang, keys]) => {
+  keys.forEach(k => { GD_NATION_KEY_TO_LANG[k] = lang; });
+});
+function gdLangKeyForNation(nationRaw) {
+  const key = normalizeNationKey(nationDisplayName(nationRaw));
+  return GD_NATION_KEY_TO_LANG[key] || key || "inconnu";
+}
+
+const GD_WEIGHTS = { moral: 0.25, anciennete: 0.15, coach: 0.15, leadership: 0.15, age: 0.10, langue: 0.10, forme: 0.10 };
+
+let gdLoadedForClub = null;
+let gdCurrentResult = null;
+
+function gdClamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
+function gdAverage(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
+function gdStdDev(arr) {
+  if (arr.length < 2) return 0;
+  const m = gdAverage(arr);
+  return Math.sqrt(gdAverage(arr.map(v => (v - m) ** 2)));
+}
+
+async function fetchGroupDynamicsEffectif(clubId) {
+  const { data, error } = await supabaseClient
+    .from("game_players")
+    .select("id, age, moral, leadership, nationalite, jour_arrivee_club")
+    .eq("game_id", gameId)
+    .eq("game_club_id", clubId)
+    .eq("categorie", "equipe_a");
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+async function fetchClubResultsInfo(clubId) {
+  const { data, error } = await supabaseClient
+    .from("game_clubs")
+    .select("victoires, nuls, defaites, points, classement")
+    .eq("id", clubId)
+    .single();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+
+// Calcule (et persiste) la note de dynamique de groupe pour un club. Mise
+// en cache par clubId (voir gdLoadedForClub) pour eviter de tout recharger
+// a chaque ouverture du sous-onglet/widget ; passer { force: true } pour
+// forcer un recalcul (ex: apres un changement de coach ou un recrutement).
+async function computeGroupDynamics(clubId, { force } = {}) {
+  if (!force && gdLoadedForClub === clubId && gdCurrentResult) return gdCurrentResult;
+
+  const [effectif, staffMembers, clubInfo] = await Promise.all([
+    fetchGroupDynamicsEffectif(clubId),
+    staffViewLoadedForClub === clubId ? Promise.resolve(staffViewMembers) : fetchClubStaffMembers(clubId),
+    fetchClubResultsInfo(clubId),
+  ]);
+
+  if (!effectif.length) {
+    gdLoadedForClub = clubId;
+    gdCurrentResult = null;
+    return null;
+  }
+
+  const jourActuel = Number(currentGame?.jour_actuel) || 0;
+  const coachRows = staffMembers.filter(m => COACH_TEAM_POSTES.includes((m.poste || "").trim()));
+  const coach = resolveTeamCoaches(coachRows).equipe_a;
+
+  // --- Moral moyen (deja sur une echelle 0-100 cote Supabase) ---
+  const moralVals = effectif.map(p => Number(p.moral)).filter(Number.isFinite);
+  const moralMoyen = gdAverage(moralVals) ?? 60;
+  const moralScore = gdClamp(Math.round(moralMoyen), 0, 100);
+
+  // --- Homogeneite d'age : plus l'ecart-type des ages est faible, plus la note est haute ---
+  const ages = effectif.map(p => Number(p.age)).filter(Number.isFinite);
+  const ageEcartType = gdStdDev(ages);
+  const ageScore = gdClamp(Math.round(100 - (ageEcartType - 2) * 15), 15, 100);
+
+  // --- Cohesion linguistique : part du plus gros groupe linguistique de l'effectif ---
+  const langCounts = {};
+  effectif.forEach(p => {
+    const key = gdLangKeyForNation(p.nationalite);
+    langCounts[key] = (langCounts[key] || 0) + 1;
+  });
+  const langGroupCount = Object.keys(langCounts).length;
+  const majorityShare = Math.max(...Object.values(langCounts)) / effectif.length;
+  const langScore = gdClamp(Math.round(majorityShare * 100), 20, 100);
+
+  // --- Forme recente du club : points par match de la saison en cours ---
+  // (aucun historique match par match n'existe encore cote Supabase ; on
+  // s'appuie donc sur les totaux de saison. Pre-saison / saison pas encore
+  // commencee => composante neutre plutot que de penaliser/favoriser a tort.)
+  const matchsJoues = (clubInfo?.victoires || 0) + (clubInfo?.nuls || 0) + (clubInfo?.defaites || 0);
+  let formeScore;
+  if (matchsJoues === 0) {
+    formeScore = 60;
+  } else {
+    const ppm = (clubInfo.points || 0) / matchsJoues;
+    formeScore = gdClamp(Math.round((ppm / 3) * 100), 0, 100);
+  }
+
+  // --- Stabilite du coach : jours de jeu depuis son arrivee a la tete de l'equipe A ---
+  let coachJours = null;
+  let coachScore;
+  if (!coach) {
+    coachScore = 45; // pas d'entraineur "Equipe A" en poste : composante degradee
+  } else {
+    coachJours = Math.max(0, jourActuel - (Number(coach.jour_arrivee) || 0));
+    coachScore = gdClamp(Math.round(30 + (coachJours / 365) * 70), 30, 100);
+  }
+
+  // --- Anciennete moyenne des joueurs au sein du club ---
+  const arrivals = effectif.map(p => Math.max(0, jourActuel - (Number(p.jour_arrivee_club) || 0)));
+  const ancienneteMoyenneJours = gdAverage(arrivals) ?? 0;
+  const ancienneteScore = gdClamp(Math.round(30 + (ancienneteMoyenneJours / 365) * 70), 30, 100);
+
+  // --- Presence de leaders (stat "leadership" /20) ---
+  const leaderships = effectif.map(p => Number(p.leadership)).filter(Number.isFinite);
+  const nbLeaders = leaderships.filter(l => l >= 14).length;
+  const maxLeadership = leaderships.length ? Math.max(...leaderships) : 0;
+  const leadershipScore = gdClamp(Math.round(nbLeaders * 20 + (maxLeadership / 20) * 40), 0, 100);
+
+  const noteGlobale = gdClamp(Math.round(
+    moralScore * GD_WEIGHTS.moral +
+    ancienneteScore * GD_WEIGHTS.anciennete +
+    coachScore * GD_WEIGHTS.coach +
+    leadershipScore * GD_WEIGHTS.leadership +
+    ageScore * GD_WEIGHTS.age +
+    langScore * GD_WEIGHTS.langue +
+    formeScore * GD_WEIGHTS.forme
+  ), 0, 100);
+
+  const result = {
+    clubId, noteGlobale, moralMoyen, moralScore,
+    ageEcartType, ageScore,
+    langScore, langGroupCount, majorityShare,
+    formeScore, matchsJoues,
+    coach, coachJours, coachScore,
+    ancienneteMoyenneJours, ancienneteScore,
+    nbLeaders, maxLeadership, leadershipScore,
+    nbJoueurs: effectif.length,
+  };
+
+  gdLoadedForClub = clubId;
+  gdCurrentResult = result;
+  persistGroupDynamics(clubId, result);
+  return result;
+}
+
+// Persiste la note (et le detail du calcul) pour ne jamais la perdre entre
+// deux sessions. Echec silencieux (log console) : ne doit jamais bloquer
+// l'affichage cote utilisateur.
+async function persistGroupDynamics(clubId, r) {
+  const row = {
+    game_id: gameId,
+    game_club_id: clubId,
+    note_globale: r.noteGlobale,
+    moral_moyen: r.moralMoyen,
+    age_ecart_type: r.ageEcartType,
+    age_score: r.ageScore,
+    langues_score: r.langScore,
+    forme_recente_score: r.formeScore,
+    coach_anciennete_jours: r.coachJours,
+    coach_stabilite_score: r.coachScore,
+    joueurs_anciennete_moyenne_jours: r.ancienneteMoyenneJours,
+    anciennete_score: r.ancienneteScore,
+    nb_leaders: r.nbLeaders,
+    leadership_score: r.leadershipScore,
+    details: {
+      nb_joueurs: r.nbJoueurs,
+      langues_groupes: r.langGroupCount,
+      part_groupe_majoritaire: r.majorityShare,
+      matchs_joues: r.matchsJoues,
+      max_leadership: r.maxLeadership,
+      coach_nom: r.coach?.nom || null,
+      poids: GD_WEIGHTS,
+    },
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabaseClient.from("dynamique_groupe").upsert(row, { onConflict: "game_club_id" });
+  if (error) console.error("persistGroupDynamics:", error);
+}
+
+function gdScoreColor(note) {
+  if (note >= 70) return "var(--accent)";
+  if (note >= 45) return "var(--gold)";
+  return "var(--danger)";
+}
+function gdScoreLabel(note) {
+  if (note >= 80) return "Excellente";
+  if (note >= 65) return "Bonne";
+  if (note >= 50) return "Correcte";
+  if (note >= 35) return "Fragile";
+  return "Critique";
+}
+function gdRingHtml(note, { mini } = {}) {
+  const color = gdScoreColor(note);
+  return `
+    <div class="gd-ring${mini ? " mini" : ""}" style="--gd-pct:${note}; --gd-color:${color};">
+      <div class="gd-ring-value">${note}${mini ? "" : "<small>/ 100</small>"}</div>
+    </div>
+  `;
+}
+function gdBarRowHtml(label, score, note) {
+  const s = gdClamp(Math.round(score), 0, 100);
+  return `
+    <div class="gd-bar-row">
+      <div class="gd-bar-head"><span class="label">${escapeHtml(label)}</span><span class="value">${s}/100</span></div>
+      <div class="gd-bar-track"><div class="gd-bar-fill" style="width:${s}%; background:${gdScoreColor(s)};"></div></div>
+      ${note ? `<div class="gd-bar-note">${escapeHtml(note)}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderGroupDynamicsDetail(r) {
+  const el = document.getElementById("tacDynamiqueContent");
+  if (!el) return;
+  if (!r) {
+    el.innerHTML = `<div class="tac-card"><div class="fm-empty">Aucun joueur d'équipe première : impossible de calculer la dynamique de groupe.</div></div>`;
+    return;
+  }
+  const coachSub = r.coach
+    ? `${escapeHtml(r.coach.nom || "-")} — en poste depuis ${r.coachJours} jour${r.coachJours > 1 ? "s" : ""}.`
+    : `Aucun entraîneur "Équipe A" en poste.`;
+  el.innerHTML = `
+    <div class="gd-layout">
+      <div class="tac-card gd-score-card">
+        ${gdRingHtml(r.noteGlobale)}
+        <div class="gd-label">${gdScoreLabel(r.noteGlobale)}</div>
+        <div class="gd-sub">Basée sur ${r.nbJoueurs} joueur${r.nbJoueurs > 1 ? "s" : ""} d'équipe première.</div>
+      </div>
+      <div class="tac-card gd-bars">
+        <h3>Composantes</h3>
+        ${gdBarRowHtml("Moral moyen", r.moralScore, `Moral moyen de l'effectif : ${Math.round(r.moralMoyen)}/100.`)}
+        ${gdBarRowHtml("Ancienneté des joueurs", r.ancienneteScore, `En moyenne ${Math.round(r.ancienneteMoyenneJours)} jour(s) au sein du club.`)}
+        ${gdBarRowHtml("Stabilité du coach", r.coachScore, coachSub)}
+        ${gdBarRowHtml("Présence de leaders", r.leadershipScore, `${r.nbLeaders} leader(s) identifié(s) (leadership ≥ 14/20, max : ${r.maxLeadership}/20).`)}
+        ${gdBarRowHtml("Homogénéité d'âge", r.ageScore, `Écart-type d'âge de l'effectif : ${r.ageEcartType.toFixed(1)} an(s).`)}
+        ${gdBarRowHtml("Cohésion linguistique", r.langScore, `${r.langGroupCount} groupe(s) linguistique(s) recensé(s), ${Math.round(r.majorityShare * 100)}% dans le groupe majoritaire.`)}
+        ${gdBarRowHtml("Forme récente du club", r.formeScore, r.matchsJoues > 0 ? `${r.matchsJoues} match(s) joué(s) cette saison.` : "Saison pas encore commencée : composante neutre.")}
+      </div>
+    </div>
+  `;
+}
+
+async function loadAndRenderGroupDynamicsDetail(clubId) {
+  const el = document.getElementById("tacDynamiqueContent");
+  if (el && !(gdLoadedForClub === clubId && gdCurrentResult)) {
+    el.innerHTML = `<div class="tac-card"><div class="fm-empty">Chargement...</div></div>`;
+  }
+  const r = await computeGroupDynamics(clubId);
+  renderGroupDynamicsDetail(r);
+}
+
+// Widget compact affiche sur la page d'accueil (remplace l'ancien module
+// "Entraînement", pas encore implemente). Cliquer dessus ouvre l'onglet
+// Tactique directement sur le sous-onglet Dynamique de groupe.
+async function renderGroupDynamicsHome(clubId) {
+  const el = document.getElementById("fmGroupDynamics");
+  if (!el) return;
+  el.innerHTML = `Chargement...`;
+  const r = await computeGroupDynamics(clubId);
+  if (!r) {
+    el.innerHTML = `Effectif d'équipe première insuffisant pour calculer la dynamique de groupe.`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="gd-home-card" id="gdHomeCard">
+      ${gdRingHtml(r.noteGlobale, { mini: true })}
+      <div class="gd-home-text">
+        <div class="gd-home-label">${gdScoreLabel(r.noteGlobale)} — ${r.noteGlobale}/100</div>
+        <div class="gd-home-sub">Voir le détail dans l'onglet Tactique</div>
+      </div>
+    </div>
+  `;
+  const card = document.getElementById("gdHomeCard");
+  if (card) {
+    card.addEventListener("click", () => {
+      const sidebarRow = document.querySelector('.fm-nav-item[data-key="tactique"]');
+      if (sidebarRow) sidebarRow.click();
+      showFmTacSubtab("dynamique");
+    });
+  }
 }
 
 function renderStaffAttrChips(member, dept, locked) {
@@ -6922,11 +7337,6 @@ function renderNextMatch() {
   el.innerHTML = `Aucun match programmé pour l'instant.`;
 }
 
-function renderTraining() {
-  const el = document.getElementById("fmTraining");
-  el.innerHTML = `Le planning d'entraînement n'est pas encore configuré.`;
-}
-
 async function renderStandings(club) {
   const el = document.getElementById("fmStandings");
 
@@ -7005,7 +7415,7 @@ async function showMyClub(gameClubId, canChange) {
   renderFmHeader(club, me?.pseudo, currentGame, canChange);
   renderFmSidebar(gameClubId);
   renderNextMatch();
-  renderTraining();
+  renderGroupDynamicsHome(gameClubId);
   renderFinances(club);
   renderTeamStats();
   renderStandings(club);
