@@ -967,7 +967,7 @@ let squadTeamCoachRows = [];
 async function fetchSquadTeamCoaches(clubId) {
   const { data, error } = await supabaseClient
     .from("game_staff")
-    .select("nom, poste, est_adjoint, equipe_assignee")
+    .select("id, nom, poste, est_adjoint, equipe_assignee")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId)
     .in("poste", SQUAD_COACH_POSTES);
@@ -975,21 +975,39 @@ async function fetchSquadTeamCoaches(clubId) {
   return data || [];
 }
 
-function pickSquadCoach(rows, category) {
-  const matches = rows.filter(r => r.equipe_assignee === category);
-  const head = matches.find(r => !r.est_adjoint) || matches[0];
-  if (head) return head;
-  if (category === "equipe_a") {
-    return rows.find(r => !r.est_adjoint && !r.equipe_assignee) || null;
-  }
-  return null;
+// Repartition des roles d'entraineur, persistee cote base via la fonction
+// SQL `recompute_coach_team_assignment()` (colonne `equipe_assignee` de
+// `game_staff`) : le titulaire (poste "Entraîneur"/"Entraîneuse") le plus
+// ancien du club est TOUJOURS "equipe_a" et UNIQUEMENT "equipe_a" ; les
+// roles "reserve"/"u18" vont en priorite aux autres titulaires du club s'il
+// y en a, sinon aux adjoints restants. Un nouveau titulaire fraichement
+// recrute prend donc automatiquement la place d'un adjoint qui occupait ce
+// role par defaut. Ce calcul cote client ne sert que de filet de securite si
+// la resynchro serveur n'a pas encore tourne pour ce club.
+function resolveSquadCoaches(rows) {
+  const sorted = [...rows].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  const heads = sorted.filter(r => !r.est_adjoint);
+  const adjoints = sorted.filter(r => r.est_adjoint);
+  const pool = [...heads, ...adjoints]; // titulaires (par id) puis adjoints (par id)
+
+  const explicit = cat => {
+    const matches = sorted.filter(r => r.equipe_assignee === cat);
+    return matches.find(r => !r.est_adjoint) || matches[0] || null;
+  };
+
+  return {
+    equipe_a: explicit("equipe_a") || pool[0] || null,
+    reserve: explicit("reserve") || pool[1] || null,
+    u18: explicit("u18") || pool[2] || null,
+  };
 }
 
 function renderSquadTeamCoaches() {
+  const resolved = resolveSquadCoaches(squadTeamCoachRows);
   ["equipe_a", "reserve", "u18"].forEach(cat => {
     const el = document.querySelector(`.squad-subtab-coach[data-subtab-coach="${cat}"]`);
     if (!el) return;
-    const coach = pickSquadCoach(squadTeamCoachRows, cat);
+    const coach = resolved[cat];
     el.textContent = coach ? `🧑‍🏫 ${coach.nom}` : "Aucun coach assigné";
   });
 }
