@@ -2459,7 +2459,7 @@ function tacPlayerPostes(player) {
 }
 // Ordre de proximite entre familles de roles, utilise pour evaluer un
 // "depannage" hors poste naturel (ex: un MC qui depanne en MD).
-const TAC_ROLE_ORDER = ["GB", "D", "MD", "M", "MO", "AL", "BT"];
+const TAC_ROLE_ORDER = ["GB", "D", "AL", "MD", "M", "MO", "BT"];
 function tacRoleDistance(r1, r2) {
   if (r1 === r2) return 0;
   const i1 = TAC_ROLE_ORDER.indexOf(r1), i2 = TAC_ROLE_ORDER.indexOf(r2);
@@ -2523,7 +2523,7 @@ const TAC_FORMATIONS = {
     tacSlot("gb", "GB", "GB", "C", 50, 94),
     tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
     tacSlot("md1", "MD", "MD", "C", 38, 58), tacSlot("md2", "MD", "MD", "C", 62, 58),
-    tacSlot("alg", "ALG", "AL", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12), tacSlot("ald", "ALD", "AL", "D", 86, 16),
+    tacSlot("alg", "ALG", "MO", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12), tacSlot("ald", "ALD", "MO", "D", 86, 16),
   ],
   "4-3-2-1 MD MO Axial": [
     tacSlot("gb", "GB", "GB", "C", 50, 94),
@@ -2536,7 +2536,7 @@ const TAC_FORMATIONS = {
     tacSlot("gb", "GB", "GB", "C", 50, 94),
     tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
     tacSlot("md1", "MD", "MD", "C", 25, 60), tacSlot("md2", "MD", "MD", "C", 50, 64), tacSlot("md3", "MD", "MD", "C", 75, 60),
-    tacSlot("alg", "ALG", "AL", "G", 16, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "AL", "D", 84, 16),
+    tacSlot("alg", "ALG", "MO", "G", 16, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "MO", "D", 84, 16),
   ],
   "5-2-1-2 MD MO": [
     tacSlot("gb", "GB", "GB", "C", 50, 94),
@@ -2556,7 +2556,7 @@ const TAC_FORMATIONS = {
     tacSlot("gb", "GB", "GB", "C", 50, 94),
     tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
     tacSlot("md1", "MD", "MD", "C", 35, 58), tacSlot("md2", "MD", "MD", "C", 65, 58),
-    tacSlot("alg", "ALG", "AL", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "AL", "D", 86, 16),
+    tacSlot("alg", "ALG", "MO", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "MO", "D", 86, 16),
   ],
   "5-3-2 MD AL": [
     tacSlot("gb", "GB", "GB", "C", 50, 94),
@@ -2565,10 +2565,11 @@ const TAC_FORMATIONS = {
     tacSlot("bt1", "BU", "BT", "C", 38, 14), tacSlot("bt2", "BU", "BT", "C", 62, 14),
   ],
 };
-// Wingbacks en defense a 5 : les ailiers (AL) depannent naturellement ces
-// couloirs, on l'ajoute donc comme role alternatif accepte pour ces slots.
-["5-2-1-2 MD MO", "5-2-2-1 MD MO", "5-2-3 MD Jeu large", "5-3-2 MD AL"].forEach(key => {
-  TAC_FORMATIONS[key].forEach(slot => {
+// DG/DD sont le poste naturel des Arrieres Lateraux (AL) : on l'ajoute comme
+// role alternatif accepte pour ces slots, dans TOUS les systemes (le role de
+// base reste "D", pour les defenseurs centraux capables de jouer large).
+Object.values(TAC_FORMATIONS).forEach(slots => {
+  slots.forEach(slot => {
     if (slot.id === "dg" || slot.id === "dd") slot.altRole = "AL";
   });
 });
@@ -4662,7 +4663,7 @@ const PDB_FOOT_RANK = {
 // "D/AL (DG)" (plusieurs roles x plusieurs cotes combines). On les eclate en
 // postes atomiques ("D (D)", "AL (G)"...) pour que le filtre liste chaque
 // poste une seule fois au lieu de toutes les combinaisons brutes.
-const PDB_ROLE_ORDER = ["GB", "D", "MD", "M", "AL", "MO", "BT"];
+const PDB_ROLE_ORDER = ["GB", "D", "AL", "MD", "M", "MO", "BT"];
 const PDB_SIDE_ORDER = ["D", "G", "C"];
 
 function expandPosteToken(token) {
