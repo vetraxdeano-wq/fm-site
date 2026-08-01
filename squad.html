@@ -204,16 +204,23 @@
   .squad-subtab-btn {
     display: flex; align-items: center; gap: 8px; background: transparent; border: none;
     border-bottom: 3px solid transparent; color: var(--text-dim);
-    padding: 14px 16px 11px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+    padding: 10px 16px 9px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
   }
   .squad-subtab-icon { font-size: 15px; line-height: 1; }
   .squad-subtab-btn:hover { color: var(--text); }
   .squad-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
+  .squad-subtab-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .squad-subtab-label { display: flex; align-items: center; gap: 6px; }
   .squad-subtab-count {
     background: rgba(255,255,255,0.08); color: var(--text-dim); font-size: 11px;
     font-weight: 700; padding: 1px 7px; border-radius: 999px;
   }
   .squad-subtab-btn.active .squad-subtab-count { background: rgba(251,191,36,0.18); color: var(--gold); }
+  .squad-subtab-coach {
+    font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0;
+    color: var(--text-dim); opacity: 0.8;
+  }
+  .squad-subtab-btn.active .squad-subtab-coach { color: rgba(251,191,36,0.8); opacity: 1; }
   .fm-squad-card-header {
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
     padding: 14px 18px; border-bottom: 1px solid var(--border); flex: 0 0 auto;
@@ -293,9 +300,27 @@
     <div class="fm-content-wrap">
       <div class="fm-squad-card">
         <div class="squad-subtab-bar" id="squadSubtabBar">
-          <button type="button" class="squad-subtab-btn active" data-subtab="equipe_a"><span class="squad-subtab-icon">🏟️</span>Équipe A <span class="squad-subtab-count">0</span></button>
-          <button type="button" class="squad-subtab-btn" data-subtab="reserve"><span class="squad-subtab-icon">🔁</span>Réserve <span class="squad-subtab-count">0</span></button>
-          <button type="button" class="squad-subtab-btn" data-subtab="u18"><span class="squad-subtab-icon">🌱</span>U18 <span class="squad-subtab-count">0</span></button>
+          <button type="button" class="squad-subtab-btn active" data-subtab="equipe_a">
+            <span class="squad-subtab-icon">🏟️</span>
+            <span class="squad-subtab-text">
+              <span class="squad-subtab-label">Équipe A <span class="squad-subtab-count">0</span></span>
+              <span class="squad-subtab-coach" data-subtab-coach="equipe_a">—</span>
+            </span>
+          </button>
+          <button type="button" class="squad-subtab-btn" data-subtab="reserve">
+            <span class="squad-subtab-icon">🔁</span>
+            <span class="squad-subtab-text">
+              <span class="squad-subtab-label">Réserve <span class="squad-subtab-count">0</span></span>
+              <span class="squad-subtab-coach" data-subtab-coach="reserve">—</span>
+            </span>
+          </button>
+          <button type="button" class="squad-subtab-btn" data-subtab="u18">
+            <span class="squad-subtab-icon">🌱</span>
+            <span class="squad-subtab-text">
+              <span class="squad-subtab-label">U18 <span class="squad-subtab-count">0</span></span>
+              <span class="squad-subtab-coach" data-subtab-coach="u18">—</span>
+            </span>
+          </button>
         </div>
         <div class="fm-squad-card-header">
           <span class="title" id="fmSquadTitle">Effectif</span>
@@ -930,6 +955,45 @@ function renderMyClubBody() {
 let activeSquadSubtab = "equipe_a";
 let squadSubtabsWired = false;
 
+// ---- Coach de chaque sous-onglet (Equipe A / Reserve / U18) ---------------
+// Les entraineurs sont stockes dans `game_staff`, rattaches a une equipe via
+// la colonne `equipe_assignee` ("equipe_a" / "reserve" / "u18"). Ce champ
+// n'est renseigne que quand un club a effectivement plusieurs entraineurs a
+// distinguer ; pour un club n'ayant qu'un seul entraineur (cas courant pour
+// l'equipe A), on retombe sur cet entraineur meme sans tag explicite.
+const SQUAD_COACH_POSTES = ["Entraîneur", "Entraîneuse", "Entraîneur adjoint", "Entraîneuse adjointe"];
+let squadTeamCoachRows = [];
+
+async function fetchSquadTeamCoaches(clubId) {
+  const { data, error } = await supabaseClient
+    .from("game_staff")
+    .select("nom, poste, est_adjoint, equipe_assignee")
+    .eq("game_id", gameId)
+    .eq("game_club_id", clubId)
+    .in("poste", SQUAD_COACH_POSTES);
+  if (error) { console.error("fetchSquadTeamCoaches:", error); return []; }
+  return data || [];
+}
+
+function pickSquadCoach(rows, category) {
+  const matches = rows.filter(r => r.equipe_assignee === category);
+  const head = matches.find(r => !r.est_adjoint) || matches[0];
+  if (head) return head;
+  if (category === "equipe_a") {
+    return rows.find(r => !r.est_adjoint && !r.equipe_assignee) || null;
+  }
+  return null;
+}
+
+function renderSquadTeamCoaches() {
+  ["equipe_a", "reserve", "u18"].forEach(cat => {
+    const el = document.querySelector(`.squad-subtab-coach[data-subtab-coach="${cat}"]`);
+    if (!el) return;
+    const coach = pickSquadCoach(squadTeamCoachRows, cat);
+    el.textContent = coach ? `🧑‍🏫 ${coach.nom}` : "Aucun coach assigné";
+  });
+}
+
 function wireSquadSubtabs() {
   if (squadSubtabsWired) return;
   squadSubtabsWired = true;
@@ -999,6 +1063,7 @@ function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   wireSquadSubtabs();
   resetSquadSubtabToEquipeA();
   updateSquadSubtabCounts();
+  renderSquadTeamCoaches();
 
   const isSortable = col => isOwnClub || (col.key !== "niveau_actuel" && col.key !== "potentiel");
   initSortableHeaders(document.querySelector("#myClubView .squad-table thead"), MYCLUB_COLUMNS, activeMyClubSortState, renderMyClubBody, isSortable);
@@ -1088,6 +1153,7 @@ async function loadSquad() {
   }
 
   if (hasOwnClub) {
+    squadTeamCoachRows = await fetchSquadTeamCoaches(gameClubId);
     renderMyClubView(club, players, me?.pseudo, isMyClub, myClub);
   } else {
     renderGenericView(club, players);
