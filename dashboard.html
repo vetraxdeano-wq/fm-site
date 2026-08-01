@@ -795,6 +795,13 @@
   }
   .staff-col-expand-btn:hover { border-color: var(--gold); background: rgba(251,191,36,0.08); }
   .staff-col-members { padding-right: 2px; }
+  .staff-col-more-btn {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    background: rgba(255,255,255,0.03); border: 1px dashed var(--border); color: var(--text-dim);
+    border-radius: 12px; padding: 12px 14px; font-size: 12px; font-weight: 700;
+    font-family: inherit; cursor: pointer; text-align: center; transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .staff-col-more-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(251,191,36,0.06); }
   .staff-sector-list { max-height: 60vh; overflow-y: auto; }
   .staff-role-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .staff-role-chip {
@@ -841,6 +848,10 @@
   .staff-modal-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
 
   /* ---- BDD Staff (sous-onglet) : cartes façon "Effectif" (club.html) ---- */
+  .sdb-recruitment-note {
+    font-size: 12.5px; color: var(--text-dim); line-height: 1.5;
+  }
+  .sdb-recruitment-note b { color: var(--text); }
   .sdb-category-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; }
   .sdb-cards-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px;
@@ -1158,6 +1169,10 @@
         </div>
 
         <div class="staff-subtab-panel hidden fm-players-db" id="staffDbPanel">
+          <div class="pdb-recruitment-mode-card">
+            <div class="pdb-recruitment-mode-label">Qui recrute le staff ?</div>
+            <div class="sdb-recruitment-note">Tu ne choisis directement que ta <b>cellule de recrutement</b> et ton <b>entraîneur</b>. Le reste de l'organigramme (préparateurs, staff médical, analystes...) est constitué librement par ton entraîneur, avec son propre budget.</div>
+          </div>
           <div class="pdb-filterbar">
             <div class="pdb-field">
               <label for="sdbSearchInput">Nom</label>
@@ -2045,6 +2060,14 @@ function staffDbCategoryFor(poste) {
 function isEntraineurPoste(poste) {
   return staffDbCategoryFor(poste) === "entraineurs";
 }
+// Entraineur "simple" (poste exact "Entraîneur"/"Entraîneuse"), a l'exclusion
+// des adjoints, entraineurs des gardiens etc. : c'est uniquement ce role qui
+// affiche le profil tactique complet (formations, style de jeu...), les autres
+// membres du staff de coaching n'ayant pas ces attributs pertinents a afficher.
+function isHeadCoachPoste(poste) {
+  const p = (poste || "").trim();
+  return p === "Entraîneur" || p === "Entraîneuse";
+}
 
 // Profil tactique specifique aux entraineurs (colonnes de la table `staff`
 // remplies par l'import FM). Affiche en plus des attributs numeriques
@@ -2058,7 +2081,7 @@ const STAFF_TACTICAL_FIELDS = [
   ["mentalite", "Mentalité"],
 ];
 function renderStaffTacticalChips(member) {
-  if (!isEntraineurPoste(member.poste)) return "";
+  if (!isHeadCoachPoste(member.poste)) return "";
   const chips = STAFF_TACTICAL_FIELDS.map(([key, label]) => {
     const val = member[key];
     if (!val || val === "-") return "";
@@ -2253,6 +2276,33 @@ function staffMemberCardHtml(member, dept, locked, opts = {}) {
   `;
 }
 
+// Regroupe une liste de membres du staff par intitule de poste exact (ex.
+// "Préparateur physique"), groupes tries par effectif decroissant puis
+// alphabetique ; au sein de chaque groupe, membres tries par salaire mensuel
+// decroissant (puis nom, pour les cas sans salaire renseigne).
+function groupStaffByRole(members) {
+  const groups = {};
+  members.forEach(m => {
+    const role = (m.poste || "Autre").trim();
+    (groups[role] = groups[role] || []).push(m);
+  });
+  const roles = Object.keys(groups).sort((a, b) => {
+    const diff = groups[b].length - groups[a].length;
+    return diff !== 0 ? diff : a.localeCompare(b, "fr");
+  });
+  roles.forEach(role => groups[role].sort((a, b) => {
+    const sa = Number.isFinite(Number(a.salaire_actuel)) ? Number(a.salaire_actuel) : -Infinity;
+    const sb = Number.isFinite(Number(b.salaire_actuel)) ? Number(b.salaire_actuel) : -Infinity;
+    return sb !== sa ? sb - sa : (a.nom || "").localeCompare(b.nom || "", "fr");
+  }));
+  return { roles, groups };
+}
+
+// Nombre de fiches affichees directement dans une colonne avant de replier le
+// reste sous une case "+X" (l'onglet Effectif ne doit jamais avoir besoin
+// d'etre scrolle pour tout voir d'un coup d'oeil).
+const STAFF_COL_PREVIEW_MAX = 3;
+
 function renderStaffColumns() {
   const el = document.getElementById("staffColumns");
   if (!el) return;
@@ -2263,11 +2313,17 @@ function renderStaffColumns() {
   if (autresMembers.length > 0) depts.autres = { label: "Autres", icon: "📋" };
 
   el.innerHTML = Object.entries(depts).map(([dept, info]) => {
-    const members = staffViewMembers
-      .filter(m => staffDepartmentFor(m.poste) === dept)
-      .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
-    const membersHtml = members.length > 0
-      ? members.map(m => staffMemberCardHtml(m, dept, locked, { showTactical: true })).join("")
+    const members = staffViewMembers.filter(m => staffDepartmentFor(m.poste) === dept);
+    // Groupes par role (les plus fournis en premier), membres tries par plus
+    // gros salaire mensuel en tete au sein de chaque groupe.
+    const { roles, groups } = groupStaffByRole(members);
+    const ordered = roles.flatMap(role => groups[role]);
+    const preview = ordered.slice(0, STAFF_COL_PREVIEW_MAX);
+    const remaining = ordered.length - preview.length;
+
+    const membersHtml = ordered.length > 0
+      ? preview.map(m => staffMemberCardHtml(m, dept, locked, { showTactical: true })).join("")
+        + (remaining > 0 ? `<button type="button" class="staff-col-more-btn" data-dept="${dept}">+${remaining} de plus… (voir le détail)</button>` : "")
       : `<div class="staff-col-empty">Aucun membre dans ce secteur.</div>`;
     return `
       <div class="staff-column" data-dept="${dept}">
@@ -2282,7 +2338,7 @@ function renderStaffColumns() {
     `;
   }).join("");
 
-  el.querySelectorAll(".staff-col-expand-btn").forEach(btn => {
+  el.querySelectorAll(".staff-col-expand-btn, .staff-col-more-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       openStaffSectorModal(btn.getAttribute("data-dept"), locked);
@@ -2365,18 +2421,9 @@ function openStaffSectorModal(dept, locked) {
   const members = staffViewMembers.filter(m => staffDepartmentFor(m.poste) === dept);
 
   // Regroupement par intitule de poste exact (ex: "Preparateur physique"),
-  // trie par effectif decroissant puis alphabetique, membres tries par nom
-  // au sein de chaque groupe.
-  const roleGroups = {};
-  members.forEach(m => {
-    const role = (m.poste || "Autre").trim();
-    (roleGroups[role] = roleGroups[role] || []).push(m);
-  });
-  const roles = Object.keys(roleGroups).sort((a, b) => {
-    const diff = roleGroups[b].length - roleGroups[a].length;
-    return diff !== 0 ? diff : a.localeCompare(b, "fr");
-  });
-  roles.forEach(role => roleGroups[role].sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr")));
+  // trie par effectif decroissant puis alphabetique ; au sein de chaque
+  // groupe, membres tries par plus gros salaire mensuel en tete.
+  const { roles, groups: roleGroups } = groupStaffByRole(members);
 
   const filtersHtml = roles.length > 1 ? `
     <div class="staff-role-filters">
@@ -2468,7 +2515,7 @@ function openStaffModal(member, locked, fromDept) {
     <div class="stat-row"><span class="label">Salaire</span><span class="value">${member.salaire_actuel != null ? formatMoney(member.salaire_actuel) + " / mois" : "-"}</span></div>
     ${member.qualification_preparateur && member.qualification_preparateur !== "-" ? `<div class="stat-row"><span class="label">Qualification</span><span class="value">${escapeHtml(member.qualification_preparateur)}</span></div>` : ""}
     ${attrRows}
-    ${isEntraineurPoste(member.poste) ? renderStaffTacticalRows(member, locked) : ""}
+    ${isHeadCoachPoste(member.poste) ? renderStaffTacticalRows(member, locked) : ""}
   `;
 
   overlay.classList.remove("hidden");
