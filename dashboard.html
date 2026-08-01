@@ -913,6 +913,8 @@
   .tac-badge.preferee { background: rgba(74,222,128,0.15); color: var(--accent); border: 1px solid var(--accent-dim); }
   .tac-badge.deuxieme_preferee { background: rgba(251,191,36,0.15); color: var(--gold); border: 1px solid #7a5c0f; }
   .tac-badge.adaptee { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid #7a1f1f; }
+  .tac-badge.adaptees { background: rgba(74,222,128,0.15); color: var(--accent); border: 1px solid var(--accent-dim); }
+  .tac-badge.imposees { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid #7a1f1f; }
   .tac-explain { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin-top: 8px; }
   .tac-mentality-scale { display: flex; gap: 3px; margin-top: 6px; }
   .tac-mentality-dot { flex: 1; height: 6px; border-radius: 3px; background: #1c2029; border: 1px solid var(--border); }
@@ -2613,8 +2615,17 @@ function tacAssignFormation(effectif, slots) {
 // de coeur meme si elle est sous-optimale.
 const TAC_MIN_COVERAGE = 0.55;
 const TAC_CRITICAL_COVERAGE = 0.35;
+// Adaptabilite du coach (~0-20) : moyenne de sa connaissance tactique et de
+// son adaptabilite. Utilisee a la fois pour choisir la formation (explorer
+// le catalogue ou imposer le systeme fetiche) et pour decider si les
+// consignes de jeu (passes/rythme/projection/approche) sont ajustees a
+// l'effectif ou imposees par la philosophie du coach.
+function tacCoachAdaptability(coach) {
+  return ((Number(coach?.connaissance_tactique) || 10) + (Number(coach?.adaptabilite_2) || 10)) / 2; // ~0-20
+}
+
 function tacChooseFormation(coach, effectif) {
-  const adaptability = ((Number(coach?.connaissance_tactique) || 10) + (Number(coach?.adaptabilite_2) || 10)) / 2; // ~0-20
+  const adaptability = tacCoachAdaptability(coach);
   const preferee = coach?.formation_preferee && TAC_FORMATIONS[coach.formation_preferee] ? coach.formation_preferee : null;
   const deuxieme = coach?.deuxieme_formation_preferee && TAC_FORMATIONS[coach.deuxieme_formation_preferee] ? coach.deuxieme_formation_preferee : null;
 
@@ -2652,30 +2663,38 @@ function tacChooseFormation(coach, effectif) {
   }
 
   const resPreferee = preferee ? evalFor(preferee) : null;
+  const resDeuxieme = deuxieme ? evalFor(deuxieme) : null;
 
+  // Entraineur adaptable : explore systematiquement tout le catalogue, meme
+  // si son systeme favori est deja parfaitement jouable, pour verifier qu'il
+  // n'existe pas mieux avec l'effectif du moment. bestFromCatalog est seede
+  // avec le meilleur des deux systemes preferes et ne bascule qu'en cas
+  // d'amelioration stricte (a egalite, la preference du coach l'emporte) :
+  // un entraineur rigide (faible connaissance tactique / adaptabilite), lui,
+  // n'explore jamais et reste sur sa formation fetiche sauf si elle est
+  // vraiment intenable pour l'effectif.
+  if (adaptability >= 12) {
+    const preferSeedOnPreferee = resPreferee && (!resDeuxieme
+      || resPreferee.holes < resDeuxieme.holes
+      || (resPreferee.holes === resDeuxieme.holes && resPreferee.coverage >= resDeuxieme.coverage));
+    const seedKey = preferSeedOnPreferee ? preferee : deuxieme;
+    const seedRes = preferSeedOnPreferee ? resPreferee : resDeuxieme;
+    const { bestKey, bestRes } = bestFromCatalog(seedKey, seedRes);
+    const source = bestKey === preferee ? "preferee" : bestKey === deuxieme ? "deuxieme_preferee" : "adaptee";
+    let reason;
+    if (source === "preferee") reason = "L'effectif couvre correctement le système favori de l'entraîneur (vérifié face à tout le catalogue).";
+    else if (source === "deuxieme_preferee") reason = "Le second système préféré de l'entraîneur s'avère plus adapté à l'effectif que son premier choix.";
+    else reason = "Aucun des deux systèmes préférés n'était optimal : l'entraîneur (bon niveau tactique) a exploré tout le catalogue pour placer chaque joueur à son meilleur poste.";
+    return { source, formation: bestKey, result: bestRes, reason };
+  }
+
+  // Entraineur peu adaptable : n'explore jamais le catalogue, se contente de
+  // ses deux systemes preferes.
   if (resPreferee && resPreferee.coverage >= TAC_MIN_COVERAGE && resPreferee.holes === 0) {
     return { source: "preferee", formation: preferee, result: resPreferee, reason: "L'effectif couvre correctement le système favori de l'entraîneur." };
   }
-
-  const resDeuxieme = deuxieme ? evalFor(deuxieme) : null;
   if (resDeuxieme && resDeuxieme.coverage >= TAC_MIN_COVERAGE && resDeuxieme.holes === 0) {
     return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori ne colle pas à l'effectif : bascule sur le second système préféré de l'entraîneur." };
-  }
-
-  // Ni l'un ni l'autre ne convient bien : un entraineur adaptable explore tout
-  // le catalogue pour trouver le meilleur compromis (cas typique d'un
-  // effectif tres desequilibre face a un entraineur tres adaptable) ; un
-  // entraineur rigide (faible connaissance tactique / adaptabilite) reste sur
-  // sa formation fetiche sauf si elle est vraiment intenable pour l'effectif.
-  if (adaptability >= 12) {
-    const { bestKey, bestRes } = bestFromCatalog(preferee || deuxieme, resPreferee || resDeuxieme);
-    const source = bestKey === preferee ? "preferee" : bestKey === deuxieme ? "deuxieme_preferee" : "adaptee";
-    return {
-      source, formation: bestKey, result: bestRes,
-      reason: source === "adaptee"
-        ? "Ni le système favori ni le second n'étaient jouables : l'entraîneur (bon niveau tactique) a exploré tout le catalogue pour placer chaque joueur à son meilleur poste."
-        : "Bascule sur le système le plus jouable parmi les deux préférés de l'entraîneur.",
-    };
   }
 
   // Entraineur peu adaptable : force la formation preferee (ou la 2e a
@@ -2686,7 +2705,127 @@ function tacChooseFormation(coach, effectif) {
   return { source: "deuxieme_preferee", formation: deuxieme, result: resDeuxieme, reason: "Le système favori était injouable ; l'entraîneur (peu adaptable) se replie sur son second choix." };
 }
 
-// ---- Chargement effectif + entraineur, rendu et persistance ---------------
+// ---- Consignes de jeu (passes / rythme / projection / approche) -----------
+// Au-dela de la formation, quatre curseurs differencient reellement deux
+// tactiques qui partagent le meme systeme, et alimentent le moteur de
+// simulation : le type de passe recherche, le rythme impose au jeu, la
+// projection vers l'avant a la recuperation du ballon, et l'approche
+// generale (possession / contre-attaque). Comme pour le choix de formation,
+// un coach adaptable (adaptability >= 12) batit ces consignes sur le profil
+// reel de son onze de depart ; un coach rigide les impose depuis sa propre
+// philosophie (niveau d'attaque/defense, mentalite), sans se soucier de
+// l'effectif dont il dispose.
+function tacAvgAttrs(assigned, keys) {
+  const vals = [];
+  assigned.forEach(a => {
+    if (!a.player || a.slot.role === "GB") return;
+    keys.forEach(k => {
+      const v = Number(a.player[k]);
+      if (Number.isFinite(v)) vals.push(v);
+    });
+  });
+  return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 10; // valeur neutre a defaut
+}
+
+// Scores construits a partir du profil reel des titulaires (technique/passes
+// vs physique/vitesse vs sens du placement) : le coach adapte ses consignes
+// a ce que son effectif sait faire.
+function tacInstructionScoresFromEffectif(assigned, mIdx) {
+  const possessionSkill = tacAvgAttrs(assigned, ["technique", "passes", "vision_du_jeu", "prise_de_balle", "jeu_collectif"]);
+  const physicalSkill = tacAvgAttrs(assigned, ["vitesse", "acceleration", "endurance", "volume_de_jeu"]);
+  const transitionSkill = tacAvgAttrs(assigned, ["decisions", "anticipation", "agressivite"]);
+  return {
+    possessionBias: possessionSkill - physicalSkill,
+    tempo: physicalSkill * 0.7 + (mIdx / 4 * 20) * 0.3,
+    transition: transitionSkill * 0.6 + physicalSkill * 0.4,
+  };
+}
+
+// Scores construits uniquement a partir du profil intrinseque du coach
+// (niveau attaque/defense, mentalite) : consignes imposees, sans lien avec
+// la qualite reelle de l'effectif.
+function tacInstructionScoresFromCoach(coach, mIdx) {
+  const att = Number(coach.niveau_attaque) || 10;
+  const def = Number(coach.niveau_defense) || 10;
+  return {
+    possessionBias: def - att,
+    tempo: att * 0.5 + (mIdx / 4 * 20) * 0.5,
+    transition: att * 0.6 + (mIdx / 4 * 20) * 0.4,
+  };
+}
+
+function tacLabelPasses(possessionBias) {
+  if (possessionBias >= 2) return "Courtes";
+  if (possessionBias <= -2) return "Direct";
+  return "Mixte";
+}
+function tacLabelRythme(tempo) {
+  if (tempo >= 13) return "Rapide";
+  if (tempo <= 8) return "Lent";
+  return "Modéré";
+}
+function tacLabelProjection(transition, possessionBias) {
+  if (transition >= 13) return "Contre immédiat";
+  if (transition <= 8 && possessionBias >= 0) return "Conservation";
+  return "Transition rapide";
+}
+function tacLabelApproche(passesLabel, projectionLabel) {
+  if (passesLabel === "Direct" && projectionLabel !== "Conservation") return "Contre-attaque";
+  if (passesLabel === "Courtes" && projectionLabel === "Conservation") return "Possession";
+  return "Équilibré";
+}
+
+// Un coach adaptable ne calque pas ses consignes sur l'effectif : il part de
+// sa propre identite (coachScores) et ne s'en ecarte que la ou l'effectif
+// l'impose vraiment. En dessous de DEADBAND, l'ecart entre ce qu'il voudrait
+// et ce que permet l'effectif est trop faible pour justifier un changement :
+// il garde sa philosophie telle quelle. Au-dela, il corrige, mais jamais
+// entierement (MAX_SHIFT_FACTOR plafonne la bascule) — et d'autant plus
+// franchement qu'il est adaptable (le facteur grandit avec l'adaptabilite,
+// nul pile au seuil qui separe coach rigide et adaptable, pour une
+// transition continue entre les deux profils).
+function tacBlendCoachIdentity(coachScores, effectifScores, adaptability) {
+  const DEADBAND = 2.5; // ecart tolere (echelle ~0-20) sans remise en cause
+  const MAX_SHIFT_FACTOR = 0.6; // ne bascule jamais entierement sur l'effectif
+  const factor = Math.min(1, Math.max(0, (adaptability - 12) / 8)) * MAX_SHIFT_FACTOR;
+  const blend = key => {
+    const coachVal = coachScores[key], effVal = effectifScores[key];
+    const gap = effVal - coachVal;
+    if (Math.abs(gap) <= DEADBAND) return coachVal;
+    const excess = gap - Math.sign(gap) * DEADBAND;
+    return coachVal + excess * factor;
+  };
+  return { possessionBias: blend("possessionBias"), tempo: blend("tempo"), transition: blend("transition") };
+}
+
+function tacComputeInstructions(coach, adaptability, assigned) {
+  const mIdx = tacMentalityIndex(coach.mentalite || "Équilibré"); // 0..4
+  const coachScores = tacInstructionScoresFromCoach(coach, mIdx);
+  const adapte = adaptability >= 12;
+  let scores, reason;
+  if (adapte) {
+    const effectifScores = tacInstructionScoresFromEffectif(assigned, mIdx);
+    scores = tacBlendCoachIdentity(coachScores, effectifScores, adaptability);
+    reason = "Le coach garde sa philosophie de base, mais l'ajuste là où le profil réel des titulaires (technique/passes vs physique/vitesse) l'impose vraiment.";
+  } else {
+    scores = coachScores;
+    reason = "Consignes imposées par la philosophie du coach (niveau attaque/défense, mentalité), sans tenir compte de l'effectif.";
+  }
+
+  const passes = tacLabelPasses(scores.possessionBias);
+  const rythme = tacLabelRythme(scores.tempo);
+  const projection = tacLabelProjection(scores.transition, scores.possessionBias);
+  const approche = tacLabelApproche(passes, projection);
+
+  return {
+    passes, rythme, projection, approche,
+    origin: adapte ? "adaptees" : "imposees",
+    reason,
+  };
+}
+
+
+
 let tacLoadedForClub = null;
 let tacCurrentResult = null; // { coach, choice } du dernier calcul, pour recalcul rapide
 
@@ -2696,12 +2835,13 @@ const TAC_SOURCE_LABEL = { preferee: "1ère formation préférée", deuxieme_pre
 async function fetchClubTacticEffectif(clubId) {
   const { data, error } = await supabaseClient
     .from("game_players")
-    .select("id, nom, poste_brut, postes, niveau_actuel, potentiel, blessure_jours, categorie")
+    .select("id, nom, poste_brut, postes, niveau_actuel, potentiel, blessure_jours, statut, categorie, technique, passes, vision_du_jeu, prise_de_balle, jeu_collectif, vitesse, acceleration, endurance, volume_de_jeu, decisions, anticipation, agressivite")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId)
     .eq("categorie", "equipe_a");
   if (error) { console.error(error); return []; }
-  return (data || []).filter(p => !(Number(p.blessure_jours) > 0));
+  // Indisponibles pour la feuille de match : blessés et suspendus (statut "Sus").
+  return (data || []).filter(p => !(Number(p.blessure_jours) > 0) && p.statut !== "Sus");
 }
 
 async function showFmTactiqueView(clubId) {
@@ -2744,10 +2884,12 @@ async function computeAndRenderTactic(clubId, { force }) {
   }
 
   const choice = tacChooseFormation(coach, effectif);
+  const adaptability = tacCoachAdaptability(coach);
+  const instructions = tacComputeInstructions(coach, adaptability, choice.result.assigned);
   tacLoadedForClub = clubId;
-  tacCurrentResult = { coach, choice, effectif, clubId };
+  tacCurrentResult = { coach, choice, instructions, effectif, clubId };
   renderTacticResult(tacCurrentResult);
-  persistTactique(clubId, coach, choice);
+  persistTactique(clubId, coach, choice, instructions);
 }
 
 function tacMentalityIndex(label) {
@@ -2755,14 +2897,16 @@ function tacMentalityIndex(label) {
   return i === -1 ? 2 : i;
 }
 
-function renderTacticResult({ coach, choice }) {
+function renderTacticResult({ coach, choice, instructions }) {
   const { source, formation, result, reason } = choice;
-  document.getElementById("tacCoachPanel").innerHTML = tacCoachPanelHtml(coach, source, formation, reason);
+  document.getElementById("tacCoachPanel").innerHTML = tacCoachPanelHtml(coach, source, formation, reason, instructions);
   tacRenderPitch(TAC_FORMATIONS[formation], result.assigned);
   tacRenderBench(result.bench);
 }
 
-function tacCoachPanelHtml(coach, source, formation, reason) {
+const TAC_INSTRUCTION_ORIGIN_LABEL = { adaptees: "Identité ajustée à l'effectif", imposees: "Identité imposée" };
+
+function tacCoachPanelHtml(coach, source, formation, reason, instructions) {
   const mentality = coach.mentalite || "Équilibré";
   const mIdx = tacMentalityIndex(mentality);
   const dots = TAC_MENTALITY_SCALE.map((_, i) => `<div class="tac-mentality-dot ${i <= mIdx ? "on" : ""}"></div>`).join("");
@@ -2771,6 +2915,16 @@ function tacCoachPanelHtml(coach, source, formation, reason) {
     coach.type_pressing ? `Pressing : ${coach.type_pressing}` : null,
     coach.type_marquage ? `Marquage : ${coach.type_marquage}` : null,
   ].filter(Boolean).map(c => `<span class="tac-chip">${escapeHtml(c)}</span>`).join("");
+
+  const instructionsHtml = instructions ? `
+      <h3 style="margin-top:16px;">Consignes de jeu</h3>
+      <div class="tac-row"><span class="tac-label">Origine</span><span class="tac-value"><span class="tac-badge ${instructions.origin}">${TAC_INSTRUCTION_ORIGIN_LABEL[instructions.origin]}</span></span></div>
+      <div class="tac-row"><span class="tac-label">Passes</span><span class="tac-value">${escapeHtml(instructions.passes)}</span></div>
+      <div class="tac-row"><span class="tac-label">Rythme</span><span class="tac-value">${escapeHtml(instructions.rythme)}</span></div>
+      <div class="tac-row"><span class="tac-label">Projection à la récupération</span><span class="tac-value">${escapeHtml(instructions.projection)}</span></div>
+      <div class="tac-row"><span class="tac-label">Approche</span><span class="tac-value">${escapeHtml(instructions.approche)}</span></div>
+      <div class="tac-explain">${escapeHtml(instructions.reason)}</div>
+  ` : "";
 
   return `
     <div class="tac-card">
@@ -2792,6 +2946,7 @@ function tacCoachPanelHtml(coach, source, formation, reason) {
       <div class="tac-row"><span class="tac-label">${escapeHtml(mentality)}</span></div>
       <div class="tac-mentality-scale">${dots}</div>
       <div class="tac-chips">${chips}</div>
+      ${instructionsHtml}
     </div>
   `;
 }
@@ -2828,7 +2983,7 @@ function tacRenderBench(bench) {
 // Persiste la tactique calculee (une ligne par club) pour la future
 // simulation de matchs. Echec silencieux (log console) : ca ne doit jamais
 // bloquer l'affichage cote utilisateur.
-async function persistTactique(clubId, coach, choice) {
+async function persistTactique(clubId, coach, choice, instructions) {
   const compositions = choice.result.assigned.map(a => ({
     slot_id: a.slot.id, label: a.slot.label, role: a.slot.role, side: a.slot.side,
     x: a.slot.x, y: a.slot.y,
@@ -2849,6 +3004,7 @@ async function persistTactique(clubId, coach, choice) {
     coach_staff_ref: coach.staff_ref || null,
     coach_nom: coach.nom || null,
     compositions,
+    instructions: instructions || null,
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabaseClient.from("tactiques").upsert(row, { onConflict: "game_club_id" });
