@@ -743,6 +743,10 @@
   .staff-member-info { flex: 1; min-width: 0; }
   .staff-member-name { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .staff-member-role { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .staff-team-badge {
+    display: inline-block; background: rgba(251,191,36,0.14); color: var(--gold);
+    font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-left: 3px;
+  }
   .staff-member-meta {
     display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; color: var(--text-dim);
     flex-wrap: wrap;
@@ -2064,6 +2068,20 @@ function isEntraineurPoste(poste) {
 // des adjoints, entraineurs des gardiens etc. : c'est uniquement ce role qui
 // affiche le profil tactique complet (formations, style de jeu...), les autres
 // membres du staff de coaching n'ayant pas ces attributs pertinents a afficher.
+// Libelle de l'equipe encadree par un entraineur (Equipe A / Reserve / U18),
+// a partir de la colonne `equipe_assignee` de `game_staff`. Ce champ n'etant
+// renseigne que lorsque le club distingue plusieurs entraineurs, on retombe
+// sur "Equipe A" pour l'entraineur principal (non adjoint) sans tag, cas
+// courant d'un club n'ayant qu'un seul entraineur.
+const SQUAD_TEAM_LABELS = { equipe_a: "Équipe A", reserve: "Réserve", u18: "U18" };
+const COACH_TEAM_POSTES = ["Entraîneur", "Entraîneuse", "Entraîneur adjoint", "Entraîneuse adjointe"];
+function coachTeamLabel(member) {
+  const poste = (member.poste || "").trim();
+  if (!COACH_TEAM_POSTES.includes(poste)) return "";
+  let team = member.equipe_assignee;
+  if (!team && !member.est_adjoint) team = "equipe_a";
+  return team ? (SQUAD_TEAM_LABELS[team] || "") : "";
+}
 function isHeadCoachPoste(poste) {
   const p = (poste || "").trim();
   return p === "Entraîneur" || p === "Entraîneuse";
@@ -2214,7 +2232,7 @@ async function fetchLeagueStaffStats(gid, nation, division) {
 async function fetchClubStaffMembers(clubId) {
   const { data: gameStaffRows, error: gsErr } = await supabaseClient
     .from("game_staff")
-    .select("id, staff_ref, nom, poste, salaire_actuel, contrat_expire")
+    .select("id, staff_ref, nom, poste, salaire_actuel, contrat_expire, equipe_assignee, est_adjoint")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId);
   if (gsErr) { console.error(gsErr); return []; }
@@ -2258,7 +2276,7 @@ function staffMemberCardHtml(member, dept, locked, opts = {}) {
       <div class="staff-avatar" style="background:${colorFromName(member.nom)};">${initialsFromName(member.nom)}</div>
       <div class="staff-member-info">
         <div class="staff-member-name">${escapeHtml(member.nom || "-")}</div>
-        <div class="staff-member-role">${escapeHtml(member.poste || "-")}</div>
+        <div class="staff-member-role">${escapeHtml(member.poste || "-")}${coachTeamLabel(member) ? ` <span class="staff-team-badge">${escapeHtml(coachTeamLabel(member))}</span>` : ""}</div>
         <div class="staff-member-meta">
           ${clubHtml}
           ${nation ? `<span>${nation}</span>` : ""}
@@ -2509,7 +2527,7 @@ function openStaffModal(member, locked, fromDept) {
       <div class="staff-modal-avatar" style="background:${colorFromName(member.nom)};">${initialsFromName(member.nom)}</div>
       <div>
         <div class="staff-modal-name">${escapeHtml(member.nom || "-")}</div>
-        <div class="staff-modal-role">${escapeHtml(member.poste || "-")}</div>
+        <div class="staff-modal-role">${escapeHtml(member.poste || "-")}${coachTeamLabel(member) ? ` <span class="staff-team-badge">${escapeHtml(coachTeamLabel(member))}</span>` : ""}</div>
         <div class="staff-modal-sub">${nation}${Number.isFinite(Number(member.age)) ? " · " + member.age + " ans" : ""}</div>
       </div>
       <button class="staff-modal-close" id="staffModalCloseBtn">✕</button>
