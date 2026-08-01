@@ -2068,19 +2068,53 @@ function isEntraineurPoste(poste) {
 // des adjoints, entraineurs des gardiens etc. : c'est uniquement ce role qui
 // affiche le profil tactique complet (formations, style de jeu...), les autres
 // membres du staff de coaching n'ayant pas ces attributs pertinents a afficher.
-// Libelle de l'equipe encadree par un entraineur (Equipe A / Reserve / U18),
-// a partir de la colonne `equipe_assignee` de `game_staff`. Ce champ n'etant
-// renseigne que lorsque le club distingue plusieurs entraineurs, on retombe
-// sur "Equipe A" pour l'entraineur principal (non adjoint) sans tag, cas
-// courant d'un club n'ayant qu'un seul entraineur.
+// Libelle de l'equipe encadree par un entraineur (Equipe A / Reserve / U18).
+// La repartition est desormais persistee cote base (colonne
+// `equipe_assignee` de `game_staff`, resynchronisee via la fonction SQL
+// `recompute_coach_team_assignment()`) : le titulaire le plus ancien du club
+// est TOUJOURS "equipe_a" et UNIQUEMENT "equipe_a" ; "reserve"/"u18" vont en
+// priorite aux autres titulaires du club s'il y en a, sinon aux adjoints
+// restants — un nouveau titulaire recrute reprend donc automatiquement la
+// place d'un adjoint qui occupait ce role par defaut. Le calcul ci-dessous
+// ne sert que de filet de securite si la resynchro n'a pas encore tourne.
 const SQUAD_TEAM_LABELS = { equipe_a: "Équipe A", reserve: "Réserve", u18: "U18" };
 const COACH_TEAM_POSTES = ["Entraîneur", "Entraîneuse", "Entraîneur adjoint", "Entraîneuse adjointe"];
+
+function resolveTeamCoaches(coachRows) {
+  const sorted = [...coachRows].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  const heads = sorted.filter(r => !r.est_adjoint);
+  const adjoints = sorted.filter(r => r.est_adjoint);
+  const pool = [...heads, ...adjoints]; // titulaires (par id) puis adjoints (par id)
+
+  const explicit = cat => {
+    const matches = sorted.filter(r => r.equipe_assignee === cat);
+    return matches.find(r => !r.est_adjoint) || matches[0] || null;
+  };
+
+  return {
+    equipe_a: explicit("equipe_a") || pool[0] || null,
+    reserve: explicit("reserve") || pool[1] || null,
+    u18: explicit("u18") || pool[2] || null,
+  };
+}
+
+// Association membre -> liste des equipes qu'il encadre, calculee sur
+// l'ensemble du staff coaching d'un club (a recalculer a chaque chargement
+// du staff de club, voir showFmStaffView).
+let staffTeamAssignmentMap = {};
+function computeStaffTeamAssignment(members) {
+  const coachRows = members.filter(m => COACH_TEAM_POSTES.includes((m.poste || "").trim()));
+  const resolved = resolveTeamCoaches(coachRows);
+  const map = {};
+  Object.entries(resolved).forEach(([cat, row]) => {
+    if (!row) return;
+    (map[row.id] = map[row.id] || []).push(cat);
+  });
+  return map;
+}
 function coachTeamLabel(member) {
-  const poste = (member.poste || "").trim();
-  if (!COACH_TEAM_POSTES.includes(poste)) return "";
-  let team = member.equipe_assignee;
-  if (!team && !member.est_adjoint) team = "equipe_a";
-  return team ? (SQUAD_TEAM_LABELS[team] || "") : "";
+  const cats = staffTeamAssignmentMap[member.id] || [];
+  return cats.map(c => SQUAD_TEAM_LABELS[c]).join(" + ");
 }
 function isHeadCoachPoste(poste) {
   const p = (poste || "").trim();
@@ -2581,6 +2615,7 @@ async function showFmStaffView(clubId) {
   ]);
   staffViewMembers = members;
   staffViewLoadedForClub = clubId;
+  staffTeamAssignmentMap = computeStaffTeamAssignment(staffViewMembers);
   leagueStaffStats = league;
   leagueStaffStatsLoadedFor = gameId;
   renderStaffColumns();
