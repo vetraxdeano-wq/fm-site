@@ -3727,6 +3727,19 @@ const GD_VETERAN_MIN_DAYS = 365;
 // longtemps comme "nouvelle recrue" simplement parce qu'il est le moins
 // ancien d'un effectif ou tout le monde est deja bien installe.
 const GD_NOUVEAU_MAX_DAYS = 60;
+// Meme logique pour le moral : sans seuil, "Les plus heureux" et "Les plus
+// malheureux" etaient juste "le top 3" et le "bottom 3" par moral, sans
+// aucune condition de qualification - avec un petit effectif ou un moral
+// globalement homogene, les deux listes pouvaient afficher les memes
+// joueurs (voire etre identiques), avec un tag ("Très heureux"...) calcule
+// sur le vrai moral du joueur et donc contradictoire avec la liste dans
+// laquelle il apparaissait. Seuils alignes sur les paliers de gdMoralTag :
+// il faut etre au moins "Heureux" pour compter parmi les plus heureux, et
+// en dessous de "Neutre" (donc "Inquiet"/"Mécontent") pour compter parmi
+// les plus malheureux - les joueurs neutres n'apparaissent dans aucune des
+// deux listes.
+const GD_MORAL_HEUREUX_MIN = 65;
+const GD_MORAL_MALHEUREUX_MAX = 49;
 
 let gdLoadedForClub = null;
 let gdCurrentResult = null;
@@ -3850,8 +3863,8 @@ async function computeGroupDynamics(clubId, { force } = {}) {
     list.sort((a, b) => dir === "desc" ? Number(b[key]) - Number(a[key]) : Number(a[key]) - Number(b[key]));
     return list.slice(0, limit).map(p => ({ id: p.id, nom: p.nom, poste: p.poste_brut, moral: Number(p.moral), leadership: Number(p.leadership) }));
   };
-  const topHeureux = gdPickTop(effectif, "moral", "desc", 3);
-  const topMalheureux = gdPickTop(effectif, "moral", "asc", 3);
+  const topHeureux = gdPickTop(effectif, "moral", "desc", 3, p => Number(p.moral) >= GD_MORAL_HEUREUX_MIN);
+  const topMalheureux = gdPickTop(effectif, "moral", "asc", 3, p => Number(p.moral) <= GD_MORAL_MALHEUREUX_MAX);
   const topLeaders = gdPickTop(effectif, "leadership", "desc", 3, p => Number(p.leadership) >= GD_LEADER_THRESHOLD);
   const topVeterans = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "desc", 3, p => p.arrivalsJours >= GD_VETERAN_MIN_DAYS);
   const topNouveaux = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "asc", 3, p => p.arrivalsJours <= GD_NOUVEAU_MAX_DAYS);
