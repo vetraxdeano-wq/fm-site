@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FM Web — Compétition</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262a33;
+    --text: #e8eaed;
+    --text-dim: #8b909c;
+    --accent: #4ade80;
+    --accent-dim: #1f6b42;
+    --danger: #ef4444;
+    --gold: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; }
+  .back-link:hover { color: var(--text); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 13px; margin: 0 0 14px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+  }
+  .comp-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 14px; margin-bottom: 16px;
+  }
+  .comp-header .name { font-size: 22px; font-weight: 800; }
+  .comp-header .sub { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+  .comp-tag {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
+    background: rgba(251,191,36,0.12); color: var(--gold); border: 1px solid #7a5c0f;
+    border-radius: 999px; padding: 4px 11px; flex-shrink: 0; white-space: nowrap;
+  }
+  .fm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .fm-table th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-dim); padding: 8px 7px; border-bottom: 1px solid var(--border);
+  }
+  .fm-table td { padding: 9px 7px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .fm-table tr:last-child td { border-bottom: none; }
+  .fm-table tr.me td { background: rgba(251,191,36,0.1); }
+  .fm-table td.clt { color: var(--text-dim); width: 30px; }
+  .fm-table td.num { color: var(--text-dim); text-align: center; width: 34px; }
+  .fm-table td.pts { font-weight: 700; text-align: center; width: 38px; }
+  .fm-table .club-link { cursor: pointer; font-weight: 600; }
+  .fm-table .club-link:hover { color: var(--gold); text-decoration: underline; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+  .player-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .player-row:last-child { border-bottom: none; }
+  .player-rank { width: 20px; color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+  .player-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .player-club { font-size: 11px; color: var(--text-dim); flex-shrink: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .player-value { font-weight: 700; color: var(--gold); flex-shrink: 0; width: 26px; text-align: right; }
+  .match-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .match-row:last-child { border-bottom: none; }
+  .match-date { width: 90px; flex-shrink: 0; color: var(--text-dim); font-size: 12px; text-transform: capitalize; }
+  .match-teams { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .match-teams .home, .match-teams .away { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .match-teams .home { text-align: right; }
+  .match-teams .vs { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
+  .empty-state { text-align: center; color: var(--text-dim); font-size: 13px; padding: 30px 20px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="#" id="backLink" class="back-link">← Retour au club</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="comp-header">
+      <div>
+        <div class="name" id="compName">Chargement...</div>
+        <div class="sub" id="compSub"></div>
+      </div>
+      <span class="comp-tag" id="compTag"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Classement</h2>
+    <div id="compStandings" class="empty-state">Chargement...</div>
+  </div>
+
+  <div class="card">
+    <h2>Prochains matchs — <span id="compNextJournee"></span></h2>
+    <div id="compNextMatches" class="empty-state">Chargement...</div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <h2>Meilleurs buteurs</h2>
+      <div id="compTopScorers" class="empty-state">Chargement...</div>
+    </div>
+    <div class="card">
+      <h2>Meilleurs passeurs</h2>
+      <div id="compTopAssists" class="empty-state">Chargement...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const params = new URLSearchParams(window.location.search);
+const gameId = params.get("game");
+const competitionId = params.get("competition");
+const myClubId = params.get("club") ? Number(params.get("club")) : null;
+
+document.getElementById("backLink").href = myClubId
+  ? `dashboard.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(myClubId)}&view=competitions`
+  : `dashboard.html?game=${encodeURIComponent(gameId)}`;
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function goToClub(clubId) {
+  window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+}
+
+async function loadCompetition() {
+  if (!gameId || !competitionId) {
+    document.getElementById("compName").textContent = "Compétition introuvable";
+    return;
+  }
+
+  const { data: comp, error: compError } = await supabaseClient
+    .from("competitions")
+    .select("id, nom, nation, division, tier, nb_clubs, type")
+    .eq("id", competitionId)
+    .single();
+
+  if (compError || !comp) {
+    document.getElementById("compName").textContent = "Compétition introuvable";
+    return;
+  }
+
+  document.getElementById("compName").textContent = comp.nom;
+  document.getElementById("compSub").textContent = `${comp.nation} · ${comp.division}`;
+  document.getElementById("compTag").textContent = comp.type === "championnat" ? "Championnat" : comp.type;
+  document.title = `FM Web — ${comp.nom}`;
+
+  // Clubs de la division (nom + classement/points via la vue, stats detaillees via game_clubs)
+  const { data: overview, error: overviewError } = await supabaseClient
+    .from("game_club_overview")
+    .select("game_club_id, nom, classement")
+    .eq("game_id", gameId)
+    .eq("nation", comp.nation)
+    .eq("division", comp.division);
+
+  if (overviewError || !overview || overview.length === 0) {
+    document.getElementById("compStandings").innerHTML = `<div class="empty-state">Impossible de charger le classement.</div>`;
+    document.getElementById("compNextMatches").innerHTML = "";
+    document.getElementById("compTopScorers").innerHTML = "";
+    document.getElementById("compTopAssists").innerHTML = "";
+    return;
+  }
+
+  const clubIds = overview.map(c => c.game_club_id);
+  const nameById = {};
+  overview.forEach(c => { nameById[c.game_club_id] = c.nom; });
+
+  const { data: fullStats } = await supabaseClient
+    .from("game_clubs")
+    .select("id, classement, points, victoires, nuls, defaites, buts_pour, buts_contre")
+    .in("id", clubIds);
+
+  const statsById = {};
+  (fullStats || []).forEach(c => { statsById[c.id] = c; });
+
+  const sorted = clubIds.slice().sort((a, b) => {
+    const sa = statsById[a] || {};
+    const sb = statsById[b] || {};
+    if (sa.classement != null && sb.classement != null) return sa.classement - sb.classement;
+    if ((sb.points ?? 0) !== (sa.points ?? 0)) return (sb.points ?? 0) - (sa.points ?? 0);
+    const diffA = (sa.buts_pour ?? 0) - (sa.buts_contre ?? 0);
+    const diffB = (sb.buts_pour ?? 0) - (sb.buts_contre ?? 0);
+    if (diffB !== diffA) return diffB - diffA;
+    return (sb.buts_pour ?? 0) - (sa.buts_pour ?? 0);
+  });
+
+  document.getElementById("compStandings").outerHTML = `
+    <table class="fm-table" id="compStandings">
+      <thead>
+        <tr>
+          <th>Clt</th><th>Club</th><th>J</th><th>V</th><th>N</th><th>D</th>
+          <th>BP</th><th>BC</th><th>Diff</th><th>Pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map((id, i) => {
+          const s = statsById[id] || {};
+          const rank = s.classement ?? (i + 1);
+          const joues = (s.victoires ?? 0) + (s.nuls ?? 0) + (s.defaites ?? 0);
+          const diff = (s.buts_pour ?? 0) - (s.buts_contre ?? 0);
+          return `
+            <tr class="${id === myClubId ? "me" : ""}">
+              <td class="clt">${rank}e</td>
+              <td><span class="club-link" data-club-id="${id}">${escapeHtml(nameById[id])}</span></td>
+              <td class="num">${joues}</td>
+              <td class="num">${s.victoires ?? 0}</td>
+              <td class="num">${s.nuls ?? 0}</td>
+              <td class="num">${s.defaites ?? 0}</td>
+              <td class="num">${s.buts_pour ?? 0}</td>
+              <td class="num">${s.buts_contre ?? 0}</td>
+              <td class="num">${diff >= 0 ? "+" : ""}${diff}</td>
+              <td class="pts">${s.points ?? 0}</td>
+            </tr>
+          `;
+        }).join("")}
+      </tbody>
+    </table>
+  `;
+  document.querySelectorAll("#compStandings .club-link").forEach(el => {
+    el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+  });
+
+  // Prochains matchs : la prochaine journee non jouee de la competition
+  const { data: upcoming } = await supabaseClient
+    .from("calendrier")
+    .select("id, date_match, journee, club_domicile_id, club_exterieur_id")
+    .eq("game_id", gameId)
+    .eq("nation", comp.nation)
+    .eq("division", comp.division)
+    .eq("statut", "a_jouer")
+    .order("date_match", { ascending: true })
+    .order("journee", { ascending: true });
+
+  const nextMatchesEl = document.getElementById("compNextMatches");
+  if (!upcoming || upcoming.length === 0) {
+    document.getElementById("compNextJournee").textContent = "";
+    nextMatchesEl.innerHTML = `<div class="empty-state">Aucun match à venir programmé.</div>`;
+  } else {
+    const nextJournee = upcoming[0].journee;
+    document.getElementById("compNextJournee").textContent = `Journée ${nextJournee}`;
+    const journeeMatches = upcoming.filter(m => m.journee === nextJournee);
+    nextMatchesEl.innerHTML = journeeMatches.map(m => {
+      const d = m.date_match ? new Date(m.date_match) : null;
+      const dateLabel = d ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "") : "-";
+      return `
+        <div class="match-row">
+          <div class="match-date">${dateLabel}</div>
+          <div class="match-teams">
+            <span class="home">${escapeHtml(nameById[m.club_domicile_id] || "?")}</span>
+            <span class="vs">vs</span>
+            <span class="away">${escapeHtml(nameById[m.club_exterieur_id] || "?")}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // Meilleurs buteurs / passeurs de la competition
+  const { data: players } = await supabaseClient
+    .from("game_players")
+    .select("id, nom, game_club_id, buts_saison, passes_decisives_saison, poste_brut")
+    .eq("game_id", gameId)
+    .in("game_club_id", clubIds);
+
+  const topScorersEl = document.getElementById("compTopScorers");
+  const topAssistsEl = document.getElementById("compTopAssists");
+
+  if (!players || players.length === 0) {
+    topScorersEl.innerHTML = `<div class="empty-state">Pas encore de données.</div>`;
+    topAssistsEl.innerHTML = `<div class="empty-state">Pas encore de données.</div>`;
+    return;
+  }
+
+  const topScorers = players.slice().sort((a, b) => (b.buts_saison ?? 0) - (a.buts_saison ?? 0)).slice(0, 10);
+  const topAssists = players.slice().sort((a, b) => (b.passes_decisives_saison ?? 0) - (a.passes_decisives_saison ?? 0)).slice(0, 10);
+
+  const renderPlayerList = (list, valueKey) => list.map((p, i) => `
+    <div class="player-row">
+      <span class="player-rank">${i + 1}</span>
+      <span class="player-name">${escapeHtml(p.nom)}</span>
+      <span class="player-club">${escapeHtml(nameById[p.game_club_id] || "")}</span>
+      <span class="player-value">${p[valueKey] ?? 0}</span>
+    </div>
+  `).join("");
+
+  topScorersEl.innerHTML = topScorers.every(p => !p.buts_saison)
+    ? `<div class="empty-state">Aucun but marqué pour l'instant.</div>`
+    : renderPlayerList(topScorers, "buts_saison");
+
+  topAssistsEl.innerHTML = topAssists.every(p => !p.passes_decisives_saison)
+    ? `<div class="empty-state">Aucune passe décisive pour l'instant.</div>`
+    : renderPlayerList(topAssists, "passes_decisives_saison");
+}
+
+loadCompetition();
+</script>
+</body>
+</html>
