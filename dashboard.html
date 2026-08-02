@@ -324,8 +324,25 @@
      part egale. */
   .fm-col .card { flex: 1 1 0; min-height:0; margin-bottom:0; padding:14px 18px; display:flex; flex-direction:column; overflow:hidden; }
   .fm-col .card .fm-card-title { flex: 0 0 auto; }
-  .fm-col .card > *:not(.fm-card-title) { flex:1; min-height:0; overflow-y:auto; }
-  .fm-col .card.card-compact { flex: 0 0 150px; }
+  .fm-col .card > *:not(.fm-card-title) {
+    flex:1; min-height:0; overflow-y:auto;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent;
+  }
+  .fm-col .card > *:not(.fm-card-title)::-webkit-scrollbar { width: 6px; }
+  .fm-col .card > *:not(.fm-card-title)::-webkit-scrollbar-track { background: transparent; }
+  .fm-col .card > *:not(.fm-card-title)::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
+  .fm-col .card > *:not(.fm-card-title)::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.26); }
+
+  /* Prochains / derniers matchs : la carte prend exactement la hauteur de
+     son contenu (3 lignes) plutot que sa part egale de la colonne, pour ne
+     jamais avoir besoin de scroller. */
+  .fm-col .card.card-fit { flex: 0 0 auto; }
+  .fm-col .card.card-fit > *:not(.fm-card-title) { flex: 0 0 auto; overflow: hidden; }
+
+  /* Finances agrandie (graphique lisible) au detriment de Stats de
+     l'equipe, reduite. */
+  .fm-col .card.card-team-stats { flex: 0 0 130px; }
+  .fm-col .card.card-finances { flex: 0 0 220px; }
 
   .card-clickable { cursor: pointer; transition: border-color 0.15s; }
   .card-clickable:hover { border-color: var(--text-dim); }
@@ -669,6 +686,8 @@
 
   /* Mini graphique d'historique financier (repris dans l'onglet Finance) */
   .fm-chart-wrap { margin-top: 10px; }
+  .fm-chart-wrap--placeholder { opacity: 0.55; }
+  .fm-chart-wrap--placeholder .fm-chart-labels { justify-content: center; }
   .fm-chart-header {
     display: flex; justify-content: space-between; align-items: baseline;
     margin-bottom: 8px;
@@ -1309,11 +1328,11 @@
     <div class="fm-content-wrap">
       <div class="fm-content" id="fmHomeView">
         <div class="fm-col">
-          <div class="card">
+          <div class="card card-fit">
             <div class="fm-card-title"><span>Prochains matchs</span></div>
             <div id="fmNextMatch" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card">
+          <div class="card card-fit">
             <div class="fm-card-title"><span>Derniers matchs</span></div>
             <div id="fmLastMatches" class="fm-empty">Chargement...</div>
           </div>
@@ -1332,11 +1351,11 @@
             <div class="fm-card-title"><span>Classement</span> <span class="chev">▾</span></div>
             <div id="fmStandings" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card">
+          <div class="card card-team-stats">
             <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
             <div id="fmTeamStats" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card card-compact">
+          <div class="card card-finances">
             <div class="fm-card-title"><span>Finances</span></div>
             <div id="fmFinances" class="fm-empty">Chargement...</div>
           </div>
@@ -7434,23 +7453,24 @@ async function fetchFinanceHistory(club) {
   });
 }
 
-function renderFinanceChart(history) {
+function renderFinanceChart(history, isPlaceholder = false) {
   const w = 400, h = 70, padY = 8;
   const values = history.map(p => p.value);
   const min = Math.min(...values), max = Math.max(...values);
+  const flat = max === min;
   const range = Math.max(1, max - min);
   const stepX = history.length > 1 ? w / (history.length - 1) : 0;
 
   const coords = history.map((pt, i) => {
     const x = history.length > 1 ? i * stepX : w / 2;
-    const y = h - padY - ((pt.value - min) / range) * (h - padY * 2);
+    const y = flat ? h / 2 : h - padY - ((pt.value - min) / range) * (h - padY * 2);
     return { x, y, pt };
   });
 
   const linePoints = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
   const areaPoints = `0,${h} ${linePoints} ${w},${h}`;
 
-  const dots = coords.map(c => {
+  const dots = isPlaceholder ? "" : coords.map(c => {
     const color = c.pt.delta >= 0 ? "var(--accent)" : "var(--danger)";
     const label = `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
     return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="${color}"><title>${label}</title></circle>`;
@@ -7459,13 +7479,14 @@ function renderFinanceChart(history) {
   const firstLabel = history[0].jour, lastLabel = history[history.length - 1].jour;
 
   return `
-    <div class="fm-chart-wrap">
+    <div class="fm-chart-wrap${isPlaceholder ? " fm-chart-wrap--placeholder" : ""}">
       <div class="fm-chart-header">
-        <span class="title">Historique des mouvements</span>
+        <span class="title">${isPlaceholder ? "Aperçu du graphique" : "Historique des mouvements"}</span>
+        ${isPlaceholder ? "" : `
         <span class="fm-chart-legend">
           <span><span class="dot gain"></span>Entrée</span>
           <span><span class="dot perte"></span>Sortie</span>
-        </span>
+        </span>`}
       </div>
       <svg class="fm-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
         <polygon class="fm-chart-area" points="${areaPoints}" fill="url(#financeGradient)" />
@@ -7475,28 +7496,36 @@ function renderFinanceChart(history) {
             <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
           </linearGradient>
         </defs>
-        <polyline class="fm-chart-line" points="${linePoints}" fill="none" stroke="var(--accent)" stroke-width="2" />
+        <polyline class="fm-chart-line" points="${linePoints}" fill="none" stroke="var(--accent)" stroke-width="2"${isPlaceholder ? ' stroke-dasharray="4 4"' : ""} />
         ${dots}
       </svg>
       <div class="fm-chart-labels">
-        <span>Jour ${firstLabel}</span>
-        <span>Jour ${lastLabel}</span>
+        ${isPlaceholder
+          ? `<span>En attente du premier mouvement financier</span>`
+          : `<span>Jour ${firstLabel}</span><span>Jour ${lastLabel}</span>`}
       </div>
     </div>
   `;
 }
 
+// Historique factice (ligne plate au budget actuel) affiche quand aucun
+// mouvement financier n'a encore ete enregistre, pour donner un apercu du
+// graphique avant qu'il n'y ait de vraies donnees.
+function buildFinancePlaceholderHistory(budget) {
+  const value = budget || 0;
+  return [0, 1, 2, 3, 4].map(i => ({ jour: i, value, delta: 0, motif: null }));
+}
+
 async function renderFinances(club) {
   const el = document.getElementById("fmFinances");
   const history = await fetchFinanceHistory(club);
+  const hasHistory = history.length > 1;
   el.innerHTML = `
     <div class="fm-stat-row">
       <span class="label">Budget disponible</span>
       <span class="value">${formatMoney(club.budget_actuel)}</span>
     </div>
-    ${history.length > 1
-      ? renderFinanceChart(history)
-      : `<div class="fm-empty" style="padding-top:6px;">Aucun mouvement enregistré pour l'instant.</div>`}
+    ${renderFinanceChart(hasHistory ? history : buildFinancePlaceholderHistory(club.budget_actuel), !hasHistory)}
   `;
 }
 
@@ -7892,7 +7921,7 @@ async function renderNextMatch() {
     getClubMatches(myGameClubId),
     getDivisionStandingsMap(myClubNation, myClubDivision),
   ]);
-  const upcoming = matches.filter(m => !m.played).slice(0, 5);
+  const upcoming = matches.filter(m => !m.played).slice(0, 3);
 
   if (upcoming.length === 0) {
     el.innerHTML = `Aucun match programmé pour l'instant.`;
@@ -7919,7 +7948,7 @@ async function renderLastMatches() {
     getClubMatches(myGameClubId),
     getDivisionStandingsMap(myClubNation, myClubDivision),
   ]);
-  const played = matches.filter(m => m.played).slice(-5).reverse();
+  const played = matches.filter(m => m.played).slice(-3).reverse();
 
   if (played.length === 0) {
     el.innerHTML = `Aucun match joué pour l'instant.`;
@@ -8019,9 +8048,9 @@ async function renderCompetitionsView(gameClubId) {
         </thead>
         <tbody>
           ${standingsList.map(r => `
-            <tr class="${String(r.id) === String(gameClubId) ? "me" : ""}" data-club-id="${r.id}">
+            <tr class="${String(r.id) === String(gameClubId) ? "me" : ""}">
               <td class="clt">${r.rank}e</td>
-              <td class="nm">${escapeHtml(r.nom)}</td>
+              <td class="nm"><span class="fm-club-link" data-club-id="${r.id}">${escapeHtml(r.nom)}</span></td>
               <td class="num">${r.joues}</td>
               <td class="num">${r.diff >= 0 ? "+" : ""}${r.diff}</td>
               <td class="pts">${r.points}</td>
@@ -8056,13 +8085,13 @@ async function renderCompetitionsView(gameClubId) {
   `;
 
   document.getElementById(`fmCompCard-${comp.id}`).addEventListener("click", (e) => {
-    if (e.target.closest(".fm-comp-mini-table tr")) return;
+    if (e.target.closest(".fm-comp-mini-table .fm-club-link")) return;
     window.location.href = `competition.html?game=${encodeURIComponent(gameId)}&competition=${encodeURIComponent(comp.id)}&club=${encodeURIComponent(gameClubId)}`;
   });
-  rightEl.querySelectorAll(".fm-comp-mini-table tr[data-club-id]").forEach(rowEl => {
-    rowEl.addEventListener("click", (e) => {
+  rightEl.querySelectorAll(".fm-comp-mini-table .fm-club-link").forEach(linkEl => {
+    linkEl.addEventListener("click", (e) => {
       e.stopPropagation();
-      const clubId = rowEl.getAttribute("data-club-id");
+      const clubId = linkEl.getAttribute("data-club-id");
       if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
     });
   });
