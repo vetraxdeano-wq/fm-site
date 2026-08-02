@@ -122,6 +122,22 @@
     max-height: 340px; overflow-y: auto; z-index: 40;
     box-shadow: 0 12px 32px rgba(0,0,0,0.5);
   }
+  .league-menu--searchable {
+    max-height: 380px; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .nation-menu-search-wrap { flex: 0 0 auto; padding: 8px; border-bottom: 1px solid var(--border); }
+  .nation-menu-search {
+    width: 100%; background: #0d0f13; border: 1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: 7px; font-size: 12.5px; font-family: inherit;
+  }
+  .nation-menu-search:focus { outline: none; border-color: var(--gold); }
+  .nation-menu-rows { flex: 1; min-height: 0; overflow-y: auto; }
+  .nation-menu-section-label {
+    padding: 8px 12px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); font-weight: 700;
+  }
+  .nation-menu-separator { margin: 6px 0; border-top: 1px solid var(--border); }
+  .nation-menu-empty { padding: 12px; font-size: 12px; color: var(--text-dim); }
   .nation-row {
     padding: 9px 12px; font-size: 13px; display: flex;
     justify-content: space-between; align-items: center; cursor: pointer; color: var(--text);
@@ -1251,7 +1267,12 @@
               <span id="nationBtnLabel">Choisir une nation</span>
               <span class="chevron">▾</span>
             </button>
-            <div class="league-menu hidden" id="nationMenu"></div>
+            <div class="league-menu league-menu--searchable hidden" id="nationMenu">
+              <div class="nation-menu-search-wrap">
+                <input type="text" class="nation-menu-search" id="nationSearchInput" placeholder="Rechercher une nation..." autocomplete="off">
+              </div>
+              <div class="nation-menu-rows" id="nationMenuRows"></div>
+            </div>
           </div>
           <div class="picker-row">
             <button class="league-btn" id="divisionBtn" type="button" disabled>
@@ -1971,9 +1992,16 @@ let selectedGameClubId = null;
 let selectedNation = null;
 let selectedDivision = null;
 
+// Grands championnats geres par le moteur (calendriers/simulation reels) :
+// epingles en haut du menu nation, avant la separation avec le reste du monde.
+const TOP_FOOTBALL_NATIONS = ["Angleterre", "Espagne", "Italie", "Allemagne", "France", "Pays-Bas"];
+
+let clubSelectAllNations = [];
+
 async function initClubSelection() {
   const nationBtn = document.getElementById("nationBtn");
   const nationMenu = document.getElementById("nationMenu");
+  const nationSearchInput = document.getElementById("nationSearchInput");
   const divisionBtn = document.getElementById("divisionBtn");
   const divisionMenu = document.getElementById("divisionMenu");
 
@@ -1989,24 +2017,24 @@ async function initClubSelection() {
     return;
   }
 
-  nationMenu.innerHTML = (nations || []).map(n => `
-    <div class="nation-row" data-nation="${escapeHtml(n.nation)}">
-      <span class="flag-label">${nationLabel(n.nation)}</span>
-    </div>
-  `).join("");
+  clubSelectAllNations = (nations || []).map(n => n.nation);
+  renderNationMenuRows("");
 
-  nationMenu.querySelectorAll(".nation-row").forEach(row => {
-    row.addEventListener("click", () => {
-      const nation = row.getAttribute("data-nation");
-      selectNation(nation);
-      nationMenu.classList.add("hidden");
-    });
+  nationSearchInput.addEventListener("input", (e) => {
+    renderNationMenuRows(e.target.value);
   });
+  nationSearchInput.addEventListener("click", (e) => e.stopPropagation());
 
   nationBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     divisionMenu.classList.add("hidden");
+    const willOpen = nationMenu.classList.contains("hidden");
     nationMenu.classList.toggle("hidden");
+    if (willOpen) {
+      nationSearchInput.value = "";
+      renderNationMenuRows("");
+      nationSearchInput.focus();
+    }
   });
 
   divisionBtn.addEventListener("click", (e) => {
@@ -2023,6 +2051,46 @@ async function initClubSelection() {
     if (!divisionMenu.contains(e.target) && e.target !== divisionBtn) {
       divisionMenu.classList.add("hidden");
     }
+  });
+}
+
+// Construit les lignes du menu nation : les grands championnats en tete
+// (ordre fixe), une separation, puis le reste des nations par ordre
+// alphabetique. La recherche filtre l'ensemble et masque la separation/le
+// libelle de section quand une des deux moities est vide.
+function renderNationMenuRows(filterText) {
+  const rowsEl = document.getElementById("nationMenuRows");
+  const q = filterText.trim().toLowerCase();
+  const matches = (n) => !q || nationDisplayName(n).toLowerCase().includes(q);
+
+  const top = TOP_FOOTBALL_NATIONS.filter(n => clubSelectAllNations.includes(n) && matches(n));
+  const rest = clubSelectAllNations
+    .filter(n => !TOP_FOOTBALL_NATIONS.includes(n) && matches(n))
+    .sort((a, b) => nationDisplayName(a).localeCompare(nationDisplayName(b), "fr"));
+
+  if (!top.length && !rest.length) {
+    rowsEl.innerHTML = `<div class="nation-menu-empty">Aucune nation trouvée.</div>`;
+    return;
+  }
+
+  const rowHtml = (n) => `
+    <div class="nation-row" data-nation="${escapeHtml(n)}">
+      <span class="flag-label">${nationLabel(n)}</span>
+    </div>
+  `;
+
+  rowsEl.innerHTML =
+    (top.length ? `<div class="nation-menu-section-label">Grands championnats</div>${top.map(rowHtml).join("")}` : "") +
+    (top.length && rest.length ? `<div class="nation-menu-separator"></div>` : "") +
+    (rest.length && !q ? `<div class="nation-menu-section-label">Autres nations</div>` : "") +
+    rest.map(rowHtml).join("");
+
+  rowsEl.querySelectorAll(".nation-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const nation = row.getAttribute("data-nation");
+      selectNation(nation);
+      document.getElementById("nationMenu").classList.add("hidden");
+    });
   });
 }
 
