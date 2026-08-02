@@ -19,111 +19,205 @@
   }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
   }
-  .topbar {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
-    position: sticky; top: 0; z-index: 10;
+  button { font-family: inherit; cursor: pointer; border-radius: 8px; font-weight: 600; }
+
+  /* Utilitaire de scroll "natif" : le scroll fonctionne normalement mais la
+     barre est fine et discrete plutot que la grosse barre blanche par defaut. */
+  .scroll-hide {
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent;
   }
-  .topbar-left { display: flex; align-items: center; gap: 14px; }
-  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; }
-  .back-link:hover { color: var(--text); }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
-  .card {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 20px; margin-bottom: 16px;
+  .scroll-hide::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scroll-hide::-webkit-scrollbar-track { background: transparent; }
+  .scroll-hide::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
+  .scroll-hide::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.26); }
+
+  /* ============================================================
+     Coquille plein ecran, identique au dashboard : une topbar (fm-header)
+     + une sidebar laterale collee au bord + le contenu qui occupe le reste.
+     ============================================================ */
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+
+  .fm-header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;
+    gap: 14px; padding: 12px 22px; flex: 0 0 auto;
+    background: linear-gradient(120deg, #4c1116, #7a1620 55%, #9c2430);
+    border-bottom: 1px solid rgba(0,0,0,0.3);
   }
-  .card h2 {
-    font-size: 13px; margin: 0 0 14px; color: var(--text-dim);
-    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+  .fm-header .title-block { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .fm-header .back-link {
+    color: rgba(255,255,255,0.75); text-decoration: none; font-size: 13px;
+    flex-shrink: 0; padding-right: 14px; border-right: 1px solid rgba(255,255,255,0.2);
   }
-  .comp-header {
-    display: flex; justify-content: space-between; align-items: flex-start;
-    gap: 14px; margin-bottom: 16px;
+  .fm-header .back-link:hover { color: #fff; }
+  .fm-header .title-block .page-title {
+    font-size: 18px; font-weight: 800; letter-spacing: 0.02em; color: #fff; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 44vw;
   }
-  .comp-header .name { font-size: 22px; font-weight: 800; }
-  .comp-header .sub { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
-  .comp-tag {
+  .fm-header .title-block .manager-line {
+    font-size: 12px; color: rgba(255,255,255,0.78); margin-top: 2px; white-space: nowrap;
+  }
+  .fm-header .right-block { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .fm-comp-tag {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
-    background: rgba(251,191,36,0.12); color: var(--gold); border: 1px solid #7a5c0f;
-    border-radius: 999px; padding: 4px 11px; flex-shrink: 0; white-space: nowrap;
+    background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 999px; padding: 5px 12px; flex-shrink: 0; white-space: nowrap;
   }
-  .fm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+  .fm-body { flex: 1; display: flex; align-items: stretch; min-height: 0; }
+
+  .fm-sidebar {
+    width: 220px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 10px 0;
+  }
+  .fm-nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 13.5px;
+    color: var(--text-dim); cursor: pointer; border-left: 3px solid transparent; user-select: none;
+  }
+  .fm-nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+  .fm-nav-item.active {
+    background: rgba(251,191,36,0.08); color: var(--gold); border-left-color: var(--gold); font-weight: 700;
+  }
+  .fm-nav-icon { width: 18px; text-align: center; flex-shrink: 0; }
+
+  .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 16px 24px; }
+  .fm-content {
+    width: 100%; height: 100%; display: grid;
+    grid-template-columns: 62% 38%; gap: 16px; align-items: stretch;
+  }
+  .fm-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: 100%; min-height: 0; }
+  .fm-col .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; flex: 1; min-height: 0; display: flex; flex-direction: column;
+  }
+  .fm-card-title {
+    flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--gold); margin-bottom: 12px;
+  }
+  .fm-card-title .comp-name { color: var(--text); font-weight: 800; text-transform: none; letter-spacing: 0; font-size: 13.5px; }
+  .fm-scroll-area { flex: 1; min-height: 0; overflow-y: auto; }
+  .fm-empty { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
+
+  .fm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .fm-table th {
-    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
-    color: var(--text-dim); padding: 8px 7px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--panel);
+    text-align: left; color: var(--text-dim); font-weight: 600; font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.03em; padding: 6px 7px; border-bottom: 1px solid var(--border);
   }
-  .fm-table td { padding: 9px 7px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .fm-table td { padding: 7px; border-bottom: 1px solid rgba(255,255,255,0.04); }
   .fm-table tr:last-child td { border-bottom: none; }
   .fm-table tr.me td { background: rgba(251,191,36,0.1); }
-  .fm-table td.clt { color: var(--text-dim); width: 30px; }
-  .fm-table td.num { color: var(--text-dim); text-align: center; width: 34px; }
-  .fm-table td.pts { font-weight: 700; text-align: center; width: 38px; }
-  .fm-table .club-link { cursor: pointer; font-weight: 600; }
-  .fm-table .club-link:hover { color: var(--gold); text-decoration: underline; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+  .fm-table td.clt { color: var(--text-dim); width: 26px; }
+  .fm-table td.num { color: var(--text-dim); text-align: center; width: 30px; }
+  .fm-table td.pts { font-weight: 700; text-align: center; width: 34px; }
+  .fm-club-link { cursor: pointer; font-weight: 600; }
+  .fm-club-link:hover { color: var(--gold); text-decoration: underline; }
+
+  /* ---- Prochains matchs (memes codes couleurs que sur le dashboard) ---- */
+  .fm-comp-match-row {
+    display: flex; align-items: center; gap: 14px; padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12.5px;
+  }
+  .fm-comp-match-row:last-child { border-bottom: none; }
+  .fm-comp-match-date { width: 60px; flex-shrink: 0; color: var(--text-dim); line-height: 1.3; text-transform: capitalize; }
+  .fm-comp-match-date .day { font-weight: 700; color: var(--text); font-size: 13px; display: block; }
+  .fm-comp-match-teams { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .fm-comp-match-teams .home, .fm-comp-match-teams .away {
+    flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  }
+  .fm-comp-match-teams .home { text-align: right; }
+  .fm-comp-match-teams span.club:hover { color: var(--gold); text-decoration: underline; }
+  .fm-comp-match-teams .vs { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
+
+  /* ---- Meilleurs buteurs / passeurs ---- */
   .player-row {
-    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    display: flex; align-items: center; gap: 10px; padding: 8px 0;
     border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
   }
   .player-row:last-child { border-bottom: none; }
-  .player-rank { width: 20px; color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+  .player-rank { width: 18px; color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
   .player-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .player-club { font-size: 11px; color: var(--text-dim); flex-shrink: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .player-value { font-weight: 700; color: var(--gold); flex-shrink: 0; width: 26px; text-align: right; }
-  .match-row {
-    display: flex; align-items: center; gap: 10px; padding: 9px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  .player-club {
+    font-size: 11px; color: var(--text-dim); flex-shrink: 0; max-width: 120px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .match-row:last-child { border-bottom: none; }
-  .match-date { width: 90px; flex-shrink: 0; color: var(--text-dim); font-size: 12px; text-transform: capitalize; }
-  .match-teams { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
-  .match-teams .home, .match-teams .away { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .match-teams .home { text-align: right; }
-  .match-teams .vs { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
-  .empty-state { text-align: center; color: var(--text-dim); font-size: 13px; padding: 30px 20px; }
+  .player-value { font-weight: 700; color: var(--gold); flex-shrink: 0; width: 24px; text-align: right; }
+
+  @media (max-width: 900px) {
+    html, body { overflow: auto; }
+    #app { position: static; min-height: 100vh; }
+    .fm-header { padding: 10px 14px; }
+    .fm-header .back-link { display: none; }
+    .fm-header .title-block .page-title { max-width: 60vw; }
+    .fm-body { flex-direction: column; }
+    .fm-sidebar {
+      width: 100%; height: auto; flex-shrink: 0; display: flex; overflow-x: auto;
+      overflow-y: hidden; padding: 4px; border-right: none; border-bottom: 1px solid var(--border);
+    }
+    .fm-nav-item { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
+    .fm-nav-item.active { border-left-color: transparent; border-bottom-color: var(--gold); }
+    .fm-content-wrap { padding: 14px; overflow-y: auto; }
+    .fm-content { height: auto; grid-template-columns: 1fr; }
+    .fm-col { height: auto; }
+    .fm-col .card { flex: none; max-height: 60vh; }
+  }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="topbar-left">
-    <a href="#" id="backLink" class="back-link">← Retour au club</a>
-  </div>
-</div>
-
-<div class="wrap">
-  <div class="card">
-    <div class="comp-header">
+<div id="app">
+  <div class="fm-header" id="fmHeader">
+    <div class="title-block">
+      <a href="#" id="backLink" class="back-link">← Retour au club</a>
       <div>
-        <div class="name" id="compName">Chargement...</div>
-        <div class="sub" id="compSub"></div>
+        <div class="page-title" id="compName">Chargement...</div>
+        <div class="manager-line" id="compSub"></div>
       </div>
-      <span class="comp-tag" id="compTag"></span>
+    </div>
+    <div class="right-block">
+      <span class="fm-comp-tag" id="compTag"></span>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Classement</h2>
-    <div id="compStandings" class="empty-state">Chargement...</div>
-  </div>
+  <div class="fm-body">
+    <div class="fm-sidebar" id="fmSidebar"></div>
 
-  <div class="card">
-    <h2>Prochains matchs — <span id="compNextJournee"></span></h2>
-    <div id="compNextMatches" class="empty-state">Chargement...</div>
-  </div>
+    <div class="fm-content-wrap">
+      <div class="fm-content">
+        <div class="fm-col">
+          <div class="card">
+            <div class="fm-card-title"><span>Classement</span></div>
+            <div class="fm-scroll-area scroll-hide" id="compStandings">
+              <div class="fm-empty">Chargement...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="fm-card-title"><span>Prochains matchs</span> <span class="comp-name" id="compNextJournee"></span></div>
+            <div class="fm-scroll-area scroll-hide" id="compNextMatches">
+              <div class="fm-empty">Chargement...</div>
+            </div>
+          </div>
+        </div>
 
-  <div class="two-col">
-    <div class="card">
-      <h2>Meilleurs buteurs</h2>
-      <div id="compTopScorers" class="empty-state">Chargement...</div>
-    </div>
-    <div class="card">
-      <h2>Meilleurs passeurs</h2>
-      <div id="compTopAssists" class="empty-state">Chargement...</div>
+        <div class="fm-col">
+          <div class="card">
+            <div class="fm-card-title"><span>Meilleurs buteurs</span></div>
+            <div class="fm-scroll-area scroll-hide" id="compTopScorers">
+              <div class="fm-empty">Chargement...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="fm-card-title"><span>Meilleurs passeurs</span></div>
+            <div class="fm-scroll-area scroll-hide" id="compTopAssists">
+              <div class="fm-empty">Chargement...</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -151,6 +245,44 @@ function escapeHtml(str) {
 function goToClub(clubId) {
   window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
 }
+
+// ===================== Sidebar (memes onglets que le dashboard) =====================
+// Cette page n'est pas la coquille du dashboard elle-meme : les onglets qui
+// ont un sous-ecran dedie sur le dashboard renvoient donc vers
+// dashboard.html avec le bon `?view=`, ceux qui ont leur propre page (Effectif,
+// Infos club) y renvoient directement. "Compétitions" reste actif ici.
+const FM_NAV_ITEMS = [
+  { key: "accueil", icon: "🏠", label: "Accueil", href: "dashboard.html" },
+  { key: "messagerie", icon: "📬", label: "Boîte de réception", href: "dashboard.html", view: "messagerie" },
+  { key: "effectif", icon: "👥", label: "Effectif", href: "squad.html" },
+  { key: "staff", icon: "💼", label: "Staff", href: "dashboard.html", view: "staff" },
+  { key: "tactique", icon: "♟️", label: "Tactique", href: "dashboard.html", view: "tactique" },
+  { key: "datacenter", icon: "📊", label: "Data Center", href: "dashboard.html", view: "datacenter" },
+  { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: "dashboard.html", view: "bdd" },
+  { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
+  { key: "competitions", icon: "🏆", label: "Compétitions", href: "dashboard.html", view: "competitions" },
+];
+
+function renderSidebar() {
+  const el = document.getElementById("fmSidebar");
+  el.innerHTML = FM_NAV_ITEMS.map(item => `
+    <div class="fm-nav-item ${item.key === "competitions" ? "active" : ""}" data-key="${item.key}">
+      <span class="fm-nav-icon">${item.icon}</span>
+      <span>${item.label}</span>
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".fm-nav-item").forEach(row => {
+    const item = FM_NAV_ITEMS.find(i => i.key === row.getAttribute("data-key"));
+    row.addEventListener("click", () => {
+      if (!myClubId) return;
+      const qs = new URLSearchParams({ game: gameId, club: myClubId });
+      if (item.view) qs.set("view", item.view);
+      window.location.href = `${item.href}?${qs.toString()}`;
+    });
+  });
+}
+renderSidebar();
 
 async function loadCompetition() {
   if (!gameId || !competitionId) {
@@ -183,7 +315,7 @@ async function loadCompetition() {
     .eq("division", comp.division);
 
   if (overviewError || !overview || overview.length === 0) {
-    document.getElementById("compStandings").innerHTML = `<div class="empty-state">Impossible de charger le classement.</div>`;
+    document.getElementById("compStandings").innerHTML = `<div class="fm-empty">Impossible de charger le classement.</div>`;
     document.getElementById("compNextMatches").innerHTML = "";
     document.getElementById("compTopScorers").innerHTML = "";
     document.getElementById("compTopAssists").innerHTML = "";
@@ -213,8 +345,8 @@ async function loadCompetition() {
     return (sb.buts_pour ?? 0) - (sa.buts_pour ?? 0);
   });
 
-  document.getElementById("compStandings").outerHTML = `
-    <table class="fm-table" id="compStandings">
+  document.getElementById("compStandings").innerHTML = `
+    <table class="fm-table">
       <thead>
         <tr>
           <th>Clt</th><th>Club</th><th>J</th><th>V</th><th>N</th><th>D</th>
@@ -230,7 +362,7 @@ async function loadCompetition() {
           return `
             <tr class="${id === myClubId ? "me" : ""}">
               <td class="clt">${rank}e</td>
-              <td><span class="club-link" data-club-id="${id}">${escapeHtml(nameById[id])}</span></td>
+              <td><span class="fm-club-link" data-club-id="${id}">${escapeHtml(nameById[id])}</span></td>
               <td class="num">${joues}</td>
               <td class="num">${s.victoires ?? 0}</td>
               <td class="num">${s.nuls ?? 0}</td>
@@ -245,7 +377,7 @@ async function loadCompetition() {
       </tbody>
     </table>
   `;
-  document.querySelectorAll("#compStandings .club-link").forEach(el => {
+  document.querySelectorAll("#compStandings .fm-club-link").forEach(el => {
     el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
   });
 
@@ -263,7 +395,7 @@ async function loadCompetition() {
   const nextMatchesEl = document.getElementById("compNextMatches");
   if (!upcoming || upcoming.length === 0) {
     document.getElementById("compNextJournee").textContent = "";
-    nextMatchesEl.innerHTML = `<div class="empty-state">Aucun match à venir programmé.</div>`;
+    nextMatchesEl.innerHTML = `<div class="fm-empty">Aucun match à venir programmé.</div>`;
   } else {
     const nextJournee = upcoming[0].journee;
     document.getElementById("compNextJournee").textContent = `Journée ${nextJournee}`;
@@ -272,16 +404,19 @@ async function loadCompetition() {
       const d = m.date_match ? new Date(m.date_match) : null;
       const dateLabel = d ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "") : "-";
       return `
-        <div class="match-row">
-          <div class="match-date">${dateLabel}</div>
-          <div class="match-teams">
-            <span class="home">${escapeHtml(nameById[m.club_domicile_id] || "?")}</span>
+        <div class="fm-comp-match-row">
+          <div class="fm-comp-match-date">${dateLabel}</div>
+          <div class="fm-comp-match-teams">
+            <span class="home"><span class="club" data-club-id="${m.club_domicile_id}">${escapeHtml(nameById[m.club_domicile_id] || "?")}</span></span>
             <span class="vs">vs</span>
-            <span class="away">${escapeHtml(nameById[m.club_exterieur_id] || "?")}</span>
+            <span class="away"><span class="club" data-club-id="${m.club_exterieur_id}">${escapeHtml(nameById[m.club_exterieur_id] || "?")}</span></span>
           </div>
         </div>
       `;
     }).join("");
+    nextMatchesEl.querySelectorAll(".club").forEach(el => {
+      el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+    });
   }
 
   // Meilleurs buteurs / passeurs de la competition
@@ -295,13 +430,13 @@ async function loadCompetition() {
   const topAssistsEl = document.getElementById("compTopAssists");
 
   if (!players || players.length === 0) {
-    topScorersEl.innerHTML = `<div class="empty-state">Pas encore de données.</div>`;
-    topAssistsEl.innerHTML = `<div class="empty-state">Pas encore de données.</div>`;
+    topScorersEl.innerHTML = `<div class="fm-empty">Pas encore de données.</div>`;
+    topAssistsEl.innerHTML = `<div class="fm-empty">Pas encore de données.</div>`;
     return;
   }
 
-  const topScorers = players.slice().sort((a, b) => (b.buts_saison ?? 0) - (a.buts_saison ?? 0)).slice(0, 10);
-  const topAssists = players.slice().sort((a, b) => (b.passes_decisives_saison ?? 0) - (a.passes_decisives_saison ?? 0)).slice(0, 10);
+  const topScorers = players.slice().sort((a, b) => (b.buts_saison ?? 0) - (a.buts_saison ?? 0)).slice(0, 15);
+  const topAssists = players.slice().sort((a, b) => (b.passes_decisives_saison ?? 0) - (a.passes_decisives_saison ?? 0)).slice(0, 15);
 
   const renderPlayerList = (list, valueKey) => list.map((p, i) => `
     <div class="player-row">
@@ -313,11 +448,11 @@ async function loadCompetition() {
   `).join("");
 
   topScorersEl.innerHTML = topScorers.every(p => !p.buts_saison)
-    ? `<div class="empty-state">Aucun but marqué pour l'instant.</div>`
+    ? `<div class="fm-empty">Aucun but marqué pour l'instant.</div>`
     : renderPlayerList(topScorers, "buts_saison");
 
   topAssistsEl.innerHTML = topAssists.every(p => !p.passes_decisives_saison)
-    ? `<div class="empty-state">Aucune passe décisive pour l'instant.</div>`
+    ? `<div class="fm-empty">Aucune passe décisive pour l'instant.</div>`
     : renderPlayerList(topAssists, "passes_decisives_saison");
 }
 
