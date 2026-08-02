@@ -810,7 +810,8 @@ function renderFmSubtabs(viewedClubId) {
 
 function renderFmHeader(pseudo, headerClubName, canSearch = true) {
   const el = document.getElementById("fmHeader");
-  const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml((headerClubName || "").toUpperCase())}`;
+  const titleLabel = escapeHtml((headerClubName || "Club").toUpperCase());
+  const managerLine = `Managé par ${escapeHtml(pseudo || "Manager")}`;
 
   const realDate = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
   const dateLabel = formatRealDate(realDate) || `Jour ${currentGame?.jour_actuel ?? "-"}`;
@@ -819,7 +820,7 @@ function renderFmHeader(pseudo, headerClubName, canSearch = true) {
     <div class="title-block">
       <a href="dashboard.html?game=${encodeURIComponent(gameId)}" class="back-link">← Accueil</a>
       <div class="page-title-wrap" id="fmSearchWrap">
-        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="INFOS CLUB" autocomplete="off">
+        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="${titleLabel}" autocomplete="off">
         <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
         <div class="manager-line">${managerLine}</div>
       </div>
@@ -1696,17 +1697,25 @@ async function getDivisionStandings(nation, division) {
 }
 
 async function getClubMatches(clubId) {
+  // clubId vient des query params (donc une string), alors que
+  // club_domicile_id / club_exterieur_id renvoyes par Supabase sont des
+  // nombres : sans ce cast, `m.club_domicile_id === clubId` est toujours
+  // faux, isHome reste toujours a false et l'adversaire calcule est alors
+  // TOUJOURS l'equipe a domicile (le club affiche s'affrontant lui-meme des
+  // qu'il jouait a domicile).
+  const clubIdNum = Number(clubId);
+
   const { data: matches, error } = await supabaseClient
     .from("calendrier")
     .select("id, date_match, journee, club_domicile_id, club_exterieur_id, score_domicile, score_exterieur")
     .eq("game_id", gameId)
-    .or(`club_domicile_id.eq.${clubId},club_exterieur_id.eq.${clubId}`)
+    .or(`club_domicile_id.eq.${clubIdNum},club_exterieur_id.eq.${clubIdNum}`)
     .order("date_match", { ascending: true });
 
   if (error || !matches) return [];
 
   const oppIds = [...new Set(matches.map(m =>
-    m.club_domicile_id === clubId ? m.club_exterieur_id : m.club_domicile_id
+    m.club_domicile_id === clubIdNum ? m.club_exterieur_id : m.club_domicile_id
   ))];
   const { data: oppClubs } = await supabaseClient
     .from("game_clubs")
@@ -1716,7 +1725,7 @@ async function getClubMatches(clubId) {
   (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; });
 
   return matches.map(m => {
-    const isHome = m.club_domicile_id === clubId;
+    const isHome = m.club_domicile_id === clubIdNum;
     const oppId = isHome ? m.club_exterieur_id : m.club_domicile_id;
     return {
       ...m,
@@ -1980,18 +1989,10 @@ async function loadClub() {
     .eq("game_club_id", gameClubId)
     .order("reputation_mondiale", { ascending: false, nullsFirst: false });
 
-  // Le bandeau identifie toujours le manager et SON club, meme quand la
-  // fiche affichee en dessous est celle d'un autre club (comme dans squad.html).
-  let headerClubName = club.nom;
-  if (!isOwnClub) {
-    const { data: myClubRow } = await supabaseClient
-      .from("game_clubs")
-      .select("nom")
-      .eq("id", myClubId)
-      .eq("game_id", gameId)
-      .single();
-    headerClubName = myClubRow?.nom || club.nom;
-  }
+  // Le bandeau identifie desormais le club affiche sur CETTE page (utile
+  // pour se reperer quand on consulte la fiche d'un autre club que le
+  // sien), et non plus systematiquement le club du manager.
+  const headerClubName = club.nom;
 
   document.getElementById("clubHero").classList.remove("hidden");
   document.getElementById("clubGrid").style.display = "";
