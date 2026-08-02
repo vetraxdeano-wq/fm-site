@@ -129,6 +129,100 @@ function profilRole(role) {
   return PROFILS_ROLE[role] || PROFILS_ROLE.MD;
 }
 
+/**
+ * Déduit un rôle générique (clé de PROFILS_ROLE) à partir de `poste_brut`
+ * (ex. "AL/M (G), MO (GC), BT (C)") pour un joueur qui n'a PAS de slot de
+ * composition assigné — typiquement un remplaçant pris sur le banc, dont on
+ * a besoin d'estimer la note/le poids buteur-passeur-carton sans tactique.
+ */
+function inferRolePrincipal(joueurRow) {
+  const brut = joueurRow?.poste_brut || '';
+  const premierSegment = brut.split(',')[0] || '';
+  const tokenPoste = premierSegment.split('(')[0].trim();
+  const premierToken = tokenPoste.split('/')[0].trim().toUpperCase();
+  const MAP = { GB: 'GB', D: 'D', DL: 'D', MD: 'MD', M: 'MD', MO: 'MO', AL: 'AL', BT: 'BT' };
+  return MAP[premierToken] || 'MD';
+}
+
+// ============================================================
+// PROFIL TACTIQUE DES ÉQUIPES (style, mentalité, pressing, ligne)
+// Alimente le mismatch tactique (étape 1bis) à partir de `tactiques`
+// (style_tactique, mentalite, type_pressing, instructions.ligne/rythme).
+// ============================================================
+
+/** Axes 0-1 (sauf mention contraire) par grande famille de style de jeu. */
+const AXES_STYLE = {
+  Gegenpress: { possession: 0.45, directness: 0.5, pressing: 0.95, risque: 0.75 },
+  'Contrôle de la possession': { possession: 0.9, directness: 0.15, pressing: 0.35, risque: 0.3 },
+  'Jeu ultra-défensif': { possession: 0.25, directness: 0.3, pressing: 0.15, risque: 0.05 },
+  'Tiki-Taka vertical': { possession: 0.8, directness: 0.5, pressing: 0.45, risque: 0.55 },
+  'Tiki-Taka': { possession: 0.95, directness: 0.1, pressing: 0.3, risque: 0.35 },
+  'Jeu sur les ailes': { possession: 0.55, directness: 0.55, pressing: 0.4, risque: 0.5 },
+  Catenaccio: { possession: 0.3, directness: 0.35, pressing: 0.15, risque: 0.05 },
+  'Contre-attaques fluides': { possession: 0.3, directness: 0.8, pressing: 0.3, risque: 0.55 },
+  'Longs ballons devant': { possession: 0.2, directness: 0.95, pressing: 0.35, risque: 0.5 },
+  'Contre-attaques directes': { possession: 0.25, directness: 0.9, pressing: 0.25, risque: 0.6 },
+  '-': { possession: 0.5, directness: 0.5, pressing: 0.4, risque: 0.4 },
+};
+const STYLE_DEFAUT = AXES_STYLE['-'];
+
+const MENTALITE_AXE = { 'Très prudent': -2, Prudent: -1, Équilibré: 0, Offensive: 1, Aventureux: 2 };
+const PRESSING_AXE = { 'Moins souvent': -0.15, Équilibré: 0, 'Plus souvent': 0.15 };
+const LIGNE_AXE = { Basse: -1, Médiane: 0, Haute: 1 };
+const RYTHME_AXE = { Lent: -1, Modéré: 0, Rapide: 1 };
+
+/** Traduit une ligne `tactiques` (style, mentalité, pressing, instructions) en profil numérique comparable. */
+function profilTactique(tactique) {
+  const base = AXES_STYLE[tactique?.style_tactique] || STYLE_DEFAUT;
+  const mentaliteAxe = MENTALITE_AXE[tactique?.mentalite] ?? 0;
+  const pressingAxe = PRESSING_AXE[tactique?.type_pressing] ?? 0;
+  const ligneAxe = LIGNE_AXE[tactique?.instructions?.ligne] ?? 0;
+  const rythmeAxe = RYTHME_AXE[tactique?.instructions?.rythme] ?? 0;
+
+  return {
+    possession: clamp(base.possession + mentaliteAxe * 0.04, 0, 1),
+    directness: clamp(base.directness + mentaliteAxe * 0.03 + rythmeAxe * 0.08, 0, 1),
+    pressing: clamp(base.pressing + pressingAxe * 0.35, 0, 1),
+    risque: clamp(base.risque + mentaliteAxe * 0.08, 0, 1),
+    ligne: ligneAxe,
+    mentaliteAxe,
+  };
+}
+
+/**
+ * Mismatch tactique de l'équipe "pour" contre l'équipe "adverse" : combine
+ * trois lectures classiques du jeu (pressing qui casse la possession adverse,
+ * ligne haute exposée à un jeu direct/rapide, écart de mentalité qui ouvre
+ * ou ferme le match), le tout modulé par le niveau tactique du coach qui
+ * exécute le plan et amorti par la capacité d'adaptation du coach adverse.
+ *
+ * @returns {{ bonusDanger: number, malusExposition: number }} deltas (points, échelle ~0-100) à appliquer au danger/attaque de l'équipe "pour".
+ */
+function calculerMismatchTactique(profilPour, profilAdverse, niveauCoachPour, niveauCoachAdverse) {
+  // Pressing qui prend le dessus sur une équipe qui cherche à construire au sol
+  const ecartPressingPossession = profilPour.pressing - profilAdverse.possession;
+  const bonusRecuperationHaute = clamp(ecartPressingPossession, -0.5, 0.5) * 6;
+
+  // Ligne défensive haute exposée si l'adversaire joue vite et direct
+  const expositionDansLeDos = profilAdverse.directness * clamp(profilPour.ligne, 0, 1);
+  const malusLigneHaute = expositionDansLeDos * 5;
+
+  // Écart de mentalité : plus le fossé est grand, plus l'équipe la plus entreprenante prend l'ascendant
+  const ecartMentalite = profilPour.mentaliteAxe - profilAdverse.mentaliteAxe;
+  const bonusPriseDeRisque = clamp(ecartMentalite, -4, 4) * 0.8;
+
+  const facteurExecution = clamp(0.5 + niveauCoachPour * 0.6, 0.5, 1.15);
+  const facteurAdaptationAdverse = clamp(1.15 - niveauCoachAdverse * 0.3, 0.75, 1.1);
+
+  const bonusDanger = (bonusRecuperationHaute + bonusPriseDeRisque) * facteurExecution * facteurAdaptationAdverse;
+  const malusExposition = malusLigneHaute * facteurExecution;
+
+  return {
+    bonusDanger: clamp(bonusDanger, -8, 8),
+    malusExposition: clamp(malusExposition, 0, 8),
+  };
+}
+
 // ============================================================
 // ÉTAPE 1 — FORCE DES ÉQUIPES
 // ============================================================
@@ -149,9 +243,25 @@ function noteJoueurMatch(joueurRow, role) {
   const forme = clamp(joueurRow.forme ?? 100, 0, 150) / 100; // multiplicateur ~0.5-1.5
   const moral = clamp(joueurRow.moral ?? 100, 0, 150) / 100;
 
-  let note = noteAttributs * 0.55 + ca * 0.45;
+  // Le CA est plus discriminant que la moyenne des attributs bruts (qui reste
+  // souvent élevée même pour un joueur de bas niveau) : on lui donne plus de poids.
+  let note = noteAttributs * 0.4 + ca * 0.6;
+
+  // Étirement de l'écart autour d'un point central pour éviter que les niveaux
+  // très différents (National vs. classe mondiale) ne s'écrasent trop entre eux.
+  const CENTRE = 50;
+  const FACTEUR_ETIREMENT = 1.35;
+  note = CENTRE + (note - CENTRE) * FACTEUR_ETIREMENT;
+
   note *= 0.85 + 0.15 * forme; // la forme pèse pour 15%
   note *= 0.92 + 0.08 * moral; // le moral pèse pour 8%
+
+  // Régularité (attribut 1-20, ex. joueurs.regularite / players.regularite) : un joueur peu
+  // régulier livre des prestations beaucoup plus dispersées d'un match à l'autre qu'un joueur
+  // très régulier. Écart-type ~1.5 pt pour regularite=20, ~11 pts pour regularite=1.
+  const regularite = clamp(joueurRow.regularite ?? 11, 1, 20);
+  const ecartTypeJournalier = clamp(13 - regularite * 0.55, 1.5, 12);
+  note += bruitGaussien(ecartTypeJournalier * 0.4);
 
   if ((joueurRow.blessure_jours ?? 0) > 0) note *= 0.5; // ne devrait pas être titulaire, garde-fou
 
@@ -166,11 +276,14 @@ function noteJoueurMatch(joueurRow, role) {
  * @param {Array}  p.compositions - tactique.compositions (11 entrées avec player_id, role)
  * @param {Array}  p.joueurs - game_players du club (pour retrouver les attributs par id)
  * @param {object} p.tactique - ligne tactiques (connaissance_tactique, instructions)
- * @param {object} p.coach - ligne game_staff (niveau_tactique, niveau_attaque, niveau_defense) ou null
- * @param {object} p.club - ligne clubs/game_clubs (reputation, niveau_pct)
+ * @param {object} p.coach - ligne game_staff jointe à `staff` (niveau_tactique, niveau_attaque,
+ *   niveau_defense, adaptabilite) ou null. NB : ces attributs vivent sur `staff` (via
+ *   tactique.coach_staff_ref), pas sur `game_staff` — la couche de fetch doit faire la jointure.
+ * @param {object} p.club - ligne clubs/game_clubs (reputation, niveau_pct, capacite_stade, affluence_moyenne)
+ * @param {object} [p.groupe] - ligne `dynamique_groupe` du club (note_globale 0-100) ou null
  * @param {object} p.contexte - { domicile, enjeu (0-1), meteo }
  */
-function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, contexte }) {
+function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, groupe, contexte }) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
 
   const titulairesNotes = compositions.map((slot) => {
@@ -181,18 +294,33 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, con
 
   const noteEffectif = moyenne(titulairesNotes.map((t) => t.note));
 
-  // Cohésion collective : familiarité tactique (fit_score moyen des slots) + connaissance tactique du coach
+  // Dynamique de groupe (table dynamique_groupe : moral, ancienneté, leadership, stabilité du
+  // coach, cohésion linguistique...) synthétisée en une note 0-100 déjà calculée côté dashboard.
+  const dynGroupe = clamp((groupe?.note_globale ?? 60) / 100, 0.3, 1.15);
+
+  // Cohésion collective : familiarité tactique (fit_score moyen des slots), connaissance
+  // tactique du coach, et dynamique de groupe de l'effectif.
   const fitScoreMoyen = moyenne(compositions.map((c) => c.fit_score ?? 2)) / 3; // fit_score 0-3
   const connaissanceTactique = clamp((tactique?.connaissance_tactique ?? 12) / 20, 0, 1);
-  const cohesion = clamp(0.5 + 0.3 * fitScoreMoyen + 0.2 * connaissanceTactique, 0.5, 1.15);
+  const cohesion = clamp(0.5 + 0.22 * fitScoreMoyen + 0.13 * connaissanceTactique + 0.15 * dynGroupe, 0.5, 1.2);
 
   // Staff : niveau tactique du coach module la note d'ensemble
   const niveauCoach = coach
     ? clamp(((coach.niveau_tactique ?? 12) + (coach.niveau_attaque ?? 12) + (coach.niveau_defense ?? 12)) / 3 / 20, 0.4, 1)
     : 0.7;
+  const adaptabiliteCoach = coach ? clamp((coach.adaptabilite ?? 12) / 20, 0.3, 1) : 0.6;
 
-  // Contexte : avantage du terrain, enjeu (pression), météo pénalise légèrement le jeu technique
-  const bonusDomicile = contexte?.domicile ? 1.06 : 0.97;
+  // Contexte : avantage du terrain modulé par le taux de remplissage du stade et l'enjeu du
+  // match (plus le stade est plein et l'enjeu élevé, plus le public pèse), et par la dynamique
+  // de groupe du club recevant (un vestiaire en délicatesse profite moins de la ferveur du public).
+  // À l'extérieur, une dynamique de groupe fragile pèse un peu plus lourd (moins de solidarité loin de ses bases).
+  const remplissageStade = club?.capacite_stade
+    ? clamp((club.affluence_moyenne ?? club.capacite_stade * 0.7) / club.capacite_stade, 0.25, 1)
+    : 0.7;
+  const ferveurPublique = 0.5 + remplissageStade * 0.5; // 0.625 - 1
+  const bonusDomicile = contexte?.domicile
+    ? clamp(1 + 0.05 * ferveurPublique + 0.03 * (contexte?.enjeu ?? 0) + 0.03 * (dynGroupe - 0.7), 1.02, 1.17)
+    : clamp(0.99 - 0.03 * (1 - dynGroupe), 0.9, 0.99);
   const facteurEnjeu = 1 - (contexte?.enjeu ?? 0) * 0.04; // grosse pression = petite baisse de rendement moyen
   const facteurMeteo = contexte?.meteo && contexte.meteo !== 'normale' ? 0.97 : 1;
 
@@ -215,6 +343,8 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, con
     noteDefense: (parCategorie('defenseur') * 0.7 + parCategorie('milieu') * 0.3),
     noteGardien: parCategorie('gardien'),
     titulairesNotes,
+    niveauCoach,
+    adaptabiliteCoach,
   };
 }
 
@@ -225,19 +355,27 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, con
 /**
  * Détermine possession / intensité de chaque équipe à partir de leur force.
  * Une équipe plus forte domine statistiquement plus souvent, sans certitude.
+ *
+ * @param {object} [mismatchDom] - { bonusDanger, malusExposition } du point de vue du domicile (cf. calculerMismatchTactique)
+ * @param {object} [mismatchExt] - idem côté extérieur
  */
-function calculerDomination(forceDom, forceExt) {
+function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt = null) {
   const diff = forceDom.noteGlobale - forceExt.noteGlobale; // typiquement -60..+60
   const bruit = bruitGaussien(6); // légère variabilité match à match
   const diffAjuste = diff + bruit;
 
   // Logistique centrée : possession moyenne 50%, s'écarte selon l'écart de force
-  const possessionDom = clamp(50 + diffAjuste * 0.45, 28, 72);
+  const possessionDom = clamp(50 + diffAjuste * 0.5, 22, 78);
   const possessionExt = 100 - possessionDom;
 
-  // Pression/occasions dépendent surtout de l'attaque adverse vs milieu/défense
-  const dangerDom = clamp(50 + (forceDom.noteAttaque - forceExt.noteDefense) * 0.5 + bruitGaussien(4), 15, 90);
-  const dangerExt = clamp(50 + (forceExt.noteAttaque - forceDom.noteDefense) * 0.5 + bruitGaussien(4), 15, 90);
+  // Pression/occasions dépendent surtout de l'attaque adverse vs milieu/défense, ajustées par
+  // le mismatch tactique (pressing qui casse la construction adverse, ligne haute exposée, écart
+  // de mentalité qui ouvre le match).
+  const ajustDom = (mismatchDom?.bonusDanger ?? 0) - (mismatchExt?.malusExposition ?? 0);
+  const ajustExt = (mismatchExt?.bonusDanger ?? 0) - (mismatchDom?.malusExposition ?? 0);
+
+  const dangerDom = clamp(50 + (forceDom.noteAttaque - forceExt.noteDefense) * 0.5 + ajustDom + bruitGaussien(4), 15, 92);
+  const dangerExt = clamp(50 + (forceExt.noteAttaque - forceDom.noteDefense) * 0.5 + ajustExt + bruitGaussien(4), 15, 92);
 
   return {
     possession: { domicile: Math.round(possessionDom), exterieur: Math.round(possessionExt) },
@@ -252,7 +390,7 @@ function calculerDomination(forceDom, forceExt) {
 /** Génère un bloc de stats cohérent pour UNE équipe à partir de sa domination. */
 function genererStatsEquipe(possessionPct, dangerScore, forceAttaque, forceDefenseAdverse) {
   // Occasions franches : proportionnelles au danger créé
-  const occasionsFranches = clamp(Math.round(dangerScore / 14 + bruitGaussien(0.6)), 0, 10);
+  const occasionsFranches = clamp(Math.round(dangerScore / 11 + bruitGaussien(0.6)), 0, 10);
 
   // Tirs totaux >= occasions franches (les occasions franches sont un sous-ensemble des tirs)
   const tirsBonus = tiragePoisson(clamp(dangerScore / 22, 0.3, 5));
@@ -312,8 +450,8 @@ function calculerButsEquipe(statsEquipe, forceAttaque, forceGardienAdverse, cont
   const facteurPression = 1 - (contexte?.enjeu ?? 0) * 0.05;
 
   for (let i = 0; i < nbOccasionsAConvertir; i++) {
-    // probabilité de base d'une occasion franche ~ 22%, modulée par le niveau des deux côtés
-    const probaBut = clamp(0.22 + (qualiteFinition - qualiteGardien) * 0.35, 0.04, 0.6) * facteurPression;
+    // probabilité de base d'une occasion franche ~ 28%, modulée par le niveau des deux côtés
+    const probaBut = clamp(0.28 + (qualiteFinition - qualiteGardien) * 0.45, 0.05, 0.7) * facteurPression;
     if (proba(probaBut)) {
       buts++;
     } else if (proba(0.55)) {
@@ -323,6 +461,93 @@ function calculerButsEquipe(statsEquipe, forceAttaque, forceGardienAdverse, cont
   }
 
   return { buts, arrets };
+}
+
+// ============================================================
+// ÉTAPE 4bis — BANC ET REMPLACEMENTS (5 max)
+// ============================================================
+
+/**
+ * Sélectionne les meilleurs remplaçants disponibles (joueurs équipe_a du club
+ * qui ne sont PAS dans les 11 titulaires), au plus `max` (5, règle du jeu).
+ * `joueurs` doit contenir tout l'effectif équipe_a du club (pas que les titulaires).
+ */
+function selectionnerBanc(compositions, joueurs, max = 5) {
+  const idsTitulaires = new Set(compositions.map((c) => c.player_id));
+  const candidats = joueurs.filter((j) => !idsTitulaires.has(j.id) && (j.blessure_jours ?? 0) <= 0);
+
+  const evalues = candidats.map((jr) => {
+    const role = inferRolePrincipal(jr);
+    return { joueur: jr, role, note: noteJoueurMatch(jr, role) };
+  });
+  evalues.sort((a, b) => b.note - a.note);
+  return evalues.slice(0, max);
+}
+
+/**
+ * Génère jusqu'à 5 changements pour une équipe : minute d'entrée croissante au
+ * fil du match, remplaçant systématiquement le titulaire de champ le moins
+ * bien noté à l'instant T (jamais le gardien). Un coach mieux noté tactiquement
+ * et plus adaptable change un peu plus tôt et cible mieux le maillon faible ;
+ * un coach moins bon change plus tard, de façon moins optimale, et utilise
+ * parfois moins de ses 5 fenêtres.
+ */
+function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabiliteCoach = 0.6) {
+  // Le gardien remplaçant ne rentre pas sur un changement de champ dans ce modèle simplifié
+  // (les titulaires sortants sont toujours des joueurs de champ, cf. filtre plus bas).
+  const bancEligible = banc.filter((b) => b.role !== 'GB');
+  if (!bancEligible.length) return [];
+
+  const qualitePlan = clamp((niveauCoach + adaptabiliteCoach) / 2, 0.3, 1);
+  const nbSubs = clamp(Math.round(2 + qualitePlan * 2 + bruitGaussien(0.8)), 1, Math.min(5, bancEligible.length));
+
+  const dejaSorti = new Set();
+  const remplacements = [];
+
+  for (let i = 0; i < nbSubs; i++) {
+    const entrant = bancEligible[i];
+    if (!entrant) break;
+
+    // Le sortant : titulaire de champ restant sur le pré le moins bien noté (fatigue/forme du jour)
+    const candidatsSortants = compositions.filter((c) => c.role !== 'GB' && !dejaSorti.has(c.player_id));
+    if (!candidatsSortants.length) break;
+    const sortant = candidatsSortants.reduce((pire, c) => (c.note ?? 50) < (pire.note ?? 50) ? c : pire, candidatsSortants[0]);
+    dejaSorti.add(sortant.player_id);
+
+    // Minute d'entrée : progresse au fil des changements ; un coach mieux préparé anticipe un peu plus tôt.
+    const minuteBase = 58 + i * 7 - qualitePlan * 8;
+    const minute = clamp(Math.round(minuteBase + bruitGaussien(6)), 46, 90);
+
+    remplacements.push({
+      minute,
+      slot_id: sortant.slot_id,
+      role: sortant.role,
+      sortant_id: sortant.player_id,
+      sortant_nom: sortant.player_nom,
+      entrant_id: entrant.joueur.id,
+      entrant_nom: entrant.joueur.nom,
+    });
+  }
+
+  return remplacements.sort((a, b) => a.minute - b.minute);
+}
+
+/**
+ * Renvoie la composition "effective" sur le terrain à une minute donnée :
+ * les titulaires déjà remplacés à cette minute sont substitués par leur entrant
+ * (même slot/rôle — hypothèse simplificatrice : changement poste pour poste).
+ */
+function compositionEffective(compositionsBase, remplacements, minute) {
+  if (!remplacements?.length) return compositionsBase;
+  const actifs = remplacements.filter((r) => r.minute <= minute);
+  if (!actifs.length) return compositionsBase;
+
+  const parSlot = new Map(actifs.map((r) => [r.slot_id, r]));
+  return compositionsBase.map((slot) => {
+    const rempl = parSlot.get(slot.slot_id);
+    if (!rempl) return slot;
+    return { ...slot, player_id: rempl.entrant_id, player_nom: rempl.entrant_nom };
+  });
 }
 
 // ============================================================
@@ -357,17 +582,20 @@ function attribuerPasseur(compositions, joueursParId, slotButeur) {
   });
 }
 
-function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId) {
+function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, remplacements = []) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const evenements = [];
 
   for (let i = 0; i < nbButs; i++) {
-    const slotButeur = attribuerButeur(compositions, joueursParId);
+    const minute = minuteAleatoire();
+    const compoAuMoment = compositionEffective(compositions, remplacements, minute);
+
+    const slotButeur = attribuerButeur(compoAuMoment, joueursParId);
     if (!slotButeur) continue;
-    const slotPasseur = attribuerPasseur(compositions, joueursParId, slotButeur);
+    const slotPasseur = attribuerPasseur(compoAuMoment, joueursParId, slotButeur);
 
     evenements.push({
-      minute: minuteAleatoire(),
+      minute,
       game_club_id: gameClubId,
       buteur_id: slotButeur.player_id,
       buteur_nom: slotButeur.player_nom,
@@ -383,16 +611,19 @@ function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId) {
 // ÉTAPE 7 — CARTONS
 // ============================================================
 
-function genererCartonsEquipe(fautes, compositions, joueurs, gameClubId) {
+function genererCartonsEquipe(fautes, compositions, joueurs, gameClubId, remplacements = []) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const cartons = [];
   const dejaJaune = new Set();
 
   for (let i = 0; i < fautes; i++) {
-    // ~14% des fautes donnent un carton jaune
-    if (!proba(0.14)) continue;
+    // ~18% des fautes donnent un carton jaune
+    if (!proba(0.18)) continue;
 
-    const slot = tirerJoueurPondere(compositions, joueursParId, (profil, note, jr) => {
+    const minute = minuteAleatoire();
+    const compoAuMoment = compositionEffective(compositions, remplacements, minute);
+
+    const slot = tirerJoueurPondere(compoAuMoment, joueursParId, (profil, note, jr) => {
       const agressivite = jr?.agressivite ?? 10;
       const tacles = jr?.tacles ?? 10;
       return profil.poidsCarton * (0.4 + (agressivite + tacles) / 40);
@@ -400,13 +631,13 @@ function genererCartonsEquipe(fautes, compositions, joueurs, gameClubId) {
     if (!slot) continue;
 
     if (dejaJaune.has(slot.player_id)) {
-      cartons.push({ minute: minuteAleatoire(), game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'deuxieme_jaune' });
+      cartons.push({ minute, game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'deuxieme_jaune' });
     } else {
       dejaJaune.add(slot.player_id);
-      cartons.push({ minute: minuteAleatoire(), game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'jaune' });
+      cartons.push({ minute, game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'jaune' });
       // petite chance de carton rouge direct indépendant (tacle très dangereux)
       if (proba(0.015)) {
-        cartons.push({ minute: minuteAleatoire(), game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'rouge_direct' });
+        cartons.push({ minute: clamp(minute + 1, 1, 90), game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'rouge_direct' });
       }
     }
   }
@@ -418,42 +649,84 @@ function genererCartonsEquipe(fautes, compositions, joueurs, gameClubId) {
 // ÉTAPE 8 — BLESSURES
 // ============================================================
 
-function genererBlessuresEquipe(compositions, joueurs, gameClubId, intensiteMatch) {
+const GRAVITE_BLESSURE = [
+  { item: 'legere', poids: 6 },
+  { item: 'moyenne', poids: 3 },
+  { item: 'grave', poids: 1 },
+];
+
+function risqueBlessure(jr, intensiteMatch) {
+  const tendance = clamp((jr.tendance_blessure ?? 10) / 20, 0.05, 1); // plus haut = plus fragile
+  const endurance = clamp((jr.endurance ?? 12) / 20, 0.3, 1);
+  const probaBase = 0.006; // ~0.6% par joueur par match en moyenne
+  return probaBase * (0.5 + tendance) * (1.3 - endurance * 0.4) * (0.8 + intensiteMatch * 0.4);
+}
+
+function genererBlessuresEquipe(compositions, joueurs, gameClubId, intensiteMatch, remplacements = []) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const blessures = [];
+  const sortieParSlot = new Map(remplacements.map((r) => [r.slot_id, r]));
 
+  // Titulaires : blessure possible tant qu'ils sont sur le terrain (avant leur éventuel remplacement)
   for (const slot of compositions) {
     const jr = joueursParId.get(slot.player_id);
     if (!jr) continue;
-    const tendance = clamp((jr.tendance_blessure ?? 10) / 20, 0.05, 1); // plus haut = plus fragile
-    const endurance = clamp((jr.endurance ?? 12) / 20, 0.3, 1);
-    const probaBase = 0.006; // ~0.6% par joueur par match en moyenne
-    const p = probaBase * (0.5 + tendance) * (1.3 - endurance * 0.4) * (0.8 + intensiteMatch * 0.4);
-    if (proba(p)) {
-      blessures.push({
-        minute: minuteAleatoire(),
-        game_club_id: gameClubId,
-        player_id: slot.player_id,
-        player_nom: slot.player_nom,
-        gravite: tirageAlPondere([
-          { item: 'legere', poids: 6 },
-          { item: 'moyenne', poids: 3 },
-          { item: 'grave', poids: 1 },
-        ]),
-      });
-    }
+    if (!proba(risqueBlessure(jr, intensiteMatch))) continue;
+
+    const rempl = sortieParSlot.get(slot.slot_id);
+    const minute = rempl ? clamp(minuteAleatoire(), 1, Math.max(1, rempl.minute - 1)) : minuteAleatoire();
+    // Si la fenêtre avant remplacement est trop courte pour ce tirage, on l'ignore plutôt que de forcer une minute incohérente.
+    if (rempl && minute >= rempl.minute) continue;
+
+    blessures.push({
+      minute,
+      game_club_id: gameClubId,
+      player_id: slot.player_id,
+      player_nom: slot.player_nom,
+      gravite: tirageAlPondere(GRAVITE_BLESSURE),
+    });
   }
 
-  return blessures;
+  // Entrants : risque prorata du temps de jeu restant après leur entrée (jambes plus fraîches, mais moins de minutes)
+  for (const rempl of remplacements) {
+    const jr = joueursParId.get(rempl.entrant_id);
+    if (!jr) continue;
+    const prorata = clamp((90 - rempl.minute) / 90, 0.05, 0.5);
+    if (!proba(risqueBlessure(jr, intensiteMatch) * prorata * 1.5)) continue;
+
+    blessures.push({
+      minute: clamp(Math.round(rempl.minute + Math.random() * (90 - rempl.minute)), rempl.minute, 90),
+      game_club_id: gameClubId,
+      player_id: rempl.entrant_id,
+      player_nom: rempl.entrant_nom,
+      gravite: tirageAlPondere(GRAVITE_BLESSURE),
+    });
+  }
+
+  return blessures.sort((a, b) => a.minute - b.minute);
 }
 
 // ============================================================
 // ÉTAPE 9 — NOTES DES JOUEURS / HOMME DU MATCH
 // ============================================================
 
-function calculerNotesJoueurs({ compositions, gameClubId, buteurs, passeurs, cartons, statsEquipe, victoire, nul }) {
-  const notes = compositions.map((slot) => {
-    let note = 6.0 + bruitGaussien(0.35);
+function calculerNotesJoueurs({ compositions, joueurs = [], remplacements = [], gameClubId, buteurs, passeurs, cartons, statsEquipe, victoire, nul }) {
+  const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
+
+  // Participants = les 11 titulaires + les entrants qui sont réellement montés au jeu.
+  const participants = [
+    ...compositions.map((slot) => ({ ...slot, entrant: false })),
+    ...remplacements.map((r) => ({ slot_id: r.slot_id, role: r.role, player_id: r.entrant_id, player_nom: r.entrant_nom, entrant: true, minuteEntree: r.minute })),
+  ];
+
+  const notes = participants.map((slot) => {
+    const jr = joueursParId.get(slot.player_id);
+    const regularite = clamp(jr?.regularite ?? 11, 1, 20);
+    const ecartTypeNote = clamp(0.55 - regularite * 0.02, 0.15, 0.5); // joueur régulier = notes resserrées
+
+    // Un entrant a joué moins longtemps : note de base plus prudente, sauf s'il a pesé sur le match (but/passe)
+    const baseEntrant = slot.entrant ? 6.0 - clamp((slot.minuteEntree - 46) / 90, 0, 0.3) : 6.0;
+    let note = baseEntrant + bruitGaussien(ecartTypeNote);
 
     const butsSlot = buteurs.filter((b) => b.game_club_id === gameClubId && b.buteur_id === slot.player_id).length;
     const passesSlot = passeurs.filter((p) => p.game_club_id === gameClubId && p.passeur_id === slot.player_id).length;
@@ -461,6 +734,8 @@ function calculerNotesJoueurs({ compositions, gameClubId, buteurs, passeurs, car
 
     note += butsSlot * 1.1;
     note += passesSlot * 0.6;
+    // Un but/une passe décisive d'un entrant "pèse" un peu plus dans le récit du match (impact banc)
+    if (slot.entrant && (butsSlot > 0 || passesSlot > 0)) note += 0.3;
     for (const c of cartonsSlot) {
       if (c.type === 'jaune') note -= 0.3;
       if (c.type === 'deuxieme_jaune' || c.type === 'rouge_direct') note -= 1.2;
@@ -474,7 +749,12 @@ function calculerNotesJoueurs({ compositions, gameClubId, buteurs, passeurs, car
     if (victoire) note += 0.25;
     else if (!nul) note -= 0.15;
 
-    return { player_id: slot.player_id, player_nom: slot.player_nom, note: Math.round(clamp(note, 2, 10) * 10) / 10 };
+    return {
+      player_id: slot.player_id,
+      player_nom: slot.player_nom,
+      entrant: slot.entrant || false,
+      note: Math.round(clamp(note, 2, 10) * 10) / 10,
+    };
   });
 
   return notes;
@@ -519,8 +799,12 @@ function genererResume({ nomDom, nomExt, scoreDom, scoreExt, statsDom, buteurs }
  * Simule un match complet entre deux clubs.
  *
  * @param {object} p
- * @param {object} p.domicile - { gameClubId, nom, joueurs, tactique, coach }
- * @param {object} p.exterieur - { gameClubId, nom, joueurs, tactique, coach }
+ * @param {object} p.domicile - { gameClubId, nom, joueurs, tactique, coach, club, groupe }
+ *   - joueurs : TOUT l'effectif équipe_a du club (pas que les 11 titulaires — nécessaire pour le banc)
+ *   - coach : ligne game_staff jointe à `staff` (niveau_tactique, niveau_attaque, niveau_defense, adaptabilite)
+ *   - club : ligne game_clubs jointe à `clubs` (reputation, niveau_pct, capacite_stade, affluence_moyenne)
+ *   - groupe : ligne `dynamique_groupe` du club (optionnelle)
+ * @param {object} p.exterieur - même forme que p.domicile
  * @param {object} [p.contexte] - { enjeu: 0-1, meteo: 'normale'|... }
  * @returns {object} prêt à écrire dans `calendrier` (score_domicile, score_exterieur, stats)
  */
@@ -528,13 +812,14 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   const compoDom = domicile.tactique.compositions;
   const compoExt = exterieur.tactique.compositions;
 
-  // Étape 1
+  // Étape 1 — force de chaque équipe (intègre déjà cohésion, dynamique de groupe, avantage du terrain)
   const forceDom = calculerForceEquipe({
     compositions: compoDom,
     joueurs: domicile.joueurs,
     tactique: domicile.tactique,
     coach: domicile.coach,
     club: domicile.club,
+    groupe: domicile.groupe,
     contexte: { ...contexte, domicile: true },
   });
   const forceExt = calculerForceEquipe({
@@ -543,11 +828,18 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
     tactique: exterieur.tactique,
     coach: exterieur.coach,
     club: exterieur.club,
+    groupe: exterieur.groupe,
     contexte: { ...contexte, domicile: false },
   });
 
-  // Étape 2
-  const domination = calculerDomination(forceDom, forceExt);
+  // Étape 1bis — mismatch tactique (style/mentalité/pressing/ligne des deux coachs l'un contre l'autre)
+  const profilDom = profilTactique(domicile.tactique);
+  const profilExt = profilTactique(exterieur.tactique);
+  const mismatchDom = calculerMismatchTactique(profilDom, profilExt, forceDom.niveauCoach, forceExt.niveauCoach);
+  const mismatchExt = calculerMismatchTactique(profilExt, profilDom, forceExt.niveauCoach, forceDom.niveauCoach);
+
+  // Étape 2 (domination ajustée par le mismatch tactique)
+  const domination = calculerDomination(forceDom, forceExt, mismatchDom, mismatchExt);
 
   // Étape 3
   const stats = genererStatistiques(domination, forceDom, forceExt);
@@ -562,25 +854,35 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   const scoreDom = Math.min(resultatDom.buts, stats.domicile.tirs_cadres);
   const scoreExt = Math.min(resultatExt.buts, stats.exterieur.tirs_cadres);
 
-  // Étapes 5 & 6
-  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId);
-  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId);
+  // Étape 4bis — banc et remplacements (5 max), basés sur le reste de l'effectif équipe_a
+  const compoDomAvecNote = forceDom.titulairesNotes.map((t) => ({ ...t.slot, note: t.note }));
+  const compoExtAvecNote = forceExt.titulairesNotes.map((t) => ({ ...t.slot, note: t.note }));
+  const bancDom = selectionnerBanc(compoDom, domicile.joueurs);
+  const bancExt = selectionnerBanc(compoExt, exterieur.joueurs);
+  const remplacementsDom = genererRemplacements(compoDomAvecNote, bancDom, forceDom.niveauCoach, forceDom.adaptabiliteCoach).map((r) => ({ ...r, game_club_id: domicile.gameClubId }));
+  const remplacementsExt = genererRemplacements(compoExtAvecNote, bancExt, forceExt.niveauCoach, forceExt.adaptabiliteCoach).map((r) => ({ ...r, game_club_id: exterieur.gameClubId }));
+
+  // Étapes 5 & 6 (les remplaçants entrés en jeu peuvent être buteur/passeur)
+  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsDom);
+  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsExt);
   const tousLesButs = [...buteursDom, ...buteursExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 7
-  const cartonsDom = genererCartonsEquipe(stats.domicile.fautes, compoDom, domicile.joueurs, domicile.gameClubId);
-  const cartonsExt = genererCartonsEquipe(stats.exterieur.fautes, compoExt, exterieur.joueurs, exterieur.gameClubId);
+  const cartonsDom = genererCartonsEquipe(stats.domicile.fautes, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsDom);
+  const cartonsExt = genererCartonsEquipe(stats.exterieur.fautes, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsExt);
   const tousLesCartons = [...cartonsDom, ...cartonsExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 8
   const intensiteMatch = clamp((domination.danger.domicile + domination.danger.exterieur) / 140, 0.3, 1.3);
-  const blessuresDom = genererBlessuresEquipe(compoDom, domicile.joueurs, domicile.gameClubId, intensiteMatch);
-  const blessuresExt = genererBlessuresEquipe(compoExt, exterieur.joueurs, exterieur.gameClubId, intensiteMatch);
+  const blessuresDom = genererBlessuresEquipe(compoDom, domicile.joueurs, domicile.gameClubId, intensiteMatch, remplacementsDom);
+  const blessuresExt = genererBlessuresEquipe(compoExt, exterieur.joueurs, exterieur.gameClubId, intensiteMatch, remplacementsExt);
   const toutesLesBlessures = [...blessuresDom, ...blessuresExt].sort((a, b) => a.minute - b.minute);
 
-  // Étape 9
+  // Étape 9 (notes incluant les entrants, variance selon la régularité de chaque joueur)
   const notesDom = calculerNotesJoueurs({
     compositions: compoDom,
+    joueurs: domicile.joueurs,
+    remplacements: remplacementsDom,
     gameClubId: domicile.gameClubId,
     buteurs: tousLesButs,
     passeurs: tousLesButs, // les passeurs sont inclus dans les mêmes objets "but"
@@ -591,6 +893,8 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   });
   const notesExt = calculerNotesJoueurs({
     compositions: compoExt,
+    joueurs: exterieur.joueurs,
+    remplacements: remplacementsExt,
     gameClubId: exterieur.gameClubId,
     buteurs: tousLesButs,
     passeurs: tousLesButs,
@@ -629,6 +933,7 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
       passeurs: tousLesButs.filter((b) => b.passeur_id).map((b) => ({ minute: b.minute, game_club_id: b.game_club_id, player_id: b.passeur_id, player_nom: b.passeur_nom, but_de: b.buteur_id })),
       cartons: tousLesCartons,
       blessures: toutesLesBlessures,
+      remplacements: [...remplacementsDom, ...remplacementsExt].sort((a, b) => a.minute - b.minute),
       notes_joueurs: { domicile: notesDom, exterieur: notesExt },
       homme_du_match: hommeDuMatch,
       resume,
@@ -649,4 +954,12 @@ module.exports = {
   calculerNotesJoueurs,
   genererResume,
   noteJoueurMatch,
+  // impact tactique
+  profilTactique,
+  calculerMismatchTactique,
+  // banc / remplacements
+  selectionnerBanc,
+  genererRemplacements,
+  compositionEffective,
+  inferRolePrincipal,
 };
