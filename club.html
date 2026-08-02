@@ -238,7 +238,14 @@
     flex: 0 0 auto; padding: 14px 18px; border-bottom: 1px solid var(--border);
     font-weight: 700; font-size: 14px;
   }
-  .fm-comp-calendar-list { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+  .fm-comp-calendar-list {
+    flex: 1; min-height: 0; overflow-y: auto; position: relative;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent;
+  }
+  .fm-comp-calendar-list::-webkit-scrollbar { width: 6px; }
+  .fm-comp-calendar-list::-webkit-scrollbar-track { background: transparent; }
+  .fm-comp-calendar-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
+  .fm-comp-calendar-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.26); }
   .fm-comp-match-row {
     display: flex; align-items: center; gap: 14px; padding: 12px 18px;
     border-bottom: 1px solid var(--border); font-size: 12.5px;
@@ -279,16 +286,22 @@
   .fm-comp-match-score.victoire { color: var(--accent); border-color: #2f6b45; background: rgba(74,222,128,0.1); }
   .fm-comp-match-score.defaite { color: #f87171; border-color: #7a2f2f; background: rgba(248,113,113,0.1); }
   .fm-comp-match-score.nul { color: var(--text-dim); }
+  /* Le pane de droite n'a pas de hauteur de conteneur fixe ici (la page
+     scrolle, contrairement au dashboard) : on lui donne donc une hauteur
+     explicite (comme le calendrier juste au-dessus) plutot qu'un flex:1,
+     pour que la carte carree puisse combler cet espace. */
   .fm-comp-right-pane {
-    width: 100%; display: grid; gap: 14px;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    width: 100%; display: flex; flex-wrap: wrap; align-content: stretch; gap: 14px;
+    height: min(50vh, 520px);
   }
   .fm-comp-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 16px 18px; cursor: pointer; transition: border-color 0.15s;
+    display: flex; flex-direction: column; overflow: hidden;
+    aspect-ratio: 1 / 1; min-height: 280px; max-height: 520px;
   }
   .fm-comp-card:hover { border-color: var(--gold); }
-  .fm-comp-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+  .fm-comp-card-head { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
   .fm-comp-card-title { font-size: 15px; font-weight: 800; }
   .fm-comp-card-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
   .fm-comp-card-tag {
@@ -296,29 +309,47 @@
     background: rgba(251,191,36,0.12); color: var(--gold); border: 1px solid #7a5c0f;
     border-radius: 999px; padding: 3px 9px; flex-shrink: 0; white-space: nowrap;
   }
-  .fm-comp-card-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .fm-comp-card-stats { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .fm-comp-stat .label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.03em; margin-bottom: 3px; }
   .fm-comp-stat .value { font-size: 15px; font-weight: 700; }
-  .fm-comp-mini-standings {
-    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
-    display: flex; flex-direction: column; gap: 2px;
+  .fm-comp-mini-standings-wrap {
+    flex: 1; min-height: 0; overflow-y: auto; margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--border);
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent;
   }
-  .fm-comp-mini-row {
-    display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: 11.5px;
+  .fm-comp-mini-standings-wrap::-webkit-scrollbar { width: 6px; }
+  .fm-comp-mini-standings-wrap::-webkit-scrollbar-track { background: transparent; }
+  .fm-comp-mini-standings-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
+  .fm-comp-mini-standings-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.26); }
+  .fm-comp-mini-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .fm-comp-mini-table th {
+    position: sticky; top: 0; background: var(--panel); text-align: left; font-size: 9.5px;
+    text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim);
+    padding: 4px 6px; border-bottom: 1px solid var(--border);
   }
-  .fm-comp-mini-row .rk { width: 22px; flex-shrink: 0; color: var(--text-dim); font-weight: 700; }
-  .fm-comp-mini-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fm-comp-mini-row.me { background: rgba(251,191,36,0.1); }
-  .fm-comp-mini-row.me .rk { color: var(--gold); }
-  .fm-comp-mini-row.me .nm { font-weight: 800; color: var(--text); }
+  .fm-comp-mini-table tbody tr { cursor: pointer; }
+  .fm-comp-mini-table tbody tr:hover td { background: rgba(255,255,255,0.03); }
+  .fm-comp-mini-table td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .fm-comp-mini-table tr:last-child td { border-bottom: none; }
+  .fm-comp-mini-table tr.me td { background: rgba(251,191,36,0.1); }
+  .fm-comp-mini-table tr.me .clt, .fm-comp-mini-table tr.me .nm { color: var(--gold); font-weight: 800; }
+  .fm-comp-mini-table td.clt { color: var(--text-dim); width: 24px; }
+  .fm-comp-mini-table td.nm {
+    max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; cursor: pointer; font-weight: 600;
+  }
+  .fm-comp-mini-table td.nm:hover { color: var(--gold); text-decoration: underline; }
+  .fm-comp-mini-table td.num { color: var(--text-dim); text-align: center; width: 28px; }
+  .fm-comp-mini-table td.pts { font-weight: 700; text-align: center; width: 30px; color: var(--text); }
   .fm-comp-card-footer {
-    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+    flex: 0 0 auto; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
     font-size: 11.5px; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center;
   }
   .fm-comp-empty { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
   @media (max-width: 900px) {
     .fm-comp-calendar-pane { height: 56vh; }
-    .fm-comp-right-pane { grid-template-columns: 1fr; }
+    .fm-comp-right-pane { flex-direction: column; flex-wrap: nowrap; height: auto; }
+    .fm-comp-card { aspect-ratio: auto; height: 420px; max-height: none; }
     .fm-comp-card-stats { grid-template-columns: repeat(2, 1fr); }
   }
 
@@ -1669,31 +1700,41 @@ async function getDivisionStandings(nation, division) {
 
   if (error || !rivals || rivals.length === 0) return [];
 
-  if (rivals.every(r => r.classement != null)) {
-    return rivals
-      .slice()
-      .sort((a, b) => a.classement - b.classement)
-      .map(r => ({ id: r.game_club_id, nom: r.nom, rank: r.classement }));
-  }
-
+  // On recupere toujours les stats completes (V/N/D/buts) en plus du rang,
+  // pour pouvoir afficher un mini-classement detaille (points, matchs joues,
+  // diff de buts) partout ou getDivisionStandings est utilisee.
   const { data: full } = await supabaseClient
     .from("game_clubs")
-    .select("id, classement, points, buts_pour, buts_contre")
+    .select("id, classement, points, victoires, nuls, defaites, buts_pour, buts_contre")
     .in("id", rivals.map(r => r.game_club_id));
 
   const nomMap = {};
   rivals.forEach(r => { nomMap[r.game_club_id] = r.nom; });
+  const statsMap = {};
+  (full || []).forEach(c => { statsMap[c.id] = c; });
 
-  const sorted = (full || []).slice().sort((a, b) => {
+  const sorted = rivals.slice().sort((a, b) => {
+    const sa = statsMap[a.game_club_id] || {};
+    const sb = statsMap[b.game_club_id] || {};
     if (a.classement != null && b.classement != null) return a.classement - b.classement;
-    if ((b.points ?? 0) !== (a.points ?? 0)) return (b.points ?? 0) - (a.points ?? 0);
-    const diffA = (a.buts_pour ?? 0) - (a.buts_contre ?? 0);
-    const diffB = (b.buts_pour ?? 0) - (b.buts_contre ?? 0);
+    if ((sb.points ?? 0) !== (sa.points ?? 0)) return (sb.points ?? 0) - (sa.points ?? 0);
+    const diffA = (sa.buts_pour ?? 0) - (sa.buts_contre ?? 0);
+    const diffB = (sb.buts_pour ?? 0) - (sb.buts_contre ?? 0);
     if (diffB !== diffA) return diffB - diffA;
-    return (b.buts_pour ?? 0) - (a.buts_pour ?? 0);
+    return (sb.buts_pour ?? 0) - (sa.buts_pour ?? 0);
   });
 
-  return sorted.map((c, i) => ({ id: c.id, nom: nomMap[c.id] || "?", rank: c.classement ?? (i + 1) }));
+  return sorted.map((r, i) => {
+    const s = statsMap[r.game_club_id] || {};
+    const joues = (s.victoires ?? 0) + (s.nuls ?? 0) + (s.defaites ?? 0);
+    const diff = (s.buts_pour ?? 0) - (s.buts_contre ?? 0);
+    return {
+      id: r.game_club_id, nom: nomMap[r.game_club_id] || "?",
+      rank: r.classement ?? (i + 1),
+      points: s.points ?? 0, joues, diff,
+      victoires: s.victoires ?? 0, nuls: s.nuls ?? 0, defaites: s.defaites ?? 0,
+    };
+  });
 }
 
 async function getClubMatches(clubId) {
@@ -1840,16 +1881,28 @@ async function renderCompetitionsTab(viewedClubId) {
   const nbClubs = comp.nb_clubs || standingsList.length;
   const diff = (clubRow?.buts_pour ?? 0) - (clubRow?.buts_contre ?? 0);
 
-  const myIndex = standingsList.findIndex(r => String(r.id) === String(viewedClubId));
-  const windowStart = myIndex === -1 ? -1 : Math.max(0, myIndex - 2);
-  const windowRows = myIndex === -1 ? [] : standingsList.slice(windowStart, windowStart + 5);
-  const miniStandingsHtml = windowRows.length ? `
-    <div class="fm-comp-mini-standings">
-      ${windowRows.map(r => `
-        <div class="fm-comp-mini-row ${String(r.id) === String(viewedClubId) ? "me" : ""}" data-club-id="${r.id}">
-          <span class="rk">${r.rank}e</span><span class="nm">${escapeHtml(r.nom)}</span>
-        </div>
-      `).join("")}
+  // Mini-classement complet (comme l'onglet Classement) : Clt / Club / J /
+  // Diff / Pts pour chaque club de la division, avec le club consulte mis
+  // en avant. La carte etant carree et remplissant l'espace vertical
+  // disponible, la table scrolle en interne si la division est grande.
+  const miniStandingsHtml = standingsList.length ? `
+    <div class="fm-comp-mini-standings-wrap">
+      <table class="fm-comp-mini-table">
+        <thead>
+          <tr><th>Clt</th><th>Club</th><th>J</th><th>Diff</th><th>Pts</th></tr>
+        </thead>
+        <tbody>
+          ${standingsList.map(r => `
+            <tr class="${String(r.id) === String(viewedClubId) ? "me" : ""}" data-club-id="${r.id}">
+              <td class="clt">${r.rank}e</td>
+              <td class="nm">${escapeHtml(r.nom)}</td>
+              <td class="num">${r.joues}</td>
+              <td class="num">${r.diff >= 0 ? "+" : ""}${r.diff}</td>
+              <td class="pts">${r.points}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
     </div>
   ` : "";
 
@@ -1877,10 +1930,10 @@ async function renderCompetitionsTab(viewedClubId) {
   `;
 
   document.getElementById(`fmCompCard-${comp.id}`).addEventListener("click", (e) => {
-    if (e.target.closest(".fm-comp-mini-row")) return;
+    if (e.target.closest(".fm-comp-mini-table tr")) return;
     window.location.href = `competition.html?game=${encodeURIComponent(gameId)}&competition=${encodeURIComponent(comp.id)}&club=${encodeURIComponent(viewedClubId)}`;
   });
-  rightEl.querySelectorAll(".fm-comp-mini-row").forEach(rowEl => {
+  rightEl.querySelectorAll(".fm-comp-mini-table tr[data-club-id]").forEach(rowEl => {
     rowEl.addEventListener("click", (e) => {
       e.stopPropagation();
       const clubId = rowEl.getAttribute("data-club-id");
