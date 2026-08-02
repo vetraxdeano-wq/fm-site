@@ -1076,26 +1076,39 @@
   .fm-inbox-detail-meta .sender { color: var(--text); font-weight: 600; font-size: 13px; }
   .fm-inbox-detail-body { font-size: 13.5px; line-height: 1.7; white-space: pre-line; }
 
-  /* ---- Compétitions (sous-onglet) : calendrier a gauche, compétitions a droite ---- */
-  .fm-competitions-view { width: 100%; height: 100%; display: flex; gap: 16px; min-height: 0; }
+  /* ---- Compétitions (sous-onglet) : calendrier horizontal en haut (pleine
+     largeur, plus d'espace), compétitions du club en dessous ---- */
+  .fm-competitions-view { width: 100%; height: 100%; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
   .fm-comp-calendar-pane {
-    width: 380px; flex: 0 0 380px; background: var(--panel); border: 1px solid var(--border);
+    width: 100%; flex: 0 0 auto; background: var(--panel); border: 1px solid var(--border);
     border-radius: 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    height: min(46vh, 460px);
   }
   .fm-comp-calendar-header {
-    flex: 0 0 auto; padding: 14px 16px; border-bottom: 1px solid var(--border);
-    font-weight: 700; font-size: 14px;
+    flex: 0 0 auto; padding: 14px 18px; border-bottom: 1px solid var(--border);
+    font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: space-between;
   }
-  .fm-comp-calendar-list { flex: 1; min-height: 0; overflow-y: auto; }
+  .fm-comp-calendar-header .hint { font-size: 11px; font-weight: 500; color: var(--text-dim); text-transform: none; }
+  .fm-comp-calendar-list { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
   .fm-comp-match-row {
-    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    display: flex; align-items: center; gap: 14px; padding: 12px 18px;
     border-bottom: 1px solid var(--border); font-size: 12.5px;
   }
   .fm-comp-match-row:last-child { border-bottom: none; }
-  .fm-comp-match-date { width: 60px; flex-shrink: 0; color: var(--text-dim); line-height: 1.3; text-transform: capitalize; }
+  .fm-comp-match-row.played { opacity: 0.82; }
+  .fm-comp-match-row.next {
+    background: rgba(251,191,36,0.07); border-left: 3px solid var(--gold);
+    padding-left: 15px; opacity: 1;
+  }
+  .fm-comp-match-row.next .fm-comp-match-tag {
+    display: inline-block; margin-left: 8px; font-size: 9.5px; text-transform: uppercase;
+    letter-spacing: 0.04em; font-weight: 700; color: var(--gold);
+    background: rgba(251,191,36,0.12); border: 1px solid #7a5c0f; border-radius: 999px; padding: 2px 7px;
+  }
+  .fm-comp-match-date { width: 64px; flex-shrink: 0; color: var(--text-dim); line-height: 1.3; text-transform: capitalize; }
   .fm-comp-match-date .day { font-weight: 700; color: var(--text); font-size: 13px; display: block; }
   .fm-comp-match-journee {
-    width: 32px; flex-shrink: 0; font-size: 10.5px; color: var(--text-dim); text-align: center;
+    width: 34px; flex-shrink: 0; font-size: 10.5px; color: var(--text-dim); text-align: center;
     background: #14171d; border: 1px solid var(--border); border-radius: 6px; padding: 3px 0;
   }
   .fm-comp-match-side {
@@ -1110,7 +1123,17 @@
     flex-shrink: 0; font-size: 11px; color: var(--text-dim); background: #14171d;
     border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px;
   }
-  .fm-comp-right-pane { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+  .fm-comp-match-score {
+    flex-shrink: 0; font-size: 12.5px; font-weight: 800; border-radius: 999px; padding: 3px 11px;
+    border: 1px solid var(--border); background: #14171d; color: var(--text);
+  }
+  .fm-comp-match-score.victoire { color: var(--accent); border-color: #2f6b45; background: rgba(74,222,128,0.1); }
+  .fm-comp-match-score.defaite { color: #f87171; border-color: #7a2f2f; background: rgba(248,113,113,0.1); }
+  .fm-comp-match-score.nul { color: var(--text-dim); }
+  .fm-comp-right-pane {
+    width: 100%; flex: 0 0 auto; display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
   .fm-comp-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 16px 18px; cursor: pointer; transition: border-color 0.15s;
@@ -1127,14 +1150,29 @@
   .fm-comp-card-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .fm-comp-stat .label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.03em; margin-bottom: 3px; }
   .fm-comp-stat .value { font-size: 15px; font-weight: 700; }
+  .fm-comp-mini-standings {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .fm-comp-mini-row {
+    display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: 11.5px;
+  }
+  .fm-comp-mini-row .rk { width: 22px; flex-shrink: 0; color: var(--text-dim); font-weight: 700; }
+  .fm-comp-mini-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fm-comp-mini-row.me { background: rgba(251,191,36,0.1); }
+  .fm-comp-mini-row.me .rk { color: var(--gold); }
+  .fm-comp-mini-row.me .nm { font-weight: 800; color: var(--text); }
   .fm-comp-card-footer {
     margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
     font-size: 11.5px; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center;
   }
   .fm-comp-empty { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  /* ---- Module "prochains matchs" reutilise sur la page d'accueil ---- */
+  .fm-comp-calendar-list--compact .fm-comp-match-row { padding: 10px 0; }
+  .fm-comp-calendar-list--compact .fm-comp-match-row.next { padding-left: 10px; }
   @media (max-width: 900px) {
-    .fm-competitions-view { flex-direction: column; }
-    .fm-comp-calendar-pane { width: 100%; flex: 0 0 auto; max-height: 50vh; }
+    .fm-comp-calendar-pane { height: 56vh; }
+    .fm-comp-right-pane { grid-template-columns: 1fr; }
     .fm-comp-card-stats { grid-template-columns: repeat(2, 1fr); }
   }
 
@@ -1217,7 +1255,7 @@
       <div class="fm-content" id="fmHomeView">
         <div class="fm-col">
           <div class="card">
-            <div class="fm-card-title"><span>Prochaine rencontre</span></div>
+            <div class="fm-card-title"><span>Prochains matchs</span></div>
             <div id="fmNextMatch" class="fm-empty">Chargement...</div>
           </div>
           <div class="card">
@@ -7593,39 +7631,37 @@ function renderTeamStats() {
   `;
 }
 
-function renderNextMatch() {
-  // Pas encore de calendrier de matchs relie au jeu.
-  const el = document.getElementById("fmNextMatch");
-  el.innerHTML = `Aucun match programmé pour l'instant.`;
-}
-
-// Classement (rang 1-based) de chaque club d'une division, sous forme de map
-// game_club_id -> rang. Utilise le classement persiste (game_clubs.classement)
-// s'il est deja renseigne pour tous les clubs de la division, sinon le
-// recalcule a la volee via points/diff/buts pour (utile en pre-saison, avant
-// le premier recalcul officiel des classements).
-async function getDivisionStandingsMap(nation, division) {
-  if (!nation || !division) return {};
+// Classement d'une division sous forme de liste ordonnee [{id, nom, rank}, ...].
+// Utilise le classement persiste (game_clubs.classement) s'il est deja
+// renseigne pour tous les clubs de la division, sinon le recalcule a la
+// volee via points/diff/buts pour (utile en pre-saison, avant le premier
+// recalcul officiel des classements).
+async function getDivisionStandings(nation, division) {
+  if (!nation || !division) return [];
 
   const { data: rivals, error } = await supabaseClient
     .from("game_club_overview")
-    .select("game_club_id, classement")
+    .select("game_club_id, nom, classement")
     .eq("game_id", gameId)
     .eq("nation", nation)
     .eq("division", division);
 
-  if (error || !rivals || rivals.length === 0) return {};
+  if (error || !rivals || rivals.length === 0) return [];
 
   if (rivals.every(r => r.classement != null)) {
-    const map = {};
-    rivals.forEach(r => { map[r.game_club_id] = r.classement; });
-    return map;
+    return rivals
+      .slice()
+      .sort((a, b) => a.classement - b.classement)
+      .map(r => ({ id: r.game_club_id, nom: r.nom, rank: r.classement }));
   }
 
   const { data: full } = await supabaseClient
     .from("game_clubs")
     .select("id, classement, points, buts_pour, buts_contre")
     .in("id", rivals.map(r => r.game_club_id));
+
+  const nomMap = {};
+  rivals.forEach(r => { nomMap[r.game_club_id] = r.nom; });
 
   const sorted = (full || []).slice().sort((a, b) => {
     if (a.classement != null && b.classement != null) return a.classement - b.classement;
@@ -7636,9 +7672,119 @@ async function getDivisionStandingsMap(nation, division) {
     return (b.buts_pour ?? 0) - (a.buts_pour ?? 0);
   });
 
+  return sorted.map((c, i) => ({ id: c.id, nom: nomMap[c.id] || "?", rank: c.classement ?? (i + 1) }));
+}
+
+// Map game_club_id -> rang, derivee de getDivisionStandings.
+async function getDivisionStandingsMap(nation, division) {
+  const list = await getDivisionStandings(nation, division);
   const map = {};
-  sorted.forEach((c, i) => { map[c.id] = c.classement ?? (i + 1); });
+  list.forEach(r => { map[r.id] = r.rank; });
   return map;
+}
+
+// Calendrier complet d'un club (matchs joues + matchs a venir), trie
+// chronologiquement, avec le nom de l'adversaire resolu et un flag `played`
+// (present des lors que les deux scores sont renseignes, independamment du
+// libelle exact utilise pour le statut).
+async function getClubMatches(clubId) {
+  const { data: matches, error } = await supabaseClient
+    .from("calendrier")
+    .select("id, date_match, journee, club_domicile_id, club_exterieur_id, score_domicile, score_exterieur")
+    .eq("game_id", gameId)
+    .or(`club_domicile_id.eq.${clubId},club_exterieur_id.eq.${clubId}`)
+    .order("date_match", { ascending: true });
+
+  if (error || !matches) return [];
+
+  const oppIds = [...new Set(matches.map(m =>
+    m.club_domicile_id === clubId ? m.club_exterieur_id : m.club_domicile_id
+  ))];
+  const { data: oppClubs } = await supabaseClient
+    .from("game_clubs")
+    .select("id, nom")
+    .in("id", oppIds);
+  const oppMap = {};
+  (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; });
+
+  return matches.map(m => {
+    const isHome = m.club_domicile_id === clubId;
+    const oppId = isHome ? m.club_exterieur_id : m.club_domicile_id;
+    return {
+      ...m,
+      isHome,
+      oppId,
+      oppName: oppMap[oppId] || "?",
+      played: m.score_domicile != null && m.score_exterieur != null,
+    };
+  });
+}
+
+// Rendu d'une ligne de calendrier : score + issue (V/N/D) pour un match
+// joue, classement de l'adversaire pour un match a venir. `opts.isNext`
+// marque la ligne comme le prochain match (mise en avant + ancre de scroll).
+function renderMatchRow(m, standingsMap, opts = {}) {
+  const d = m.date_match ? new Date(m.date_match) : null;
+  const dayLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "-";
+  const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "") : "";
+
+  let resultHtml;
+  let rowClass = "fm-comp-match-row";
+  if (m.played) {
+    rowClass += " played";
+    const myScore = m.isHome ? m.score_domicile : m.score_exterieur;
+    const oppScore = m.isHome ? m.score_exterieur : m.score_domicile;
+    const outcome = myScore > oppScore ? "victoire" : myScore < oppScore ? "defaite" : "nul";
+    resultHtml = `<div class="fm-comp-match-score ${outcome}">${myScore}-${oppScore}</div>`;
+  } else {
+    const oppRank = standingsMap[m.oppId] ? `${standingsMap[m.oppId]}e` : "—";
+    resultHtml = `<div class="fm-comp-match-rank">${oppRank}</div>`;
+  }
+  if (opts.isNext) rowClass += " next";
+
+  return `
+    <div class="${rowClass}" ${opts.isNext ? 'data-next="true"' : ""}>
+      <div class="fm-comp-match-date"><span class="day">${dayLabel}</span>${weekday}</div>
+      <div class="fm-comp-match-journee">J${m.journee ?? "-"}</div>
+      <div class="fm-comp-match-side ${m.isHome ? "dom" : "ext"}">${m.isHome ? "D" : "E"}</div>
+      <div class="fm-comp-match-opp" data-club-id="${m.oppId}">${escapeHtml(m.oppName)}${opts.isNext ? `<span class="fm-comp-match-tag">Prochain</span>` : ""}</div>
+      ${resultHtml}
+    </div>
+  `;
+}
+
+function bindMatchRowClicks(container) {
+  container.querySelectorAll(".fm-comp-match-opp").forEach(el => {
+    el.addEventListener("click", () => {
+      const clubId = el.getAttribute("data-club-id");
+      if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+    });
+  });
+}
+
+async function renderNextMatch() {
+  const el = document.getElementById("fmNextMatch");
+  el.innerHTML = `Chargement...`;
+  if (!myGameClubId) {
+    el.innerHTML = `Aucun match programmé pour l'instant.`;
+    return;
+  }
+
+  const [matches, standingsMap] = await Promise.all([
+    getClubMatches(myGameClubId),
+    getDivisionStandingsMap(myClubNation, myClubDivision),
+  ]);
+  const upcoming = matches.filter(m => !m.played).slice(0, 5);
+
+  if (upcoming.length === 0) {
+    el.innerHTML = `Aucun match programmé pour l'instant.`;
+    return;
+  }
+
+  el.innerHTML = `<div class="fm-comp-calendar-list fm-comp-calendar-list--compact">${
+    upcoming.map((m, i) => renderMatchRow(m, standingsMap, { isNext: i === 0 })).join("")
+  }</div>`;
+  bindMatchRowClicks(el);
 }
 
 async function showFmCompetitionsView(gameClubId) {
@@ -7666,61 +7812,33 @@ async function renderCompetitionsView(gameClubId) {
     return;
   }
 
-  const standingsMap = await getDivisionStandingsMap(myClubNation, myClubDivision);
+  const standingsList = await getDivisionStandings(myClubNation, myClubDivision);
+  const standingsMap = {};
+  standingsList.forEach(r => { standingsMap[r.id] = r.rank; });
 
-  // --- Colonne gauche : calendrier des prochains matchs du club ---
-  const { data: matches, error: matchesError } = await supabaseClient
-    .from("calendrier")
-    .select("id, date_match, journee, club_domicile_id, club_exterieur_id, statut")
-    .eq("game_id", gameId)
-    .or(`club_domicile_id.eq.${gameClubId},club_exterieur_id.eq.${gameClubId}`)
-    .eq("statut", "a_jouer")
-    .order("date_match", { ascending: true });
+  // --- Calendrier : matchs joues (avec resultat) + matchs a venir, tries
+  // chronologiquement. Le prochain match est toujours mis en avant ; la
+  // liste est ouverte avec ce match ancre en haut de la zone visible (les
+  // resultats passes restent accessibles en remontant le scroll). ---
+  const matches = await getClubMatches(gameClubId);
 
-  if (matchesError) {
-    calEl.innerHTML = `<div class="fm-comp-empty">Impossible de charger le calendrier.</div>`;
-  } else if (!matches || matches.length === 0) {
-    calEl.innerHTML = `<div class="fm-comp-empty">Aucun match à venir programmé.</div>`;
+  if (matches.length === 0) {
+    calEl.innerHTML = `<div class="fm-comp-empty">Aucun match programmé.</div>`;
   } else {
-    const oppIds = [...new Set(matches.map(m =>
-      m.club_domicile_id === gameClubId ? m.club_exterieur_id : m.club_domicile_id
-    ))];
-    const { data: oppClubs } = await supabaseClient
-      .from("game_clubs")
-      .select("id, nom")
-      .in("id", oppIds);
-    const oppMap = {};
-    (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; });
+    const nextIndex = matches.findIndex(m => !m.played);
+    calEl.innerHTML = matches
+      .map((m, i) => renderMatchRow(m, standingsMap, { isNext: i === nextIndex }))
+      .join("");
+    bindMatchRowClicks(calEl);
 
-    calEl.innerHTML = matches.map(m => {
-      const isHome = m.club_domicile_id === gameClubId;
-      const oppId = isHome ? m.club_exterieur_id : m.club_domicile_id;
-      const oppName = oppMap[oppId] || "?";
-      const oppRank = standingsMap[oppId] ? `${standingsMap[oppId]}e` : "—";
-      const d = m.date_match ? new Date(m.date_match) : null;
-      const dayLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "-";
-      const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "") : "";
-      return `
-        <div class="fm-comp-match-row">
-          <div class="fm-comp-match-date"><span class="day">${dayLabel}</span>${weekday}</div>
-          <div class="fm-comp-match-journee">J${m.journee ?? "-"}</div>
-          <div class="fm-comp-match-side ${isHome ? "dom" : "ext"}">${isHome ? "D" : "E"}</div>
-          <div class="fm-comp-match-opp" data-club-id="${oppId}">${escapeHtml(oppName)}</div>
-          <div class="fm-comp-match-rank">${oppRank}</div>
-        </div>
-      `;
-    }).join("");
-
-    calEl.querySelectorAll(".fm-comp-match-opp").forEach(el => {
-      el.addEventListener("click", () => {
-        const clubId = el.getAttribute("data-club-id");
-        if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
-      });
+    requestAnimationFrame(() => {
+      const nextRow = calEl.querySelector('[data-next="true"]');
+      if (nextRow) calEl.scrollTop = Math.max(0, nextRow.offsetTop - 4);
     });
   }
 
-  // --- Colonne droite : compétitions auxquelles participe le club (le
-  // championnat pour l'instant ; les coupes viendront s'ajouter ici) ---
+  // --- Compétitions auxquelles participe le club (le championnat pour
+  // l'instant ; les coupes viendront s'ajouter ici) ---
   const { data: comp, error: compError } = await supabaseClient
     .from("competitions")
     .select("id, nom, tier, nb_clubs")
@@ -7741,8 +7859,22 @@ async function renderCompetitionsView(gameClubId) {
     .single();
 
   const rank = standingsMap[gameClubId];
-  const nbClubs = comp.nb_clubs || Object.keys(standingsMap).length;
+  const nbClubs = comp.nb_clubs || standingsList.length;
   const diff = (clubRow?.buts_pour ?? 0) - (clubRow?.buts_contre ?? 0);
+
+  // Classement approximatif : les 2 equipes au-dessus et les 2 en-dessous.
+  const myIndex = standingsList.findIndex(r => String(r.id) === String(gameClubId));
+  const windowStart = myIndex === -1 ? -1 : Math.max(0, myIndex - 2);
+  const windowRows = myIndex === -1 ? [] : standingsList.slice(windowStart, windowStart + 5);
+  const miniStandingsHtml = windowRows.length ? `
+    <div class="fm-comp-mini-standings">
+      ${windowRows.map(r => `
+        <div class="fm-comp-mini-row ${String(r.id) === String(gameClubId) ? "me" : ""}" data-club-id="${r.id}">
+          <span class="rk">${r.rank}e</span><span class="nm">${escapeHtml(r.nom)}</span>
+        </div>
+      `).join("")}
+    </div>
+  ` : "";
 
   rightEl.innerHTML = `
     <div class="fm-comp-card" id="fmCompCard-${comp.id}">
@@ -7759,6 +7891,7 @@ async function renderCompetitionsView(gameClubId) {
         <div class="fm-comp-stat"><div class="label">Bilan</div><div class="value">${clubRow?.victoires ?? 0}V ${clubRow?.nuls ?? 0}N ${clubRow?.defaites ?? 0}D</div></div>
         <div class="fm-comp-stat"><div class="label">Diff.</div><div class="value">${diff >= 0 ? "+" : ""}${diff}</div></div>
       </div>
+      ${miniStandingsHtml}
       <div class="fm-comp-card-footer">
         <span>Classement, stats et prochains matchs de la compétition</span>
         <span>→</span>
@@ -7766,8 +7899,16 @@ async function renderCompetitionsView(gameClubId) {
     </div>
   `;
 
-  document.getElementById(`fmCompCard-${comp.id}`).addEventListener("click", () => {
+  document.getElementById(`fmCompCard-${comp.id}`).addEventListener("click", (e) => {
+    if (e.target.closest(".fm-comp-mini-row")) return;
     window.location.href = `competition.html?game=${encodeURIComponent(gameId)}&competition=${encodeURIComponent(comp.id)}&club=${encodeURIComponent(gameClubId)}`;
+  });
+  rightEl.querySelectorAll(".fm-comp-mini-row").forEach(rowEl => {
+    rowEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const clubId = rowEl.getAttribute("data-club-id");
+      if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+    });
   });
 }
 
