@@ -333,16 +333,12 @@
   .fm-col .card > *:not(.fm-card-title)::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
   .fm-col .card > *:not(.fm-card-title)::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.26); }
 
-  /* Prochains / derniers matchs : la carte prend exactement la hauteur de
-     son contenu (3 lignes) plutot que sa part egale de la colonne, pour ne
-     jamais avoir besoin de scroller. */
+  /* Prochains / derniers matchs, Stats de l'equipe et Finances : chaque
+     carte prend exactement la hauteur de son contenu (jamais besoin de
+     scroller dedans). Le Classement recupere tout l'espace restant de la
+     colonne et scrolle en interne si sa division est grande. */
   .fm-col .card.card-fit { flex: 0 0 auto; }
   .fm-col .card.card-fit > *:not(.fm-card-title) { flex: 0 0 auto; overflow: hidden; }
-
-  /* Finances agrandie (graphique lisible) au detriment de Stats de
-     l'equipe, reduite. */
-  .fm-col .card.card-team-stats { flex: 0 0 130px; }
-  .fm-col .card.card-finances { flex: 0 0 220px; }
 
   .card-clickable { cursor: pointer; transition: border-color 0.15s; }
   .card-clickable:hover { border-color: var(--text-dim); }
@@ -1351,11 +1347,11 @@
             <div class="fm-card-title"><span>Classement</span> <span class="chev">▾</span></div>
             <div id="fmStandings" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card card-team-stats">
+          <div class="card card-fit">
             <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
             <div id="fmTeamStats" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card card-finances">
+          <div class="card card-fit">
             <div class="fm-card-title"><span>Finances</span></div>
             <div id="fmFinances" class="fm-empty">Chargement...</div>
           </div>
@@ -4124,9 +4120,11 @@ function groupStaffByRole(members) {
 }
 
 // Nombre de fiches affichees directement dans une colonne avant de replier le
-// reste sous une case "+X" (l'onglet Effectif ne doit jamais avoir besoin
-// d'etre scrolle pour tout voir d'un coup d'oeil).
-const STAFF_COL_PREVIEW_MAX = 3;
+// reste sous une case "+X". Valeur de depart ; recalculee dynamiquement
+// (cf. adjustStaffColPreviewMax) pour remplir toute la hauteur visible du
+// panneau Effectif au lieu d'un nombre fixe, le reste restant accessible
+// via "+X..." (ou la modale complete).
+let staffColPreviewMax = 3;
 
 function renderStaffColumns() {
   const el = document.getElementById("staffColumns");
@@ -4146,7 +4144,7 @@ function renderStaffColumns() {
       const sb = Number.isFinite(Number(b.salaire_actuel)) ? Number(b.salaire_actuel) : -Infinity;
       return sb !== sa ? sb - sa : (a.nom || "").localeCompare(b.nom || "", "fr");
     });
-    const preview = ordered.slice(0, STAFF_COL_PREVIEW_MAX);
+    const preview = ordered.slice(0, staffColPreviewMax);
     const remaining = ordered.length - preview.length;
 
     const membersHtml = ordered.length > 0
@@ -4179,6 +4177,47 @@ function renderStaffColumns() {
       const member = staffViewMembers.find(m => String(m.id) === String(id));
       const dept = card.closest(".staff-column")?.getAttribute("data-dept");
       if (member) openStaffModal(member, locked, dept);
+    });
+  });
+}
+
+// Recalcule combien de fiches afficher par colonne pour remplir toute la
+// hauteur visible du panneau Effectif (au lieu du nombre fixe de depart),
+// en mesurant la hauteur reelle d'une carte et du recap deja rendus. Ne
+// re-rend que si le nombre obtenu differe de celui utilise pour le rendu
+// en cours, pour eviter toute boucle.
+let staffColAdjustScheduled = false;
+function adjustStaffColPreviewMax() {
+  const panel = document.getElementById("staffEffectifPanel");
+  const column = document.querySelector(".staff-column");
+  const card = document.querySelector(".staff-member-card");
+  if (!panel || !column) return;
+
+  const cardHeight = card ? card.getBoundingClientRect().height + 10 : 76; // + margin-bottom
+  const recap = column.querySelector(".staff-col-recap");
+  const expandBtn = column.querySelector(".staff-col-expand-btn");
+  const title = column.querySelector(".staff-col-title");
+  const fixedHeight =
+    (recap ? recap.getBoundingClientRect().height : 0) +
+    (expandBtn ? expandBtn.getBoundingClientRect().height + 10 : 0) +
+    (title ? title.getBoundingClientRect().height : 0) + 40;
+
+  const available = panel.clientHeight - fixedHeight;
+  const fit = Math.max(3, Math.floor(available / cardHeight));
+
+  if (fit !== staffColPreviewMax) {
+    staffColPreviewMax = fit;
+    renderStaffColumns();
+  }
+}
+
+function scheduleStaffColAdjust() {
+  if (staffColAdjustScheduled) return;
+  staffColAdjustScheduled = true;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      staffColAdjustScheduled = false;
+      adjustStaffColPreviewMax();
     });
   });
 }
@@ -4381,6 +4420,7 @@ async function showFmStaffView(clubId) {
   const needsLeague = leagueStaffStatsLoadedFor !== gameId;
   if (!needsMembers && !needsLeague) {
     renderStaffColumns();
+    scheduleStaffColAdjust();
     return;
   }
   const el = document.getElementById("staffColumns");
@@ -4395,10 +4435,12 @@ async function showFmStaffView(clubId) {
   leagueStaffStats = league;
   leagueStaffStatsLoadedFor = gameId;
   renderStaffColumns();
+  scheduleStaffColAdjust();
 }
 
 // ---- Sous-onglets de l'onglet Staff : "Effectif" / "Base de données Staff" ----
 let staffSubtabsWired = false;
+let staffResizeWired = false;
 
 function wireStaffSubtabs(clubId) {
   if (staffSubtabsWired) return;
@@ -4412,6 +4454,18 @@ function wireStaffSubtabs(clubId) {
       }
     });
   });
+
+  if (!staffResizeWired) {
+    staffResizeWired = true;
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const panel = document.getElementById("staffEffectifPanel");
+        if (panel && !panel.classList.contains("hidden")) scheduleStaffColAdjust();
+      }, 150);
+    });
+  }
 }
 
 function showStaffEffectifSubtab() {
