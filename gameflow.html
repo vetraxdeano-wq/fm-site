@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FM Web — Gameflow</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262a33;
+    --text: #e8eaed;
+    --text-dim: #8b909c;
+    --accent: #4ade80;
+    --accent-dim: #1f6b42;
+    --danger: #ef4444;
+    --gold: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; min-height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  .back-link { color: var(--text-dim); text-decoration: none; font-size: 13px; }
+  .back-link:hover { color: var(--text); }
+  .game-name { font-weight: 700; font-size: 16px; }
+  .game-meta { font-size: 12px; color: var(--text-dim); }
+  .badge {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim);
+  }
+  .badge.host { color: var(--gold); border-color: var(--gold); }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 20px 80px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 12.5px; margin: 0 0 14px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  /* Etat de la partie */
+  .state-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .state-item { text-align: center; }
+  .state-value { font-size: 22px; font-weight: 800; }
+  .state-value.date { font-size: 15px; }
+  .state-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+
+  /* Bouton continuer */
+  .continue-panel { text-align: center; padding: 8px 0 4px; }
+  #continueBtn {
+    background: var(--gold); color: #3a2a00; border: none;
+    padding: 16px 44px; border-radius: 999px; font-weight: 800;
+    font-size: 16px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    transition: filter 0.15s, transform 0.1s;
+  }
+  #continueBtn:hover { filter: brightness(1.08); }
+  #continueBtn:active { transform: scale(0.98); }
+  #continueBtn:disabled { opacity: 0.45; cursor: default; filter: none; }
+  .continue-hint { margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+  .not-host-hint {
+    text-align: center; font-size: 13px; color: var(--text-dim);
+    padding: 14px; border: 1px dashed var(--border); border-radius: 10px;
+  }
+
+  /* Matchs du jour / journal */
+  .match-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+    font-size: 13px; border-bottom: 1px solid var(--border);
+  }
+  .match-row:last-child { border-bottom: none; }
+  .match-comp { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; width: 70px; flex-shrink: 0; }
+  .match-teams { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .match-teams .home { text-align: right; flex: 1; }
+  .match-teams .away { text-align: left; flex: 1; }
+  .match-score {
+    font-weight: 700; font-variant-numeric: tabular-nums; background: #14171d;
+    border: 1px solid var(--border); border-radius: 6px; padding: 2px 10px; flex-shrink: 0;
+  }
+  .match-score.pending { color: var(--text-dim); font-weight: 600; }
+  .empty-hint { color: var(--text-dim); font-size: 13px; text-align: center; padding: 10px 0; }
+
+  .log-entry { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .log-entry:last-child { border-bottom: none; }
+  .log-date { font-size: 12.5px; font-weight: 700; color: var(--gold); margin-bottom: 4px; }
+  .log-event { font-size: 12.5px; color: var(--text-dim); margin: 2px 0; }
+  .log-match { font-size: 12.5px; margin: 2px 0; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); padding: 10px 18px;
+    border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="back-link" id="backLink" href="dashboard.html">← Retour</a>
+    <div>
+      <div class="game-name" id="gameName">Chargement...</div>
+      <div class="game-meta" id="gameMeta"></div>
+    </div>
+  </div>
+  <span class="badge" id="hostBadge"></span>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>État de la partie</h2>
+    <div class="state-grid">
+      <div class="state-item">
+        <div class="state-value" id="stateJour">—</div>
+        <div class="state-label">Jour</div>
+      </div>
+      <div class="state-item">
+        <div class="state-value date" id="stateDate">—</div>
+        <div class="state-label">Date</div>
+      </div>
+      <div class="state-item">
+        <div class="state-value" id="stateSaison">—</div>
+        <div class="state-label">Saison</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Aujourd'hui</h2>
+    <div id="todayMatches"><div class="empty-hint">Chargement...</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Game master</h2>
+    <div class="continue-panel">
+      <button id="continueBtn" disabled>Continuer</button>
+      <div class="continue-hint" id="continueHint">Chargement...</div>
+    </div>
+  </div>
+
+  <div class="card" id="logCard">
+    <h2>Journal de la session</h2>
+    <div id="logList"><div class="empty-hint">Les jours avancés pendant cette session apparaîtront ici.</div></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const params = new URLSearchParams(window.location.search);
+const gameId = params.get("game");
+
+let userId = null;
+let currentGame = null;
+let isHost = false;
+
+function toast(msg, isError = false) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (isError ? " error" : "");
+  setTimeout(() => { el.className = "toast"; }, 2500);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function computeRealDate(dateDebut, jourActuel) {
+  if (!dateDebut) return null;
+  const base = new Date(`${dateDebut}T00:00:00`);
+  if (isNaN(base.getTime())) return null;
+  const jours = Number(jourActuel);
+  base.setDate(base.getDate() + (Number.isFinite(jours) ? jours : 0));
+  return base;
+}
+function formatRealDate(date) {
+  if (!date) return null;
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" }).format(date);
+}
+function toISODate(date) {
+  if (!date) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+async function init() {
+  document.getElementById("backLink").href = `dashboard.html?game=${encodeURIComponent(gameId || "")}`;
+
+  if (!gameId) {
+    document.getElementById("gameName").textContent = "Aucune partie spécifiée";
+    return;
+  }
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session?.user) {
+    window.location.href = "index.html";
+    return;
+  }
+  userId = session.user.id;
+
+  await loadState();
+  document.getElementById("continueBtn").addEventListener("click", onContinue);
+}
+
+async function loadState() {
+  const { data: game, error } = await supabaseClient.from("games").select().eq("id", gameId).single();
+  if (error || !game) {
+    document.getElementById("gameName").textContent = "Partie introuvable";
+    toast("Impossible de charger cette partie", true);
+    return;
+  }
+  currentGame = game;
+  isHost = game.created_by === userId;
+
+  document.getElementById("gameName").textContent = game.nom;
+  const realDate = computeRealDate(game.date_debut, game.jour_actuel);
+  document.getElementById("gameMeta").textContent = `Saison ${game.saison} · ${game.statut}`;
+
+  const hostBadge = document.getElementById("hostBadge");
+  hostBadge.textContent = isHost ? "Game master" : "Lecture seule";
+  hostBadge.className = "badge" + (isHost ? " host" : "");
+
+  document.getElementById("stateJour").textContent = game.jour_actuel ?? "—";
+  document.getElementById("stateDate").textContent = formatRealDate(realDate) || "—";
+  document.getElementById("stateSaison").textContent = game.saison ?? "—";
+
+  const btn = document.getElementById("continueBtn");
+  const hint = document.getElementById("continueHint");
+  if (!isHost) {
+    btn.classList.add("hidden");
+    hint.textContent = "Seul le créateur de la partie peut faire avancer le jeu.";
+  } else if (game.statut === "lobby") {
+    btn.classList.remove("hidden");
+    btn.disabled = true;
+    hint.textContent = "La partie doit être démarrée (depuis le dashboard) avant de pouvoir avancer les jours.";
+  } else if (game.statut === "terminee") {
+    btn.classList.remove("hidden");
+    btn.disabled = true;
+    hint.textContent = "Cette partie est terminée.";
+  } else {
+    btn.classList.remove("hidden");
+    btn.disabled = false;
+    hint.textContent = "Fait avancer la partie d'un jour : simule les matchs programmés, met à jour les classements, gère les fins de saison.";
+  }
+
+  await loadTodayMatches(realDate);
+}
+
+async function loadTodayMatches(realDate) {
+  const el = document.getElementById("todayMatches");
+  const iso = toISODate(realDate);
+  if (!iso) { el.innerHTML = `<div class="empty-hint">Date indisponible.</div>`; return; }
+
+  const { data: matches, error } = await supabaseClient
+    .from("calendrier")
+    .select("id, competition_ref, statut, score_domicile, score_exterieur, club_domicile_id, club_exterieur_id")
+    .eq("game_id", gameId)
+    .eq("date_match", iso);
+
+  if (error || !matches || matches.length === 0) {
+    el.innerHTML = `<div class="empty-hint">Aucun match de championnat programmé aujourd'hui.</div>`;
+    return;
+  }
+
+  const clubIds = [...new Set(matches.flatMap(m => [m.club_domicile_id, m.club_exterieur_id]))];
+  const { data: clubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", clubIds);
+  const clubNom = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
+
+  el.innerHTML = matches.map(m => matchRowHtml(m, clubNom)).join("");
+}
+
+function matchRowHtml(m, clubNom) {
+  const scoreHtml = m.statut === "joue"
+    ? `<span class="match-score">${m.score_domicile} - ${m.score_exterieur}</span>`
+    : `<span class="match-score pending">à jouer</span>`;
+  return `
+    <div class="match-row">
+      <span class="match-comp">${escapeHtml(m.competition_ref || "")}</span>
+      <div class="match-teams">
+        <span class="home">${escapeHtml(clubNom[m.club_domicile_id] || "?")}</span>
+        ${scoreHtml}
+        <span class="away">${escapeHtml(clubNom[m.club_exterieur_id] || "?")}</span>
+      </div>
+    </div>
+  `;
+}
+
+async function onContinue() {
+  const btn = document.getElementById("continueBtn");
+  btn.disabled = true;
+  btn.textContent = "...";
+  try {
+    const { data, error } = await supabaseClient.rpc("avancer_jour", { p_game_id: gameId });
+    if (error) throw error;
+    appendLogEntry(data);
+    await loadState();
+    toast(`Jour ${data.jour_actuel} — ${formatRealDate(new Date(data.date + "T00:00:00"))}`);
+  } catch (e) {
+    console.error(e);
+    toast("Erreur : " + e.message, true);
+  } finally {
+    btn.textContent = "Continuer";
+    btn.disabled = !isHost;
+  }
+}
+
+function appendLogEntry(data) {
+  const list = document.getElementById("logList");
+  if (list.querySelector(".empty-hint")) list.innerHTML = "";
+
+  const dateLabel = formatRealDate(new Date(data.date + "T00:00:00"));
+  const matchsHtml = (data.matchs || []).map(m =>
+    `<div class="log-match">${escapeHtml(m.domicile)} <strong>${m.score_domicile} - ${m.score_exterieur}</strong> ${escapeHtml(m.exterieur)}</div>`
+  ).join("");
+  const eventsHtml = (data.evenements || []).map(e => `<div class="log-event">${escapeHtml(e)}</div>`).join("");
+
+  const entry = document.createElement("div");
+  entry.className = "log-entry";
+  entry.innerHTML = `
+    <div class="log-date">Jour ${data.jour_actuel} — ${dateLabel}</div>
+    ${eventsHtml}
+    ${matchsHtml || (eventsHtml ? "" : `<div class="log-event">Rien de particulier.</div>`)}
+  `;
+  list.prepend(entry);
+}
+
+init();
+</script>
+</body>
+</html>
