@@ -3716,6 +3716,17 @@ const GD_WEIGHTS = { moral: 0.23, anciennete: 0.14, coach: 0.14, leadership: 0.1
 // Note de leadership (/20) a partir de laquelle un joueur est considere
 // comme un veritable leader dans le vestiaire.
 const GD_LEADER_THRESHOLD = 15;
+// Anciennete (en jours au club) minimale pour etre considere comme un
+// "veteran" - sans ce seuil, le top 3 par anciennete ressortait toujours,
+// meme quand tout l'effectif venait d'arriver (ex. debut de partie / club
+// tout juste repris), etiquetant a tort des joueurs presents depuis
+// quelques jours comme "au club depuis longtemps".
+const GD_VETERAN_MIN_DAYS = 365;
+// A l'inverse, anciennete maximale pour etre considere comme une "nouvelle
+// recrue" fraichement arrivee - evite d'etiqueter un joueur present depuis
+// longtemps comme "nouvelle recrue" simplement parce qu'il est le moins
+// ancien d'un effectif ou tout le monde est deja bien installe.
+const GD_NOUVEAU_MAX_DAYS = 60;
 
 let gdLoadedForClub = null;
 let gdCurrentResult = null;
@@ -3842,8 +3853,8 @@ async function computeGroupDynamics(clubId, { force } = {}) {
   const topHeureux = gdPickTop(effectif, "moral", "desc", 3);
   const topMalheureux = gdPickTop(effectif, "moral", "asc", 3);
   const topLeaders = gdPickTop(effectif, "leadership", "desc", 3, p => Number(p.leadership) >= GD_LEADER_THRESHOLD);
-  const topVeterans = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "desc", 3);
-  const topNouveaux = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "asc", 3);
+  const topVeterans = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "desc", 3, p => p.arrivalsJours >= GD_VETERAN_MIN_DAYS);
+  const topNouveaux = gdPickTop(effectifAvecAnciennete, "arrivalsJours", "asc", 3, p => p.arrivalsJours <= GD_NOUVEAU_MAX_DAYS);
 
   const noteGlobale = gdClamp(Math.round(
     moralScore * GD_WEIGHTS.moral +
@@ -4216,30 +4227,46 @@ function renderStaffColumns() {
 // en mesurant la hauteur reelle d'une carte et du recap deja rendus. Ne
 // re-rend que si le nombre obtenu differe de celui utilise pour le rendu
 // en cours, pour eviter toute boucle.
+//
+// Important : les 3 colonnes (departements) n'ont pas forcement le meme
+// nombre de lignes dans leur recap (ex. plus de postes distincts => plus de
+// "chips" => plus de lignes qui wrappent), donc pas la meme hauteur fixe
+// avant la liste de fiches. Se baser sur une seule colonne (la premiere
+// trouvee) pour calculer un nombre de fiches commun aux 3 pouvait laisser
+// une colonne plus "chargee" deborder alors que le calcul semblait correct
+// sur la colonne de reference. On prend donc le MAX de hauteur fixe sur
+// toutes les colonnes, et on ajoute une marge de securite : quitte a ce
+// qu'une colonne laisse un peu d'espace vide en bas, aucune ne doit jamais
+// forcer un scroll du panneau.
+const STAFF_COL_SAFETY_MARGIN = 18;
 let staffColAdjustScheduled = false;
 function adjustStaffColPreviewMax() {
   const panel = document.getElementById("staffEffectifPanel");
-  const column = document.querySelector(".staff-column");
+  const columns = document.querySelectorAll(".staff-column");
   const card = document.querySelector(".staff-member-card");
-  if (!panel || !column) return;
+  if (!panel || !columns.length) return;
 
   const cardHeight = card ? card.getBoundingClientRect().height + 10 : 76; // + margin-bottom
-  const recap = column.querySelector(".staff-col-recap");
-  const expandBtn = column.querySelector(".staff-col-expand-btn");
-  const title = column.querySelector(".staff-col-title");
-  const moreBtn = column.querySelector(".staff-col-more-btn");
   // Hauteur du bouton "+X..." : toujours reservee dans le calcul, meme s'il
   // ne finit pas par etre affiche (effectif du departement tenant entierement
   // dans l'apercu). Sans ca, le nombre de fiches choisi pouvait remplir tout
   // l'espace visible et laisser le bouton "+X..." deborder sous la ligne de
   // flottaison, obligeant a scroller le panneau pour l'atteindre.
-  const moreBtnHeight = moreBtn ? moreBtn.getBoundingClientRect().height + 10 : 44;
-  const fixedHeight =
-    (recap ? recap.getBoundingClientRect().height : 0) +
-    (expandBtn ? expandBtn.getBoundingClientRect().height + 10 : 0) +
-    (title ? title.getBoundingClientRect().height : 0) + 40 + moreBtnHeight;
+  let maxFixedHeight = 0;
+  columns.forEach(column => {
+    const recap = column.querySelector(".staff-col-recap");
+    const expandBtn = column.querySelector(".staff-col-expand-btn");
+    const title = column.querySelector(".staff-col-title");
+    const moreBtn = column.querySelector(".staff-col-more-btn");
+    const moreBtnHeight = moreBtn ? moreBtn.getBoundingClientRect().height + 10 : 44;
+    const fixedHeight =
+      (recap ? recap.getBoundingClientRect().height : 0) +
+      (expandBtn ? expandBtn.getBoundingClientRect().height + 10 : 0) +
+      (title ? title.getBoundingClientRect().height : 0) + 40 + moreBtnHeight;
+    if (fixedHeight > maxFixedHeight) maxFixedHeight = fixedHeight;
+  });
 
-  const available = panel.clientHeight - fixedHeight;
+  const available = panel.clientHeight - maxFixedHeight - STAFF_COL_SAFETY_MARGIN;
   const fit = Math.max(1, Math.floor(available / cardHeight));
 
   if (fit !== staffColPreviewMax) {
