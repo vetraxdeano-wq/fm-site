@@ -1307,6 +1307,10 @@
             <div id="fmNextMatch" class="fm-empty">Chargement...</div>
           </div>
           <div class="card">
+            <div class="fm-card-title"><span>Derniers matchs</span></div>
+            <div id="fmLastMatches" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card">
             <div class="fm-card-title"><span>Boîte de réception</span></div>
             <div id="fmInbox" class="fm-empty">Chargement...</div>
           </div>
@@ -7892,6 +7896,33 @@ async function renderNextMatch() {
   bindMatchRowClicks(el);
 }
 
+// Derniers matchs joues, les plus recents en premier (miroir de
+// renderNextMatch, mais sur les matchs deja disputes).
+async function renderLastMatches() {
+  const el = document.getElementById("fmLastMatches");
+  el.innerHTML = `Chargement...`;
+  if (!myGameClubId) {
+    el.innerHTML = `Aucun match joué pour l'instant.`;
+    return;
+  }
+
+  const [matches, standingsMap] = await Promise.all([
+    getClubMatches(myGameClubId),
+    getDivisionStandingsMap(myClubNation, myClubDivision),
+  ]);
+  const played = matches.filter(m => m.played).slice(-5).reverse();
+
+  if (played.length === 0) {
+    el.innerHTML = `Aucun match joué pour l'instant.`;
+    return;
+  }
+
+  el.innerHTML = `<div class="fm-comp-calendar-list fm-comp-calendar-list--compact">${
+    played.map(m => renderMatchRow(m, standingsMap)).join("")
+  }</div>`;
+  bindMatchRowClicks(el);
+}
+
 async function showFmCompetitionsView(gameClubId) {
   document.getElementById("fmHomeView").classList.add("hidden");
   document.getElementById("fmPlayersDbView").classList.add("hidden");
@@ -8036,15 +8067,9 @@ async function renderStandings(club) {
     return;
   }
 
-  const { data: rivals, error } = await supabaseClient
-    .from("game_club_overview")
-    .select("game_club_id, nom, classement")
-    .eq("game_id", gameId)
-    .eq("nation", club.nation)
-    .eq("division", club.division)
-    .order("classement", { ascending: true, nullsFirst: false });
+  const rivals = await getDivisionStandings(club.nation, club.division);
 
-  if (error || !rivals || rivals.length === 0) {
+  if (rivals.length === 0) {
     el.innerHTML = `Impossible de charger le classement de la division.`;
     return;
   }
@@ -8055,13 +8080,13 @@ async function renderStandings(club) {
         <tr><th>Clt</th><th>Équipe</th><th>J.</th><th>Diff</th><th>Pts</th></tr>
       </thead>
       <tbody>
-        ${rivals.map((r, i) => `
-          <tr class="${r.game_club_id === club.game_club_id ? "me" : ""}">
-            <td class="clt">${r.classement ?? (i + 1)}e</td>
-            <td><span class="fm-club-link" data-club-id="${r.game_club_id}">${escapeHtml(r.nom)}</span></td>
-            <td class="num">0</td>
-            <td class="num">0</td>
-            <td class="num">0</td>
+        ${rivals.map(r => `
+          <tr class="${r.id === club.game_club_id ? "me" : ""}">
+            <td class="clt">${r.rank}e</td>
+            <td><span class="fm-club-link" data-club-id="${r.id}">${escapeHtml(r.nom)}</span></td>
+            <td class="num">${r.joues}</td>
+            <td class="num">${r.diff >= 0 ? "+" : ""}${r.diff}</td>
+            <td class="num">${r.points}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -8106,6 +8131,7 @@ async function showMyClub(gameClubId, canChange) {
   renderFmHeader(club, me?.pseudo, currentGame, canChange);
   renderFmSidebar(gameClubId);
   renderNextMatch();
+  renderLastMatches();
   renderGroupDynamicsHome(gameClubId);
   renderFinances(club);
   renderTeamStats();
