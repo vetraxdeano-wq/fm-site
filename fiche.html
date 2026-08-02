@@ -469,7 +469,7 @@ const FM_NAV_ITEMS = [
   { key: "datacenter", icon: "📊", label: "Data Center", href: "dashboard.html" },
   { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: "dashboard.html" },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
-  { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
+  { key: "competitions", icon: "🏆", label: "Compétitions", href: "dashboard.html" },
 ];
 // Onglets qui vivent sur dashboard.html : on precise lequel ouvrir via
 // `?view=...` (voir FM_VIEW_PARAM_TO_KEY cote dashboard.html).
@@ -479,6 +479,7 @@ const FM_NAV_VIEW_PARAM = {
   staff: "staff",
   tactique: "tactique",
   datacenter: "datacenter",
+  competitions: "competitions",
 };
 function renderFmSidebar(clubId) {
   const el = document.getElementById("fmSidebar");
