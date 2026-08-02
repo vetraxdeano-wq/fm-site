@@ -1719,6 +1719,7 @@ const gameId = params.get("game");
 
 let userId = null;
 let currentGame = null;
+let realtimeChannel = null;
 
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
@@ -2019,6 +2020,46 @@ async function loadDashboard() {
     document.getElementById("mainDashboard").classList.remove("hidden");
     showMyClub(me.game_club_id, game.statut === "lobby");
   }
+
+  subscribeToGameUpdates();
+}
+
+// Ecoute en temps reel les changements sur la ligne `games` de cette partie
+// (jour_actuel, statut, saison...) : quand quelqu'un fait avancer le jeu
+// depuis gameflow.html, ce dashboard se met a jour tout seul, sans F5.
+// Idempotent : ne cree le canal qu'une seule fois.
+function subscribeToGameUpdates() {
+  if (!gameId || realtimeChannel) return;
+
+  realtimeChannel = supabaseClient
+    .channel(`game-${gameId}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "games", filter: `id=eq.${gameId}` },
+      (payload) => {
+        const previous = currentGame;
+        currentGame = payload.new;
+
+        const dateLabel = formatRealDate(computeRealDate(currentGame.date_debut, currentGame.jour_actuel))
+          || `Jour ${currentGame.jour_actuel ?? "-"}`;
+
+        const gameMetaEl = document.getElementById("gameMeta");
+        if (gameMetaEl) {
+          gameMetaEl.textContent = `Saison ${currentGame.saison} · ${dateLabel} · ${currentGame.statut}`;
+        }
+
+        // Rafraichit l'en-tete FM + les widgets de la page d'accueil (score,
+        // dynamique de groupe, prochain match...) sans recharger la page.
+        if (myGameClubId) {
+          showMyClub(myGameClubId, currentGame.statut === "lobby");
+        }
+
+        if (previous && previous.jour_actuel !== currentGame.jour_actuel) {
+          toast(`La partie a avancé — ${dateLabel}`);
+        }
+      }
+    )
+    .subscribe();
 }
 
 // ============================================================
