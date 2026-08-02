@@ -762,7 +762,7 @@ const FM_NAV_ITEMS = [
   { key: "datacenter", icon: "📊", label: "Data Center", href: "dashboard.html" },
   { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: "dashboard.html" },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
-  { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
+  { key: "competitions", icon: "🏆", label: "Compétitions", href: "dashboard.html" },
 ];
 // Onglets qui vivent sur dashboard.html : on precise lequel ouvrir via
 // `?view=...` (voir FM_VIEW_PARAM_TO_KEY cote dashboard.html).
@@ -772,6 +772,7 @@ const FM_NAV_VIEW_PARAM = {
   staff: "staff",
   tactique: "tactique",
   datacenter: "datacenter",
+  competitions: "competitions",
 };
 
 function renderFmSidebar(navClubId) {
@@ -842,7 +843,10 @@ function renderFmSubtabs(viewedClubId) {
 function renderFmHeader(pseudo, headerClubName, canSearch = true) {
   const el = document.getElementById("fmHeader");
   const titleLabel = escapeHtml((headerClubName || "Club").toUpperCase());
-  const managerLine = `Managé par ${escapeHtml(pseudo || "Manager")}`;
+  // La ligne "Managé par..." n'a de sens que sur son propre club : sur la
+  // fiche d'un autre club, elle serait trompeuse (laisse penser qu'on gere
+  // ce club), donc on la retire.
+  const managerLine = isOwnClubView ? `Managé par ${escapeHtml(pseudo || "Manager")}` : "";
 
   const realDate = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
   const dateLabel = formatRealDate(realDate) || `Jour ${currentGame?.jour_actuel ?? "-"}`;
@@ -853,7 +857,7 @@ function renderFmHeader(pseudo, headerClubName, canSearch = true) {
       <div class="page-title-wrap" id="fmSearchWrap">
         <input type="text" class="page-title-input" id="fmSearchInput" placeholder="${titleLabel}" autocomplete="off">
         <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
-        <div class="manager-line">${managerLine}</div>
+        ${managerLine ? `<div class="manager-line">${managerLine}</div>` : ""}
       </div>
     </div>
     <div class="right-block">
