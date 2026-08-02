@@ -316,12 +316,19 @@
     align-items:stretch; }
   .fm-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: 100%; min-height: 0; }
 
-  /* Les 3 cartes de chaque colonne se partagent la hauteur a parts egales
-     (pas de trous), et seul le contenu interne d'une carte scrolle si
-     besoin (ex: classement d'une grande division) — jamais toute la page. */
-  .fm-col .card { flex: 0 0 auto; min-height:220px; margin-bottom:0; padding:14px 18px; display:flex; flex-direction:column; }
+  /* Les cartes de chaque colonne se partagent la hauteur disponible a
+     parts egales (pas de trous, pas de debordement hors ecran) ; seul le
+     contenu interne d'une carte scrolle si besoin (ex: classement d'une
+     grande division) — jamais toute la page. La carte Finances est plus
+     compacte et garde une hauteur fixe reduite plutot que de prendre sa
+     part egale. */
+  .fm-col .card { flex: 1 1 0; min-height:0; margin-bottom:0; padding:14px 18px; display:flex; flex-direction:column; overflow:hidden; }
   .fm-col .card .fm-card-title { flex: 0 0 auto; }
-  .fm-col .card > *:not(.fm-card-title) { flex:1; min-height:0; overflow:visible; }
+  .fm-col .card > *:not(.fm-card-title) { flex:1; min-height:0; overflow-y:auto; }
+  .fm-col .card.card-compact { flex: 0 0 150px; }
+
+  .card-clickable { cursor: pointer; transition: border-color 0.15s; }
+  .card-clickable:hover { border-color: var(--text-dim); }
 
   .fm-card-title {
     display: flex; justify-content: space-between; align-items: center;
@@ -1318,10 +1325,6 @@
             <div class="fm-card-title"><span>Dynamique de groupe</span></div>
             <div id="fmGroupDynamics" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card">
-            <div class="fm-card-title"><span>Finances</span></div>
-            <div id="fmFinances" class="fm-empty">Chargement...</div>
-          </div>
         </div>
 
         <div class="fm-col">
@@ -1332,6 +1335,10 @@
           <div class="card">
             <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
             <div id="fmTeamStats" class="fm-empty">Chargement...</div>
+          </div>
+          <div class="card card-compact">
+            <div class="fm-card-title"><span>Finances</span></div>
+            <div id="fmFinances" class="fm-empty">Chargement...</div>
           </div>
         </div>
       </div>
@@ -4024,7 +4031,8 @@ async function renderGroupDynamicsHome(clubId) {
   `;
   const card = document.getElementById("gdHomeCard");
   if (card) {
-    card.addEventListener("click", () => {
+    card.addEventListener("click", (e) => {
+      e.stopPropagation();
       const sidebarRow = document.querySelector('.fm-nav-item[data-key="tactique"]');
       if (sidebarRow) sidebarRow.click();
       showFmTacSubtab("dynamique");
@@ -7427,7 +7435,7 @@ async function fetchFinanceHistory(club) {
 }
 
 function renderFinanceChart(history) {
-  const w = 400, h = 110, padY = 10;
+  const w = 400, h = 70, padY = 8;
   const values = history.map(p => p.value);
   const min = Math.min(...values), max = Math.max(...values);
   const range = Math.max(1, max - min);
@@ -7488,8 +7496,7 @@ async function renderFinances(club) {
     </div>
     ${history.length > 1
       ? renderFinanceChart(history)
-      : `<div class="fm-empty" style="padding-top:10px;">Aucun mouvement enregistré pour l'instant. L'historique s'affichera dès les premiers événements financiers de la partie (transferts, salaires, primes...).</div>`}
-    <div class="fm-empty" style="padding-top:8px;">Détail des salaires et du budget transferts à venir dans l'onglet Finance.</div>
+      : `<div class="fm-empty" style="padding-top:6px;">Aucun mouvement enregistré pour l'instant.</div>`}
   `;
 }
 
@@ -7611,7 +7618,8 @@ function renderInbox() {
   `;
 
   el.querySelectorAll(".fm-inbox-item").forEach(item => {
-    item.addEventListener("click", () => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
       const navRow = document.querySelector('.fm-nav-item[data-key="messagerie"]');
       if (navRow) navRow.click();
       else showFmInboxView();
@@ -7864,7 +7872,8 @@ function renderMatchRow(m, standingsMap, opts = {}) {
 
 function bindMatchRowClicks(container) {
   container.querySelectorAll(".fm-comp-match-opp").forEach(el => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
       const clubId = el.getAttribute("data-club-id");
       if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
     });
@@ -8102,6 +8111,47 @@ async function renderStandings(club) {
   });
 }
 
+// Rend une carte de la page d'accueil entierement cliquable vers un autre
+// onglet (calendrier, messagerie, dynamique de groupe...). Les elements
+// internes qui ont deja leur propre navigation plus precise (ligne de
+// match -> fiche adversaire, message -> message precis, club du classement
+// -> fiche club) font stopPropagation pour garder leur cible specifique.
+// Idempotent : ne rebind pas si showMyClub est rappelee (ex: apres
+// demarrage de partie).
+function makeCardClickable(contentElId, onClick) {
+  const contentEl = document.getElementById(contentElId);
+  if (!contentEl) return;
+  const card = contentEl.closest(".card");
+  if (!card || card.dataset.navBound) return;
+  card.dataset.navBound = "1";
+  card.classList.add("card-clickable");
+  card.addEventListener("click", onClick);
+}
+
+function bindHomeCardNav(gameClubId) {
+  const goToCompetitions = () => {
+    const row = document.querySelector('.fm-nav-item[data-key="competitions"]');
+    if (row) row.click();
+    else showFmCompetitionsView(gameClubId);
+  };
+  const goToInbox = () => {
+    const row = document.querySelector('.fm-nav-item[data-key="messagerie"]');
+    if (row) row.click();
+    else showFmInboxView();
+  };
+  const goToDynamique = () => {
+    const row = document.querySelector('.fm-nav-item[data-key="tactique"]');
+    if (row) row.click();
+    showFmTacSubtab("dynamique");
+  };
+
+  makeCardClickable("fmNextMatch", goToCompetitions);
+  makeCardClickable("fmLastMatches", goToCompetitions);
+  makeCardClickable("fmStandings", goToCompetitions);
+  makeCardClickable("fmInbox", goToInbox);
+  makeCardClickable("fmGroupDynamics", goToDynamique);
+}
+
 async function showMyClub(gameClubId, canChange) {
   myGameClubId = gameClubId;
   const { data: club, error } = await supabaseClient
@@ -8130,6 +8180,7 @@ async function showMyClub(gameClubId, canChange) {
 
   renderFmHeader(club, me?.pseudo, currentGame, canChange);
   renderFmSidebar(gameClubId);
+  bindHomeCardNav(gameClubId);
   renderNextMatch();
   renderLastMatches();
   renderGroupDynamicsHome(gameClubId);
