@@ -291,14 +291,14 @@
      explicite (comme le calendrier juste au-dessus) plutot qu'un flex:1,
      pour que la carte carree puisse combler cet espace. */
   .fm-comp-right-pane {
-    width: 100%; display: flex; flex-wrap: wrap; align-content: stretch; gap: 14px;
+    width: 100%; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 14px;
     height: min(50vh, 520px);
   }
   .fm-comp-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    padding: 16px 18px; cursor: pointer; transition: border-color 0.15s;
+    padding: 18px 20px; cursor: pointer; transition: border-color 0.15s;
     display: flex; flex-direction: column; overflow: hidden;
-    aspect-ratio: 1 / 1; min-height: 280px; max-height: 520px;
+    aspect-ratio: 1 / 1; flex: 0 1 calc(20% - 11.2px); min-width: 300px; max-width: 440px;
   }
   .fm-comp-card:hover { border-color: var(--gold); }
   .fm-comp-card-head { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
@@ -349,7 +349,7 @@
   @media (max-width: 900px) {
     .fm-comp-calendar-pane { height: 56vh; }
     .fm-comp-right-pane { flex-direction: column; flex-wrap: nowrap; height: auto; }
-    .fm-comp-card { aspect-ratio: auto; height: 420px; max-height: none; }
+    .fm-comp-card { aspect-ratio: auto; height: 420px; max-height: none; flex-basis: auto; min-width: 0; max-width: none; width: 100%; }
     .fm-comp-card-stats { grid-template-columns: repeat(2, 1fr); }
   }
 
