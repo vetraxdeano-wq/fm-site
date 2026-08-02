@@ -253,6 +253,12 @@
     white-space: nowrap;
   }
   .fm-change-club-btn:hover { background: rgba(255,255,255,0.08); }
+  .fm-gameflow-link {
+    background: rgba(251,191,36,0.12); color: var(--gold, #fbbf24); border: 1px solid rgba(251,191,36,0.4);
+    padding: 9px 14px; border-radius: 8px; font-weight: 700; font-size: 12.5px;
+    text-decoration: none; white-space: nowrap;
+  }
+  .fm-gameflow-link:hover { background: rgba(251,191,36,0.2); }
 
   /* Titre de la topbar transforme en champ de recherche globale
      (clubs + joueurs) avec suggestions en dessous */
@@ -7405,6 +7411,7 @@ function renderFmHeader(club, pseudo, game, canChange) {
         <div class="day-num">${dateLabel}</div>
         <div class="season-line">Saison ${escapeHtml(String(game.saison ?? "-"))}</div>
       </div>
+      ${game.created_by === userId ? `<a class="fm-gameflow-link" href="gameflow.html?game=${encodeURIComponent(gameId)}" title="Panneau de contrôle du game master">⚙ Gameflow</a>` : ""}
       ${canChange ? `<button class="fm-change-club-btn" id="changeClubBtn">Changer de club</button>` : ""}
     </div>
   `;
