@@ -697,7 +697,7 @@ const FM_NAV_ITEMS = [
   { key: "datacenter", icon: "📊", label: "Data Center", href: "dashboard.html" },
   { key: "basejoueurs", icon: "🗂️", label: "Base de données de joueurs", href: "dashboard.html" },
   { key: "infosclub", icon: "🛡️", label: "Infos club", href: "club.html" },
-  { key: "competitions", icon: "🏆", label: "Compétitions", href: null },
+  { key: "competitions", icon: "🏆", label: "Compétitions", href: "dashboard.html" },
 ];
 // Onglets qui vivent sur dashboard.html : on precise lequel ouvrir via
 // `?view=...` (voir FM_VIEW_PARAM_TO_KEY cote dashboard.html).
@@ -707,6 +707,7 @@ const FM_NAV_VIEW_PARAM = {
   staff: "staff",
   tactique: "tactique",
   datacenter: "datacenter",
+  competitions: "competitions",
 };
 
 function renderFmSidebar(navClubId) {
@@ -743,6 +744,9 @@ function renderFmHeader(club, pseudo, isOwnClub, myClub) {
   // l'effectif affiche en dessous est celui d'un autre club.
   const headerClubName = isOwnClub ? club.nom : (myClub?.nom || club.nom);
   const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml(headerClubName.toUpperCase())}`;
+  // Sur l'effectif d'un autre club, le titre precise duquel il s'agit pour
+  // ne pas laisser croire qu'on regarde son propre effectif.
+  const titlePlaceholder = isOwnClub ? "EFFECTIF" : `EFFECTIF DE ${escapeHtml((club.nom || "").toUpperCase())}`;
 
   const realDate = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
   const dateLabel = formatRealDate(realDate) || `Jour ${currentGame?.jour_actuel ?? "-"}`;
@@ -751,7 +755,7 @@ function renderFmHeader(club, pseudo, isOwnClub, myClub) {
     <div class="title-block">
       <a href="dashboard.html?game=${encodeURIComponent(gameId)}" class="back-link">← Accueil</a>
       <div class="page-title-wrap" id="fmSearchWrap">
-        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="EFFECTIF" autocomplete="off">
+        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="${titlePlaceholder}" autocomplete="off">
         <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
         <div class="manager-line">${managerLine}</div>
       </div>
