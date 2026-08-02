@@ -998,6 +998,9 @@
   }
   .tac-slot.empty .tac-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
   .tac-slot.weak .tac-slot-dot { border-color: var(--gold); }
+  .tac-slot[data-player-id] { cursor: pointer; }
+  .tac-slot[data-player-id]:hover .tac-slot-name { color: var(--gold); }
+  .tac-slot[data-player-id]:hover .tac-slot-dot { border-color: var(--gold); }
   .tac-slot-name { font-size: 10.5px; font-weight: 600; background: rgba(0,0,0,0.55); border-radius: 4px; padding: 1px 4px; max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tac-slot-ca { font-size: 9.5px; color: var(--gold); background: rgba(0,0,0,0.55); border-radius: 4px; padding: 0 4px; }
   .tac-legend { font-size: 11px; color: var(--text-dim); display: flex; gap: 14px; flex-wrap: wrap; }
@@ -1006,7 +1009,8 @@
   .tac-legend i.weak { border-color: var(--gold); }
   .tac-legend i.empty { border-color: var(--danger); background: rgba(239,68,68,0.15); }
   .tac-bench { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; align-content: start; overflow: visible; }
-  .tac-bench-item { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .tac-bench-item { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .tac-bench-item:hover .tac-bench-name { color: var(--gold); }
   .tac-bench-item:nth-last-child(-n+2) { border-bottom: none; }
   @media (max-width: 1100px) {
     .tac-bench { grid-template-columns: 1fr 1fr; }
@@ -1047,6 +1051,8 @@
   .gd-player-list { display: flex; flex-direction: column; gap: 8px; }
   .gd-player-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); }
   .gd-player-name { font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gd-player-name-link { cursor: pointer; }
+  .gd-player-name-link:hover { color: var(--gold); text-decoration: underline; }
   .gd-player-poste { font-size: 10.5px; color: var(--text-dim); flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.03em; }
   .gd-player-tag { font-size: 10.5px; color: var(--gold); flex-shrink: 0; font-weight: 600; }
   .gd-home-card { display: flex; align-items: center; gap: 14px; cursor: pointer; }
@@ -3555,12 +3561,17 @@ function tacRenderPitch(slots, assigned) {
     const cls = !a.player ? "empty" : (a.score < 2 ? "weak" : "");
     const initials = a.player ? escapeHtml((a.player.nom || "").split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase()) : "?";
     return `
-      <div class="tac-slot ${cls}" style="left:${s.x}%; top:${s.y}%;" title="${a.player ? escapeHtml(a.player.nom) : "Aucun joueur disponible"} — ${escapeHtml(s.label)}">
+      <div class="tac-slot ${cls}" style="left:${s.x}%; top:${s.y}%;" title="${a.player ? escapeHtml(a.player.nom) : "Aucun joueur disponible"} — ${escapeHtml(s.label)}" ${a.player ? `data-player-id="${escapeHtml(String(a.player.id))}"` : ""}>
         <div class="tac-slot-dot">${initials}</div>
         <div class="tac-slot-name">${a.player ? escapeHtml(a.player.nom) : s.label}</div>
       </div>
     `;
   }).join("");
+  // Clic sur un poste pourvu -> fiche du joueur titulaire (les postes vides
+  // n'ont pas de data-player-id et ne sont donc pas cliquables).
+  el.querySelectorAll(".tac-slot[data-player-id]").forEach(slotEl => {
+    slotEl.addEventListener("click", () => goToPlayerFiche(slotEl.getAttribute("data-player-id"), tacCurrentClubId));
+  });
 }
 
 function tacRenderBench(bench) {
@@ -3568,13 +3579,16 @@ function tacRenderBench(bench) {
   if (!bench.length) { el.innerHTML = `<div class="fm-empty">Effectif entièrement titularisé.</div>`; return; }
   const sorted = [...bench].sort((a, b) => (Number(b.niveau_actuel) || 0) - (Number(a.niveau_actuel) || 0));
   el.innerHTML = sorted.map(p => `
-    <div class="tac-bench-item">
+    <div class="tac-bench-item" data-player-id="${escapeHtml(String(p.id))}">
       <div>
         <div class="tac-bench-name">${escapeHtml(p.nom)}</div>
         <div class="tac-bench-poste">${escapeHtml(p.poste_brut || "-")}</div>
       </div>
     </div>
   `).join("");
+  el.querySelectorAll(".tac-bench-item[data-player-id]").forEach(itemEl => {
+    itemEl.addEventListener("click", () => goToPlayerFiche(itemEl.getAttribute("data-player-id"), tacCurrentClubId));
+  });
 }
 
 // Persiste la tactique calculee (une ligne par club) pour la future
@@ -3823,7 +3837,7 @@ async function computeGroupDynamics(clubId, { force } = {}) {
     let list = filterFn ? arr.filter(filterFn) : arr.slice();
     list = list.filter(p => Number.isFinite(Number(p[key])));
     list.sort((a, b) => dir === "desc" ? Number(b[key]) - Number(a[key]) : Number(a[key]) - Number(b[key]));
-    return list.slice(0, limit).map(p => ({ nom: p.nom, poste: p.poste_brut, moral: Number(p.moral), leadership: Number(p.leadership) }));
+    return list.slice(0, limit).map(p => ({ id: p.id, nom: p.nom, poste: p.poste_brut, moral: Number(p.moral), leadership: Number(p.leadership) }));
   };
   const topHeureux = gdPickTop(effectif, "moral", "desc", 3);
   const topMalheureux = gdPickTop(effectif, "moral", "asc", 3);
@@ -3949,12 +3963,25 @@ function gdMoralTag(moral) {
   return "Mécontent";
 }
 
+// Navigation vers la fiche detaillee d'un joueur (meme page que celle
+// ouverte depuis la recherche globale ou le tableau Base de donnees
+// joueurs). Reutilisee par la Dynamique de groupe et la Tactique : partout
+// ou un nom de joueur est affiche, cliquer dessus doit y mener.
+function goToPlayerFiche(playerId, clubId) {
+  if (!playerId) return;
+  window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId || "")}&player=${encodeURIComponent(playerId)}`;
+}
+
 // Ligne joueur (nom + poste + etat qualitatif), reutilisee dans toutes les
-// listes nominatives de la vue detaillee et dans le widget Accueil.
+// listes nominatives de la vue detaillee et dans le widget Accueil. Le nom
+// est cliquable (si l'id du joueur est connu) et ouvre sa fiche.
 function gdPlayerRowHtml(p, tag) {
+  const nameHtml = p.id
+    ? `<span class="gd-player-name gd-player-name-link" data-player-id="${escapeHtml(String(p.id))}">${escapeHtml(p.nom || "-")}</span>`
+    : `<span class="gd-player-name">${escapeHtml(p.nom || "-")}</span>`;
   return `
     <div class="gd-player-row">
-      <span class="gd-player-name">${escapeHtml(p.nom || "-")}</span>
+      ${nameHtml}
       ${p.poste ? `<span class="gd-player-poste">${escapeHtml(p.poste)}</span>` : ""}
       ${tag ? `<span class="gd-player-tag">${escapeHtml(tag)}</span>` : ""}
     </div>
@@ -4002,6 +4029,9 @@ function renderGroupDynamicsDetail(r) {
       </div>
     </div>
   `;
+  el.querySelectorAll(".gd-player-name-link").forEach(nameEl => {
+    nameEl.addEventListener("click", () => goToPlayerFiche(nameEl.getAttribute("data-player-id"), r.clubId || tacCurrentClubId));
+  });
 }
 
 async function loadAndRenderGroupDynamicsDetail(clubId) {
@@ -4197,13 +4227,20 @@ function adjustStaffColPreviewMax() {
   const recap = column.querySelector(".staff-col-recap");
   const expandBtn = column.querySelector(".staff-col-expand-btn");
   const title = column.querySelector(".staff-col-title");
+  const moreBtn = column.querySelector(".staff-col-more-btn");
+  // Hauteur du bouton "+X..." : toujours reservee dans le calcul, meme s'il
+  // ne finit pas par etre affiche (effectif du departement tenant entierement
+  // dans l'apercu). Sans ca, le nombre de fiches choisi pouvait remplir tout
+  // l'espace visible et laisser le bouton "+X..." deborder sous la ligne de
+  // flottaison, obligeant a scroller le panneau pour l'atteindre.
+  const moreBtnHeight = moreBtn ? moreBtn.getBoundingClientRect().height + 10 : 44;
   const fixedHeight =
     (recap ? recap.getBoundingClientRect().height : 0) +
     (expandBtn ? expandBtn.getBoundingClientRect().height + 10 : 0) +
-    (title ? title.getBoundingClientRect().height : 0) + 40;
+    (title ? title.getBoundingClientRect().height : 0) + 40 + moreBtnHeight;
 
   const available = panel.clientHeight - fixedHeight;
-  const fit = Math.max(3, Math.floor(available / cardHeight));
+  const fit = Math.max(1, Math.floor(available / cardHeight));
 
   if (fit !== staffColPreviewMax) {
     staffColPreviewMax = fit;
