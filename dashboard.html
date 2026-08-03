@@ -8422,7 +8422,8 @@ function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, n
   `;
 }
 
-// ---- Logos de club (table `clubs`, colonne photo_url) ------------------
+// ---- Logos de club (referentiel public.clubs, colonne logo_url,
+// rattache via game_clubs.club_ref — meme motif que club.html) ----------
 function mdetLogoFallback(nom, small) {
   const div = document.createElement("div");
   div.className = "mdet-club-logo-fallback" + (small ? " small" : "");
@@ -8449,13 +8450,15 @@ async function mdetFetchClubLogos(clubIds) {
   const logos = {};
   if (!ids.length) return logos;
   try {
-    const { data: gameClubs } = await supabaseClient.from("game_clubs").select("id, club_ref").in("id", ids);
-    const refs = (gameClubs || []).map(g => g.club_ref).filter(Boolean);
-    if (!refs.length) return logos;
-    const { data: clubRows } = await supabaseClient.from("clubs").select("id, photo_url").in("id", [...new Set(refs)]);
-    const photoByRef = Object.fromEntries((clubRows || []).map(c => [c.id, c.photo_url]));
+    // Meme motif que club.html : jointure imbriquee vers le referentiel
+    // public.clubs (rattache via game_clubs.club_ref), colonne logo_url.
+    const { data: gameClubs } = await supabaseClient
+      .from("game_clubs")
+      .select("id, clubs(logo_url)")
+      .in("id", ids);
     (gameClubs || []).forEach(g => {
-      if (g.club_ref && photoByRef[g.club_ref]) logos[g.id] = photoByRef[g.club_ref];
+      const url = g?.clubs?.logo_url;
+      if (url) logos[g.id] = url;
     });
   } catch (e) {
     console.error(e);
