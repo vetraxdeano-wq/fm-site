@@ -488,6 +488,143 @@
     .club-grid { grid-template-columns: 1fr; }
     .staff-columns { grid-template-columns: 1fr; }
   }
+
+  /* ---- Détails de match (popup, calendrier & compétitions) ---- */
+  .mdet-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    cursor: pointer; margin-left: 8px; white-space: nowrap; flex-shrink: 0;
+  }
+  .mdet-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  .mdet-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px); z-index: 400;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .mdet-overlay.hidden { display: none !important; }
+  .mdet-modal {
+    width: 100%; max-width: 1120px; max-height: 94vh; overflow-y: auto; overflow-x: hidden;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 24px 22px;
+  }
+  .mdet-header { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
+  .mdet-header-teams { flex: 1; display: flex; align-items: center; justify-content: center; gap: 18px; font-size: 17px; font-weight: 800; text-align: center; min-width: 0; }
+  .mdet-header-teams .score { color: var(--gold); font-variant-numeric: tabular-nums; margin: 0 4px; font-size: 22px; flex-shrink: 0; }
+  .mdet-header-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-header-team-name.dom { text-align: right; }
+  .mdet-header-team-name.ext { text-align: left; }
+  .mdet-close {
+    background: none; border: none; color: var(--text-dim); font-size: 18px;
+    cursor: pointer; line-height: 1; padding: 4px; flex-shrink: 0;
+  }
+  .mdet-close:hover { color: var(--text); }
+  .mdet-meta { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; }
+
+  .mdet-club-logo {
+    flex-shrink: 0; object-fit: contain; background: transparent;
+  }
+  .mdet-club-logo-fallback {
+    border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; color: #0b0d12; border: 1px solid var(--border);
+  }
+
+  .mdet-section-title {
+    font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 12px 0 6px;
+  }
+  .mdet-section-title:first-of-type { margin-top: 4px; }
+  .mdet-stats-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 5px 10px; font-size: 12.5px; }
+  .mdet-stats-grid .label { grid-column: 2; text-align: center; color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; white-space: nowrap; }
+  .mdet-stats-grid .val-dom { text-align: right; font-weight: 700; }
+  .mdet-stats-grid .val-ext { text-align: left; font-weight: 700; }
+
+  /* Barres de domination : toutes les stats d'equipe comparees en barres,
+     sur 2 colonnes pour limiter la hauteur du popup. */
+  .mdet-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 26px; margin-bottom: 4px; }
+  .mdet-bar-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .mdet-bar-val { font-size: 12px; font-weight: 800; width: 30px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .mdet-bar-val.dom { text-align: right; }
+  .mdet-bar-val.ext { text-align: left; }
+  .mdet-bar-mid { flex: 1; min-width: 0; }
+  .mdet-bar-label { text-align: center; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mdet-bar-track { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: #14171d; }
+  .mdet-bar-fill { height: 100%; }
+  .mdet-bar-fill.dom { background: var(--gold); border-radius: 999px 0 0 999px; margin-left: auto; }
+  .mdet-bar-fill.ext { background: var(--accent, #4ade80); border-radius: 0 999px 999px 0; }
+  @media (max-width: 640px) {
+    .mdet-bars { grid-template-columns: 1fr; }
+  }
+
+  /* ---- Faits de match : frise chronologique horizontale ---- */
+  .mdet-timeline {
+    display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center;
+    gap: 0; row-gap: 22px; padding: 8px 6px 6px; margin: 0 auto;
+  }
+  .mdet-timeline-item {
+    position: relative; flex: 0 0 118px; width: 118px;
+    padding-top: 29px; text-align: center;
+  }
+  .mdet-timeline-item::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 13px; height: 2px;
+    background: var(--border);
+  }
+  .mdet-timeline-item:first-child::before { left: 50%; }
+  .mdet-timeline-item:last-child::before { right: 50%; }
+  .mdet-timeline-dot {
+    position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+    width: 27px; height: 27px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    background: #14171d; border: 2px solid var(--border); z-index: 1;
+  }
+  .mdet-timeline-minute { font-size: 10.5px; color: var(--gold); font-weight: 700; margin-top: 6px; }
+  .mdet-timeline-text { font-size: 11.5px; color: var(--text); line-height: 1.35; margin-top: 2px; }
+  .mdet-event-detail { color: var(--text-dim); display: block; font-size: 10.5px; margin-top: 1px; }
+  .mdet-empty { color: var(--text-dim); font-size: 12.5px; padding: 6px 0; text-align: center; }
+
+  /* ---- Compositions (titulaires + remplacants), 2 colonnes ---- */
+  .mdet-roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+  .mdet-roster-col { min-width: 0; }
+  .mdet-roster-team-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; overflow: hidden; }
+  .mdet-roster-team-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-roster-subhead {
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 10px 0 4px;
+  }
+  .mdet-player-row {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 4px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mdet-player-row:last-child { border-bottom: none; }
+  .mdet-player-sub-icon { flex-shrink: 0; font-size: 11px; width: 14px; text-align: center; }
+  .mdet-player-name-wrap { flex: 1; min-width: 0; }
+  .mdet-player-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .mdet-player-name.clickable { cursor: pointer; }
+  .mdet-player-name.clickable:hover { color: var(--gold); text-decoration: underline; }
+  .mdet-player-name.motm { color: var(--gold); }
+  .mdet-player-sub-detail { font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-player-note {
+    flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 11px;
+    padding: 1px 7px; border-radius: 999px; min-width: 30px; text-align: center;
+  }
+  .mdet-note-elite { background: rgba(74,222,128,0.18); color: #4ade80; }
+  .mdet-note-bon { background: rgba(163,230,53,0.15); color: #a3e635; }
+  .mdet-note-moyen { background: rgba(148,163,184,0.15); color: var(--text-dim); }
+  .mdet-note-faible { background: rgba(251,191,36,0.15); color: var(--gold); }
+  .mdet-note-mauvais { background: rgba(239,68,68,0.18); color: var(--danger); }
+
+  .mdet-motm-banner {
+    display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700;
+    color: var(--gold); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 8px; padding: 6px 12px; margin-bottom: 10px;
+  }
+  @media (max-width: 640px) {
+    .mdet-roster-grid { grid-template-columns: 1fr; gap: 14px 0; }
+    .mdet-header-teams { font-size: 13px; gap: 8px; }
+    .mdet-header-teams .score { font-size: 16px; }
+    .mdet-header-teams .mdet-club-logo,
+    .mdet-header-teams .mdet-club-logo-fallback { width: 40px !important; height: 40px !important; font-size: 13px !important; }
+  }
 </style>
 </head>
 <body>
@@ -553,6 +690,10 @@
 
 <div class="staff-modal-overlay hidden" id="staffModalOverlay">
   <div class="staff-modal" id="staffModalContent"></div>
+</div>
+
+<div class="mdet-overlay hidden" id="mdetOverlay">
+  <div class="mdet-modal" id="mdetContent"></div>
 </div>
 
 <script>
@@ -1812,7 +1953,7 @@ function renderMatchRow(m, standingsMap, opts = {}) {
     const myScore = m.isHome ? m.score_domicile : m.score_exterieur;
     const oppScore = m.isHome ? m.score_exterieur : m.score_domicile;
     const outcome = myScore > oppScore ? "victoire" : myScore < oppScore ? "defaite" : "nul";
-    resultHtml = `<div class="fm-comp-match-score ${outcome}">${myScore}-${oppScore}</div>`;
+    resultHtml = `<div class="fm-comp-match-score ${outcome}">${myScore}-${oppScore}</div><button class="mdet-btn" data-match-id="${m.id}" type="button">Détails</button>`;
   } else {
     const oppRank = standingsMap[m.oppId] ? `${standingsMap[m.oppId]}e` : "—";
     resultHtml = `<div class="fm-comp-match-rank">${oppRank}</div>`;
@@ -1832,9 +1973,17 @@ function renderMatchRow(m, standingsMap, opts = {}) {
 
 function bindMatchRowClicks(container) {
   container.querySelectorAll(".fm-comp-match-opp").forEach(el => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
       const clubId = el.getAttribute("data-club-id");
       if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+    });
+  });
+  container.querySelectorAll(".mdet-btn").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const matchId = el.getAttribute("data-match-id");
+      if (matchId) openMatchDetails(matchId);
     });
   });
 }
@@ -2089,6 +2238,286 @@ function showFatalError(message) {
   el.classList.remove("hidden");
   el.innerHTML = `${escapeHtml(message)}<br><br><a href="dashboard.html?game=${encodeURIComponent(gameId || "")}" style="color:var(--gold);">← Retour à l'accueil</a>`;
 }
+
+// ---- Détails de match (popup) ----------------------------------------
+// Alimentee par calendrier.stats (jsonb ecrit par moteur_match.js) : score,
+// stats d'equipe, buteurs/passeurs, cartons, blessures, remplacements,
+// notes des joueurs, homme du match, resume.
+
+const MDET_ICONES = {
+  but: "⚽", jaune: "🟨", deuxieme_jaune: "🟨🟥", rouge_direct: "🟥", blessure: "🩹", remplacement: "🔄",
+};
+
+function mdetLigneStat(label, valDom, valExt) {
+  if (valDom == null && valExt == null) return "";
+  return `
+    <div class="val-dom">${valDom ?? "-"}</div>
+    <div class="label">${label}</div>
+    <div class="val-ext">${valExt ?? "-"}</div>
+  `;
+}
+
+function mdetNomEquipe(gameClubId, clubDomId, nomDom, nomExt) {
+  return gameClubId === clubDomId ? nomDom : nomExt;
+}
+
+function mdetRenderEvenements(stats, clubDomId, nomDom, nomExt) {
+  const evts = [];
+
+  (stats.buteurs || []).forEach(b => {
+    const passeur = (stats.passeurs || []).find(p => p.but_de === b.player_id && p.minute === b.minute);
+    evts.push({
+      minute: b.minute, icone: MDET_ICONES.but,
+      texte: `<strong>${escapeHtml(b.player_nom)}</strong> (${escapeHtml(mdetNomEquipe(b.game_club_id, clubDomId, nomDom, nomExt))})`
+        + (passeur ? ` <span class="mdet-event-detail">— passe déc. ${escapeHtml(passeur.player_nom)}</span>` : ""),
+    });
+  });
+  (stats.cartons || []).forEach(c => {
+    evts.push({
+      minute: c.minute, icone: MDET_ICONES[c.type] || "🟨",
+      texte: `${escapeHtml(c.player_nom)} <span class="mdet-event-detail">(${escapeHtml(mdetNomEquipe(c.game_club_id, clubDomId, nomDom, nomExt))})</span>`,
+    });
+  });
+  (stats.blessures || []).forEach(b => {
+    evts.push({
+      minute: b.minute, icone: MDET_ICONES.blessure,
+      texte: `${escapeHtml(b.player_nom)} <span class="mdet-event-detail">(${escapeHtml(mdetNomEquipe(b.game_club_id, clubDomId, nomDom, nomExt))}, blessure ${escapeHtml(b.gravite || "")})</span>`,
+    });
+  });
+  (stats.remplacements || []).forEach(r => {
+    evts.push({
+      minute: r.minute, icone: MDET_ICONES.remplacement,
+      texte: `${escapeHtml(r.entrant_nom)} ↔ ${escapeHtml(r.sortant_nom)} <span class="mdet-event-detail">(${escapeHtml(mdetNomEquipe(r.game_club_id, clubDomId, nomDom, nomExt))})</span>`,
+    });
+  });
+
+  evts.sort((a, b) => a.minute - b.minute);
+  if (!evts.length) return `<div class="mdet-empty">Aucun évènement notable.</div>`;
+
+  return `<div class="mdet-timeline">${evts.map(e => `
+    <div class="mdet-timeline-item">
+      <div class="mdet-timeline-dot">${e.icone}</div>
+      <div class="mdet-timeline-minute">${e.minute}e</div>
+      <div class="mdet-timeline-text">${e.texte}</div>
+    </div>
+  `).join("")}</div>`;
+}
+
+function mdetNoteClass(note) {
+  const n = Number(note);
+  if (!Number.isFinite(n)) return "mdet-note-moyen";
+  if (n >= 7.5) return "mdet-note-elite";
+  if (n >= 6.5) return "mdet-note-bon";
+  if (n >= 5.5) return "mdet-note-moyen";
+  if (n >= 4.5) return "mdet-note-faible";
+  return "mdet-note-mauvais";
+}
+
+// Ouvre la fiche du joueur clique (meme motif que les autres liens
+// fiche.html du dashboard : game + club + player en query string).
+window.mdetGoToPlayer = function (clubId, playerId) {
+  if (!playerId) return;
+  window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId || "")}&player=${encodeURIComponent(playerId)}`;
+};
+
+function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
+  const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
+  const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
+  const clickable = n.player_id ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(clubId || "")).replace(/'/g, "&#39;")}', '${escapeHtml(String(n.player_id)).replace(/'/g, "&#39;")}')"` : "";
+  return `
+    <div class="mdet-player-row">
+      <div class="mdet-player-sub-icon">${n.entrant ? "🔄" : ""}</div>
+      <div class="mdet-player-name-wrap">
+        <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+        ${sortant ? `<div class="mdet-player-sub-detail">↔ ${escapeHtml(sortant.sortant_nom)}${sortant.minute != null ? ` · ${sortant.minute}e` : ""}</div>` : ""}
+      </div>
+      <div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>
+    </div>
+  `;
+}
+
+function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId) {
+  const titulaires = (notes || []).filter(n => !n.entrant);
+  const remplacants = (notes || []).filter(n => n.entrant);
+  // Associe chaque entrant a son sortant (par nom), a partir de stats.remplacements.
+  const sortantParEntrant = {};
+  (remplacements || []).forEach(r => { sortantParEntrant[r.entrant_nom] = r; });
+  return `
+    <div class="mdet-roster-col">
+      <div class="mdet-roster-team-head">${logoHtml}<span>${escapeHtml(nomEquipe)}</span></div>
+      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
+      ${remplacants.length ? `<div class="mdet-roster-subhead">Remplacements</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("")}` : ""}
+    </div>
+  `;
+}
+
+function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt, clubDomId, clubExtId) {
+  if (!notesJoueurs) return "";
+  return `
+    <div class="mdet-roster-grid">
+      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom, clubDomId)}
+      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt, clubExtId)}
+    </div>
+  `;
+}
+
+
+// ---- Logos de club (referentiel public.clubs, colonne logo_url,
+// rattache via game_clubs.club_ref — meme motif que club.html) ----------
+function mdetLogoFallback(nom, size) {
+  const div = document.createElement("div");
+  div.className = "mdet-club-logo-fallback";
+  div.style.background = colorFromName(nom || "");
+  div.style.width = size + "px";
+  div.style.height = size + "px";
+  div.style.fontSize = Math.max(9, Math.round(size * 0.34)) + "px";
+  div.textContent = initialsFromName(nom || "?");
+  return div;
+}
+
+// Appelee par l'attribut onerror des <img> de logo : remplace l'image cassee
+// par le rond colore avec initiales (evite tout souci d'echappement HTML).
+window.mdetImgFallback = function (img, nom, size) {
+  img.replaceWith(mdetLogoFallback(nom, Number(size) || 34));
+};
+
+function mdetLogoHtml(url, nom, size) {
+  if (!url) return mdetLogoFallback(nom, size).outerHTML;
+  const nomAttr = escapeHtml(nom || "").replace(/'/g, "&#39;");
+  return `<img class="mdet-club-logo" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" loading="lazy" onerror="window.mdetImgFallback(this, '${nomAttr}', '${size}')">`;
+}
+
+async function mdetFetchClubLogos(clubIds) {
+  const ids = [...new Set(clubIds.filter(Boolean))];
+  const logos = {};
+  if (!ids.length) return logos;
+  try {
+    // Meme motif que club.html : jointure imbriquee vers le referentiel
+    // public.clubs (rattache via game_clubs.club_ref), colonne logo_url.
+    const { data: gameClubs } = await supabaseClient
+      .from("game_clubs")
+      .select("id, clubs(logo_url)")
+      .in("id", ids);
+    (gameClubs || []).forEach(g => {
+      const url = g?.clubs?.logo_url;
+      if (url) logos[g.id] = url;
+    });
+  } catch (e) {
+    console.error(e);
+  }
+  return logos;
+}
+
+// Barre de "domination" pour comparer une stat des deux equipes (possession,
+// tirs, tirs cadres, corners...). Si isPercent est vrai, valDom/valExt sont
+// deja des pourcentages sommant a ~100 ; sinon on calcule la part relative.
+function mdetBarStat(label, valDom, valExt, isPercent) {
+  if (valDom == null && valExt == null) return "";
+  const d = parseFloat(valDom) || 0;
+  const e = parseFloat(valExt) || 0;
+  let pctDom, pctExt;
+  if (isPercent) {
+    pctDom = d; pctExt = e;
+  } else {
+    const total = d + e;
+    pctDom = total > 0 ? (d / total) * 100 : 50;
+    pctExt = total > 0 ? (e / total) * 100 : 50;
+  }
+  return `
+    <div class="mdet-bar-row">
+      <div class="mdet-bar-val dom">${valDom ?? "-"}</div>
+      <div class="mdet-bar-mid">
+        <div class="mdet-bar-label">${label}</div>
+        <div class="mdet-bar-track">
+          <div class="mdet-bar-fill dom" style="width:${pctDom}%"></div>
+          <div class="mdet-bar-fill ext" style="width:${pctExt}%"></div>
+        </div>
+      </div>
+      <div class="mdet-bar-val ext">${valExt ?? "-"}</div>
+    </div>
+  `;
+}
+
+async function openMatchDetails(matchId) {
+  const overlay = document.getElementById("mdetOverlay");
+  const content = document.getElementById("mdetContent");
+  content.innerHTML = `<div class="mdet-empty">Chargement...</div>`;
+  overlay.classList.remove("hidden");
+
+  const { data: m, error } = await supabaseClient
+    .from("calendrier")
+    .select("id, date_match, journee, club_domicile_id, club_exterieur_id, score_domicile, score_exterieur, stats")
+    .eq("id", matchId)
+    .single();
+
+  if (error || !m) {
+    content.innerHTML = `<div class="mdet-header"><div class="mdet-header-teams">Match introuvable</div><button class="mdet-close" id="mdetCloseBtn">✕</button></div>`;
+    document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+    return;
+  }
+
+  const { data: clubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", [m.club_domicile_id, m.club_exterieur_id]);
+  const nomClub = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
+  const nomDom = nomClub[m.club_domicile_id] || "?";
+  const nomExt = nomClub[m.club_exterieur_id] || "?";
+  const stats = m.stats || {};
+  const d = m.date_match ? new Date(m.date_match) : null;
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
+
+  const motm = stats.homme_du_match;
+  const logos = await mdetFetchClubLogos([m.club_domicile_id, m.club_exterieur_id]);
+  const logoDom = mdetLogoHtml(logos[m.club_domicile_id], nomDom, 64);
+  const logoExt = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, 64);
+  const logoDomSmall = mdetLogoHtml(logos[m.club_domicile_id], nomDom, 30);
+  const logoExtSmall = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, 30);
+  const remplacementsDom = (stats.remplacements || []).filter(r => r.game_club_id === m.club_domicile_id);
+  const remplacementsExt = (stats.remplacements || []).filter(r => r.game_club_id === m.club_exterieur_id);
+
+  content.innerHTML = `
+    <div class="mdet-header">
+      <div class="mdet-header-teams">
+        ${logoDom}
+        <div class="mdet-header-team-name dom">${escapeHtml(nomDom)}</div>
+        <span class="score">${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}</span>
+        <div class="mdet-header-team-name ext">${escapeHtml(nomExt)}</div>
+        ${logoExt}
+      </div>
+      <button class="mdet-close" id="mdetCloseBtn">✕</button>
+    </div>
+    <div class="mdet-meta">${dateLabel}${m.journee ? ` · J${m.journee}` : ""}</div>
+
+    ${motm ? `<div class="mdet-motm-banner">⭐ Homme du match : ${escapeHtml(motm.player_nom)} (${Number(motm.note).toFixed(1)})</div>` : ""}
+
+    <div class="mdet-section-title">Statistiques</div>
+    <div class="mdet-bars">
+      ${mdetBarStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null, true)}
+      ${mdetBarStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur, false)}
+      ${mdetBarStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur, false)}
+      ${mdetBarStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur, false)}
+      ${mdetBarStat("Corners", stats.corners?.domicile, stats.corners?.exterieur, false)}
+      ${mdetBarStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur, false)}
+      ${mdetBarStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur, false)}
+      ${mdetBarStat("Centres", stats.centres?.domicile, stats.centres?.exterieur, false)}
+      ${mdetBarStat("Fautes", stats.fautes?.domicile, stats.fautes?.exterieur, false)}
+      ${mdetBarStat("Arrêts gardien", stats.arrets?.domicile, stats.arrets?.exterieur, false)}
+    </div>
+
+    <div class="mdet-section-title">Faits de match</div>
+    ${mdetRenderEvenements(stats, m.club_domicile_id, nomDom, nomExt)}
+
+    <div class="mdet-section-title">Compositions</div>
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, m.club_domicile_id, m.club_exterieur_id) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
+  `;
+  document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+}
+
+function closeMatchDetails() {
+  document.getElementById("mdetOverlay").classList.add("hidden");
+}
+
+document.getElementById("mdetOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "mdetOverlay") closeMatchDetails();
+});
 
 loadClub();
 </script>
