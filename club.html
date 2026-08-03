@@ -1007,9 +1007,11 @@ async function runGlobalSearch(q, dropdown) {
 }
 
 // ===================== BADGE / LOGO DU CLUB =====================
-// Pas encore de veritable logo uploade pour les clubs : on genere un blason
-// de substitution a partir des initiales du nom, avec une couleur stable
-// (derivee du nom) pour que chaque club garde toujours le meme badge.
+// Le vrai logo du club (issu du referentiel public.clubs, colonne logo_url,
+// rattache via game_clubs.club_ref) est utilise en priorite. A defaut, on
+// genere un blason de substitution a partir des initiales du nom, avec une
+// couleur stable (derivee du nom) pour que chaque club garde toujours le
+// meme badge de repli.
 function initials(nom) {
   const words = (nom || "").trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
@@ -1022,8 +1024,11 @@ function colorFromName(nom) {
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 62%, 46%)`;
 }
+function getClubLogoUrl(rawClub) {
+  return rawClub?.clubs?.logo_url || rawClub?.logo_url || rawClub?.logo || null;
+}
 function renderClubBadge(club, rawClub) {
-  const logoUrl = rawClub?.logo_url || rawClub?.logo || null;
+  const logoUrl = getClubLogoUrl(rawClub);
   if (logoUrl) return `<img src="${escapeHtml(logoUrl)}" alt="">`;
   return initials(club.nom);
 }
@@ -1950,7 +1955,7 @@ async function renderCompetitionsTab(viewedClubId) {
 function renderClubHero(club, rawClub) {
   const el = document.getElementById("clubHero");
   el.innerHTML = `
-    <div class="club-badge" style="background:${club.logoUrl ? "transparent" : colorFromName(club.nom)};">
+    <div class="club-badge" style="background:${getClubLogoUrl(rawClub) ? "transparent" : colorFromName(club.nom)};">
       ${renderClubBadge(club, rawClub)}
     </div>
     <div class="club-hero-info">
@@ -1958,7 +1963,6 @@ function renderClubHero(club, rawClub) {
       <div class="club-hero-sub">
         ${club.nation ? `${nationFlagImg(club.nation)} ${escapeHtml(club.nation)}` : ""}
         ${club.division ? `<span class="chip dim">${escapeHtml(club.division)}</span>` : ""}
-        ${club.classement ? `<span class="chip">Classement pronostiqué : ${club.classement}e</span>` : ""}
         ${club.statut ? `<span class="chip dim">${escapeHtml(club.statut)}</span>` : ""}
       </div>
     </div>
@@ -2025,7 +2029,7 @@ async function loadClub() {
   try {
     const { data: raw } = await supabaseClient
       .from("game_clubs")
-      .select("*")
+      .select("*, clubs(logo_url)")
       .eq("id", gameClubId)
       .eq("game_id", gameId)
       .single();
