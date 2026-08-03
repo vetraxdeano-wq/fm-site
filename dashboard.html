@@ -914,8 +914,8 @@
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 24px 22px;
   }
   .mdet-header { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
-  .mdet-header-teams { flex: 1; display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 16px; font-weight: 800; text-align: center; min-width: 0; }
-  .mdet-header-teams .score { color: var(--gold); font-variant-numeric: tabular-nums; margin: 0 4px; font-size: 20px; flex-shrink: 0; }
+  .mdet-header-teams { flex: 1; display: flex; align-items: center; justify-content: center; gap: 18px; font-size: 17px; font-weight: 800; text-align: center; min-width: 0; }
+  .mdet-header-teams .score { color: var(--gold); font-variant-numeric: tabular-nums; margin: 0 4px; font-size: 22px; flex-shrink: 0; }
   .mdet-header-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mdet-header-team-name.dom { text-align: right; }
   .mdet-header-team-name.ext { text-align: left; }
@@ -925,18 +925,16 @@
   }
   .mdet-close:hover { color: var(--text); }
   .mdet-meta { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; }
-  .mdet-resume { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; margin-bottom: 12px; padding: 8px 12px; background: #14171d; border-radius: 8px; }
 
   .mdet-club-logo {
-    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
+    border-radius: 50%; flex-shrink: 0; object-fit: cover;
     background: #1c2029; border: 1px solid var(--border);
   }
   .mdet-club-logo-fallback {
-    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 800; color: #0b0d12; border: 1px solid var(--border);
+    font-weight: 800; color: #0b0d12; border: 1px solid var(--border);
   }
-  .mdet-club-logo-fallback.small { width: 20px; height: 20px; font-size: 9px; }
 
   .mdet-section-title {
     font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
@@ -986,8 +984,10 @@
   }
   .mdet-player-row:last-child { border-bottom: none; }
   .mdet-player-sub-icon { flex-shrink: 0; font-size: 11px; width: 14px; text-align: center; }
-  .mdet-player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .mdet-player-name-wrap { flex: 1; min-width: 0; }
+  .mdet-player-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
   .mdet-player-name.motm { color: var(--gold); }
+  .mdet-player-sub-detail { font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mdet-player-note {
     flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 11px;
     padding: 1px 7px; border-radius: 999px; min-width: 30px; text-align: center;
@@ -1007,6 +1007,8 @@
     .mdet-roster-grid { grid-template-columns: 1fr; gap: 14px 0; }
     .mdet-header-teams { font-size: 13px; gap: 8px; }
     .mdet-header-teams .score { font-size: 16px; }
+    .mdet-header-teams .mdet-club-logo,
+    .mdet-header-teams .mdet-club-logo-fallback { width: 40px !important; height: 40px !important; font-size: 13px !important; }
   }
 
   /* ---- BDD Staff (sous-onglet) : cartes façon "Effectif" (club.html) ---- */
@@ -8389,60 +8391,69 @@ function mdetNoteClass(note) {
   return "mdet-note-mauvais";
 }
 
-function mdetPlayerRow(n, hommeDuMatch) {
+function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant) {
   const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
+  const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
   return `
     <div class="mdet-player-row">
       <div class="mdet-player-sub-icon">${n.entrant ? "🔄" : ""}</div>
-      <div class="mdet-player-name${isMotm ? " motm" : ""}">${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+      <div class="mdet-player-name-wrap">
+        <div class="mdet-player-name${isMotm ? " motm" : ""}">${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+        ${sortant ? `<div class="mdet-player-sub-detail">↔ ${escapeHtml(sortant.sortant_nom)}${sortant.minute != null ? ` · ${sortant.minute}e` : ""}</div>` : ""}
+      </div>
       <div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>
     </div>
   `;
 }
 
-function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe) {
+function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements) {
   const titulaires = (notes || []).filter(n => !n.entrant);
   const remplacants = (notes || []).filter(n => n.entrant);
+  // Associe chaque entrant a son sortant (par nom), a partir de stats.remplacements.
+  const sortantParEntrant = {};
+  (remplacements || []).forEach(r => { sortantParEntrant[r.entrant_nom] = r; });
   return `
     <div class="mdet-roster-col">
       <div class="mdet-roster-team-head">${logoHtml}<span>${escapeHtml(nomEquipe)}</span></div>
-      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
-      ${remplacants.length ? `<div class="mdet-roster-subhead">Remplaçants</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch)).join("")}` : ""}
+      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
+      ${remplacants.length ? `<div class="mdet-roster-subhead">Remplacements</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant)).join("")}` : ""}
     </div>
   `;
 }
 
-function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt) {
+function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt) {
   if (!notesJoueurs) return "";
   return `
     <div class="mdet-roster-grid">
-      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom)}
-      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt)}
+      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom)}
+      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt)}
     </div>
   `;
 }
 
 // ---- Logos de club (referentiel public.clubs, colonne logo_url,
 // rattache via game_clubs.club_ref — meme motif que club.html) ----------
-function mdetLogoFallback(nom, small) {
+function mdetLogoFallback(nom, size) {
   const div = document.createElement("div");
-  div.className = "mdet-club-logo-fallback" + (small ? " small" : "");
+  div.className = "mdet-club-logo-fallback";
   div.style.background = colorFromName(nom || "");
+  div.style.width = size + "px";
+  div.style.height = size + "px";
+  div.style.fontSize = Math.max(9, Math.round(size * 0.34)) + "px";
   div.textContent = initialsFromName(nom || "?");
   return div;
 }
 
 // Appelee par l'attribut onerror des <img> de logo : remplace l'image cassee
 // par le rond colore avec initiales (evite tout souci d'echappement HTML).
-window.mdetImgFallback = function (img, nom, small) {
-  img.replaceWith(mdetLogoFallback(nom, small === "1"));
+window.mdetImgFallback = function (img, nom, size) {
+  img.replaceWith(mdetLogoFallback(nom, Number(size) || 34));
 };
 
-function mdetLogoHtml(url, nom, small) {
-  if (!url) return mdetLogoFallback(nom, small).outerHTML;
-  const size = small ? 20 : 34;
+function mdetLogoHtml(url, nom, size) {
+  if (!url) return mdetLogoFallback(nom, size).outerHTML;
   const nomAttr = escapeHtml(nom || "").replace(/'/g, "&#39;");
-  return `<img class="mdet-club-logo" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" loading="lazy" onerror="window.mdetImgFallback(this, '${nomAttr}', '${small ? 1 : 0}')">`;
+  return `<img class="mdet-club-logo" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" loading="lazy" onerror="window.mdetImgFallback(this, '${nomAttr}', '${size}')">`;
 }
 
 async function mdetFetchClubLogos(clubIds) {
@@ -8524,10 +8535,12 @@ async function openMatchDetails(matchId) {
 
   const motm = stats.homme_du_match;
   const logos = await mdetFetchClubLogos([m.club_domicile_id, m.club_exterieur_id]);
-  const logoDom = mdetLogoHtml(logos[m.club_domicile_id], nomDom, false);
-  const logoExt = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, false);
-  const logoDomSmall = mdetLogoHtml(logos[m.club_domicile_id], nomDom, true);
-  const logoExtSmall = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, true);
+  const logoDom = mdetLogoHtml(logos[m.club_domicile_id], nomDom, 64);
+  const logoExt = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, 64);
+  const logoDomSmall = mdetLogoHtml(logos[m.club_domicile_id], nomDom, 30);
+  const logoExtSmall = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, 30);
+  const remplacementsDom = (stats.remplacements || []).filter(r => r.game_club_id === m.club_domicile_id);
+  const remplacementsExt = (stats.remplacements || []).filter(r => r.game_club_id === m.club_exterieur_id);
 
   content.innerHTML = `
     <div class="mdet-header">
@@ -8541,8 +8554,6 @@ async function openMatchDetails(matchId) {
       <button class="mdet-close" id="mdetCloseBtn">✕</button>
     </div>
     <div class="mdet-meta">${dateLabel}${m.journee ? ` · J${m.journee}` : ""}</div>
-
-    ${stats.resume ? `<div class="mdet-resume">${escapeHtml(stats.resume)}</div>` : ""}
 
     ${motm ? `<div class="mdet-motm-banner">⭐ Homme du match : ${escapeHtml(motm.player_nom)} (${Number(motm.note).toFixed(1)})</div>` : ""}
 
@@ -8564,7 +8575,7 @@ async function openMatchDetails(matchId) {
     ${mdetRenderEvenements(stats, m.club_domicile_id, nomDom, nomExt)}
 
     <div class="mdet-section-title">Compositions</div>
-    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
   `;
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
