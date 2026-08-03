@@ -910,8 +910,8 @@
   }
   .mdet-overlay.hidden { display: none !important; }
   .mdet-modal {
-    width: 100%; max-width: 1120px; max-height: 92vh; overflow-y: auto; overflow-x: hidden;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px 26px;
+    width: 100%; max-width: 1120px; max-height: 94vh; overflow-y: auto; overflow-x: hidden;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 24px 22px;
   }
   .mdet-header { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
   .mdet-header-teams { flex: 1; display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 16px; font-weight: 800; text-align: center; min-width: 0; }
@@ -924,8 +924,8 @@
     cursor: pointer; line-height: 1; padding: 4px; flex-shrink: 0;
   }
   .mdet-close:hover { color: var(--text); }
-  .mdet-meta { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-bottom: 16px; }
-  .mdet-resume { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 18px; padding: 10px 12px; background: #14171d; border-radius: 8px; }
+  .mdet-meta { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; }
+  .mdet-resume { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; margin-bottom: 12px; padding: 8px 12px; background: #14171d; border-radius: 8px; }
 
   .mdet-club-logo {
     width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
@@ -940,25 +940,30 @@
 
   .mdet-section-title {
     font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--text-dim); margin: 18px 0 8px;
+    color: var(--text-dim); margin: 12px 0 6px;
   }
+  .mdet-section-title:first-of-type { margin-top: 4px; }
   .mdet-stats-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 5px 10px; font-size: 12.5px; }
   .mdet-stats-grid .label { grid-column: 2; text-align: center; color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; white-space: nowrap; }
   .mdet-stats-grid .val-dom { text-align: right; font-weight: 700; }
   .mdet-stats-grid .val-ext { text-align: left; font-weight: 700; }
 
-  /* Barres de domination (possession, tirs, tirs cadres, corners) */
-  .mdet-bars { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
-  .mdet-bar-row { display: flex; align-items: center; gap: 10px; }
-  .mdet-bar-val { font-size: 12.5px; font-weight: 800; width: 34px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  /* Barres de domination : toutes les stats d'equipe comparees en barres,
+     sur 2 colonnes pour limiter la hauteur du popup. */
+  .mdet-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 26px; margin-bottom: 4px; }
+  .mdet-bar-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .mdet-bar-val { font-size: 12px; font-weight: 800; width: 30px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
   .mdet-bar-val.dom { text-align: right; }
   .mdet-bar-val.ext { text-align: left; }
   .mdet-bar-mid { flex: 1; min-width: 0; }
-  .mdet-bar-label { text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 3px; }
-  .mdet-bar-track { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: #14171d; }
+  .mdet-bar-label { text-align: center; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mdet-bar-track { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: #14171d; }
   .mdet-bar-fill { height: 100%; }
   .mdet-bar-fill.dom { background: var(--gold); border-radius: 999px 0 0 999px; margin-left: auto; }
   .mdet-bar-fill.ext { background: var(--accent, #4ade80); border-radius: 0 999px 999px 0; }
+  @media (max-width: 640px) {
+    .mdet-bars { grid-template-columns: 1fr; }
+  }
 
   .mdet-event-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
   .mdet-event-minute { color: var(--gold); font-weight: 700; width: 34px; flex-shrink: 0; text-align: right; }
@@ -996,7 +1001,7 @@
   .mdet-motm-banner {
     display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700;
     color: var(--gold); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
-    border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;
+    border-radius: 8px; padding: 6px 12px; margin-bottom: 10px;
   }
   @media (max-width: 640px) {
     .mdet-roster-grid { grid-template-columns: 1fr; gap: 14px 0; }
@@ -8419,15 +8424,24 @@ function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, n
 
 // ---- Logos de club (table `clubs`, colonne photo_url) ------------------
 function mdetLogoFallback(nom, small) {
-  return `<div class="mdet-club-logo-fallback${small ? " small" : ""}" style="background:${colorFromName(nom || "")};">${initialsFromName(nom || "?")}</div>`;
+  const div = document.createElement("div");
+  div.className = "mdet-club-logo-fallback" + (small ? " small" : "");
+  div.style.background = colorFromName(nom || "");
+  div.textContent = initialsFromName(nom || "?");
+  return div;
 }
 
+// Appelee par l'attribut onerror des <img> de logo : remplace l'image cassee
+// par le rond colore avec initiales (evite tout souci d'echappement HTML).
+window.mdetImgFallback = function (img, nom, small) {
+  img.replaceWith(mdetLogoFallback(nom, small === "1"));
+};
+
 function mdetLogoHtml(url, nom, small) {
-  const fallback = mdetLogoFallback(nom, small);
-  if (!url) return fallback;
-  const cls = small ? "mdet-club-logo" : "mdet-club-logo";
+  if (!url) return mdetLogoFallback(nom, small).outerHTML;
   const size = small ? 20 : 34;
-  return `<img class="${cls}" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" loading="lazy" onerror="this.outerHTML=${JSON.stringify(fallback).replace(/"/g, "&quot;")};">`;
+  const nomAttr = escapeHtml(nom || "").replace(/'/g, "&#39;");
+  return `<img class="mdet-club-logo" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" loading="lazy" onerror="window.mdetImgFallback(this, '${nomAttr}', '${small ? 1 : 0}')">`;
 }
 
 async function mdetFetchClubLogos(clubIds) {
@@ -8534,15 +8548,13 @@ async function openMatchDetails(matchId) {
       ${mdetBarStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null, true)}
       ${mdetBarStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur, false)}
       ${mdetBarStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur, false)}
+      ${mdetBarStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur, false)}
       ${mdetBarStat("Corners", stats.corners?.domicile, stats.corners?.exterieur, false)}
-    </div>
-    <div class="mdet-stats-grid">
-      ${mdetLigneStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur)}
-      ${mdetLigneStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur)}
-      ${mdetLigneStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur)}
-      ${mdetLigneStat("Centres", stats.centres?.domicile, stats.centres?.exterieur)}
-      ${mdetLigneStat("Fautes", stats.fautes?.domicile, stats.fautes?.exterieur)}
-      ${mdetLigneStat("Arrêts gardien", stats.arrets?.domicile, stats.arrets?.exterieur)}
+      ${mdetBarStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur, false)}
+      ${mdetBarStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur, false)}
+      ${mdetBarStat("Centres", stats.centres?.domicile, stats.centres?.exterieur, false)}
+      ${mdetBarStat("Fautes", stats.fautes?.domicile, stats.fautes?.exterieur, false)}
+      ${mdetBarStat("Arrêts gardien", stats.arrets?.domicile, stats.arrets?.exterieur, false)}
     </div>
 
     <div class="mdet-section-title">Faits de match</div>
