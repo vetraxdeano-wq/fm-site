@@ -8468,8 +8468,8 @@ async function mdetFetchClubLogos(clubIds) {
 // deja des pourcentages sommant a ~100 ; sinon on calcule la part relative.
 function mdetBarStat(label, valDom, valExt, isPercent) {
   if (valDom == null && valExt == null) return "";
-  const d = Number(valDom) || 0;
-  const e = Number(valExt) || 0;
+  const d = parseFloat(valDom) || 0;
+  const e = parseFloat(valExt) || 0;
   let pctDom, pctExt;
   if (isPercent) {
     pctDom = d; pctExt = e;
