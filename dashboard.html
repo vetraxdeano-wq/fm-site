@@ -962,24 +962,31 @@
     .mdet-bars { grid-template-columns: 1fr; }
   }
 
-  /* ---- Faits de match : frise chronologique ---- */
-  .mdet-timeline { display: flex; flex-direction: column; }
-  .mdet-timeline-item { position: relative; padding: 0 0 16px 36px; }
-  .mdet-timeline-item:last-child { padding-bottom: 0; }
+  /* ---- Faits de match : frise chronologique horizontale ---- */
+  .mdet-timeline {
+    display: flex; align-items: flex-start; justify-content: center;
+    gap: 0; overflow-x: auto; padding: 8px 6px 6px; margin: 0 auto;
+  }
+  .mdet-timeline-item {
+    position: relative; flex: 0 0 118px; width: 118px;
+    padding-top: 29px; text-align: center;
+  }
   .mdet-timeline-item::before {
-    content: ""; position: absolute; left: 13px; top: 26px; bottom: 0; width: 2px;
+    content: ""; position: absolute; left: 0; right: 0; top: 13px; height: 2px;
     background: var(--border);
   }
-  .mdet-timeline-item:last-child::before { display: none; }
+  .mdet-timeline-item:first-child::before { left: 50%; }
+  .mdet-timeline-item:last-child::before { right: 50%; }
   .mdet-timeline-dot {
-    position: absolute; left: 0; top: 0; width: 27px; height: 27px; border-radius: 50%;
+    position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+    width: 27px; height: 27px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; font-size: 13px;
     background: #14171d; border: 2px solid var(--border); z-index: 1;
   }
-  .mdet-timeline-minute { font-size: 10.5px; color: var(--gold); font-weight: 700; margin-bottom: 1px; }
-  .mdet-timeline-text { font-size: 12.5px; color: var(--text); line-height: 1.4; }
-  .mdet-event-detail { color: var(--text-dim); }
-  .mdet-empty { color: var(--text-dim); font-size: 12.5px; padding: 6px 0; }
+  .mdet-timeline-minute { font-size: 10.5px; color: var(--gold); font-weight: 700; margin-top: 6px; }
+  .mdet-timeline-text { font-size: 11.5px; color: var(--text); line-height: 1.35; margin-top: 2px; }
+  .mdet-event-detail { color: var(--text-dim); display: block; font-size: 10.5px; margin-top: 1px; }
+  .mdet-empty { color: var(--text-dim); font-size: 12.5px; padding: 6px 0; text-align: center; }
 
   /* ---- Compositions (titulaires + remplacants), 2 colonnes ---- */
   .mdet-roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
