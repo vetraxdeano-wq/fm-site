@@ -201,7 +201,13 @@ function formatRealDate(date) {
 }
 function toISODate(date) {
   if (!date) return null;
-  return date.toISOString().slice(0, 10);
+  // Volontairement PAS date.toISOString() : ça convertit en UTC et decale
+  // d'un jour en heure d'ete francaise (UTC+2), faisant chercher les matchs
+  // du mauvais jour. On reste en composants de date locale.
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 async function init() {
