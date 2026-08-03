@@ -941,7 +941,10 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   };
 }
 
-module.exports = {
+// Fonctionne en <script src="moteur_match.js"> (navigateur, fonctions
+// disponibles directement en global) ET en require('./moteur_match.js')
+// (Node, pour les tests/calibrage) sans dupliquer le fichier.
+const MOTEUR_MATCH_EXPORTS = {
   simulerMatch,
   // exports individuels utiles pour tests unitaires / calibrage
   calculerForceEquipe,
@@ -963,3 +966,7 @@ module.exports = {
   compositionEffective,
   inferRolePrincipal,
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = MOTEUR_MATCH_EXPORTS;
+}
