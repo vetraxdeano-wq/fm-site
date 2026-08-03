@@ -258,30 +258,30 @@
     box-shadow: 0 0 0 1px rgba(74,222,128,0.05), 0 12px 28px rgba(0,0,0,0.35);
   }
   .attrs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-  .attrs-head h3 { margin: 0; font-size: 14px; color: var(--accent); letter-spacing: 0.06em; }
+  .attrs-head h3 { margin: 0; font-size: 17px; color: var(--accent); letter-spacing: 0.06em; }
   .poste-select-label {
-    font-size: 12px; color: var(--gold); font-weight: 600; background: rgba(251,191,36,0.1);
-    border: 1px solid rgba(251,191,36,0.3); padding: 3px 10px; border-radius: 20px;
+    font-size: 14px; color: var(--gold); font-weight: 600; background: rgba(251,191,36,0.1);
+    border: 1px solid rgba(251,191,36,0.3); padding: 4px 12px; border-radius: 20px;
   }
   .poste-select-label.empty { color: var(--text-dim); background: transparent; border-color: var(--border); }
-  .attrs-legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-dim); margin: 6px 0 14px; flex-wrap: wrap; }
-  .attrs-legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  .attrs-legend { display: flex; gap: 18px; font-size: 13px; color: var(--text-dim); margin: 8px 0 16px; flex-wrap: wrap; }
+  .attrs-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
   .legend-dot.major { background: var(--accent); }
   .legend-dot.minor { background: var(--gold); }
 
-  .attrs-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(10px,1.6vw,22px); flex: 1; }
+  .attrs-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(14px,2vw,28px); flex: 1; }
   @media (max-width: 1500px) and (min-width: 1301px) { .attrs-cols { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 700px) { .attrs-cols { grid-template-columns: 1fr; } }
-  .attrs-cols h4 { margin: 0 0 6px 0; font-size: 12.5px; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .attrs-cols h4 { margin: 0 0 10px 0; font-size: 15px; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
 
   .attr-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 5px 8px; font-size: 13.5px; border-radius: 6px; margin: 1px 0;
+    padding: 8px 10px; font-size: 16px; border-radius: 6px; margin: 2px 0;
     transition: background 0.15s;
   }
   .attr-name { color: var(--text-dim); }
-  .attr-val { font-weight: 700; min-width: 22px; text-align: right; }
+  .attr-val { font-weight: 700; min-width: 26px; text-align: right; font-size: 16.5px; }
   .attr-high { color: var(--accent); }
   .attr-mid { color: var(--text); }
   .attr-low { color: var(--text-dim); }
@@ -1484,8 +1484,13 @@ async function loadFiche() {
 
   // Saison en cours (comble l'espace vide sous "Postes")
   document.getElementById("saisonBadge").textContent = currentSeason != null ? `Saison ${currentSeason}` : "Saison -";
+  // Affichage provisoire avec les compteurs bruts, en attendant le recalcul depuis
+  // l'historique des matchs (loadPlayerStats, appelé juste après) qui fait foi et
+  // garantit la cohérence avec le sous-onglet "Stats".
   document.getElementById("saisonTiles").innerHTML = statTilesHtml(gp, false);
   document.getElementById("saisonEmptyHint").hidden = (gp.matchs_joues_saison || 0) > 0;
+  ficheStatsLoaded = true;
+  loadPlayerStats();
 
   // Attributs
   const isGK = (gp.poste_brut || "").toUpperCase().includes("GB");
@@ -1582,14 +1587,15 @@ async function loadPlayerStats() {
 
   const rowsThisSeason = ficheStatsRows.filter(r => currentSeason == null || String(r.saison) === String(currentSeason));
 
-  // Tuiles "saison en cours" recalculées depuis le detail des matchs (coherent avec le tableau ci-dessous).
-  if (rowsThisSeason.length) {
-    document.getElementById("statsSaisonTiles").innerHTML = statTilesHtml(aggregateRows(rowsThisSeason), true);
-  } else {
-    // Repli sur les compteurs agrégés déjà présents sur game_players (au cas où aucun
-    // detail de match n'est encore disponible mais que les compteurs, eux, le sont).
-    document.getElementById("statsSaisonTiles").innerHTML = statTilesHtml(currentGamePlayer, true);
-  }
+  // Tuiles "saison en cours" recalculées depuis le detail des matchs (coherent avec le
+  // tableau ci-dessous ET avec la carte "Saison en cours" du module Attributs, qui
+  // utilise desormais la meme source pour eviter tout ecart entre les deux affichages).
+  const saisonAgg = rowsThisSeason.length ? aggregateRows(rowsThisSeason) : currentGamePlayer;
+  document.getElementById("statsSaisonTiles").innerHTML = statTilesHtml(saisonAgg, true);
+  const saisonTilesEl = document.getElementById("saisonTiles");
+  if (saisonTilesEl) saisonTilesEl.innerHTML = statTilesHtml(saisonAgg, false);
+  const saisonEmptyHintEl = document.getElementById("saisonEmptyHint");
+  if (saisonEmptyHintEl) saisonEmptyHintEl.hidden = (saisonAgg.matchs_joues ?? saisonAgg.matchs_joues_saison ?? 0) > 0;
 
   renderMatchLogTable(rowsThisSeason);
   renderCareerTable(ficheStatsRows);
