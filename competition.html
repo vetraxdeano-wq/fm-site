@@ -114,8 +114,31 @@
   .fm-table td.clt { color: var(--text-dim); width: 26px; }
   .fm-table td.num { color: var(--text-dim); text-align: center; width: 30px; }
   .fm-table td.pts { font-weight: 700; text-align: center; width: 34px; }
-  .fm-club-link { cursor: pointer; font-weight: 600; }
+  .fm-club-link { cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
   .fm-club-link:hover { color: var(--gold); text-decoration: underline; }
+  .fm-club-logo { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; border-radius: 3px; }
+
+  /* Zones de qualification europeenne / relegation : liseret colore a
+     gauche de la ligne + tres legere teinte de fond, une couleur par
+     competition europeenne (alignee sur les couleurs UEFA habituelles)
+     et une couleur dediee pour la releguation. */
+  .fm-table tr.zone-euro-1 td:first-child { border-left: 3px solid #3b82f6; }
+  .fm-table tr.zone-euro-1 td { background: rgba(59,130,246,0.07); }
+  .fm-table tr.zone-euro-2 td:first-child { border-left: 3px solid #f97316; }
+  .fm-table tr.zone-euro-2 td { background: rgba(249,115,22,0.07); }
+  .fm-table tr.zone-euro-3 td:first-child { border-left: 3px solid #22c55e; }
+  .fm-table tr.zone-euro-3 td { background: rgba(34,197,94,0.07); }
+  .fm-table tr.zone-releg td:first-child { border-left: 3px solid var(--danger); }
+  .fm-table tr.zone-releg td { background: rgba(239,68,68,0.07); }
+  .fm-table tr.me.zone-euro-1 td, .fm-table tr.me.zone-euro-2 td,
+  .fm-table tr.me.zone-euro-3 td, .fm-table tr.me.zone-releg td { background: rgba(251,191,36,0.12); }
+
+  .fm-standings-legend {
+    display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 2px 2px;
+    font-size: 11px; color: var(--text-dim); flex: 0 0 auto;
+  }
+  .fm-standings-legend .legend-item { display: flex; align-items: center; gap: 6px; }
+  .fm-standings-legend .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 
   /* ---- Prochains matchs (memes codes couleurs que sur le dashboard) ---- */
   .fm-comp-match-row {
@@ -194,6 +217,7 @@
             <div class="fm-scroll-area scroll-hide" id="compStandings">
               <div class="fm-empty">Chargement...</div>
             </div>
+            <div class="fm-standings-legend" id="compStandingsLegend"></div>
           </div>
           <div class="card">
             <div class="fm-card-title"><span>Prochains matchs</span> <span class="comp-name" id="compNextJournee"></span></div>
@@ -328,11 +352,15 @@ async function loadCompetition() {
 
   const { data: fullStats } = await supabaseClient
     .from("game_clubs")
-    .select("id, classement, points, victoires, nuls, defaites, buts_pour, buts_contre")
+    .select("id, classement, points, victoires, nuls, defaites, buts_pour, buts_contre, clubs(logo_url)")
     .in("id", clubIds);
 
   const statsById = {};
-  (fullStats || []).forEach(c => { statsById[c.id] = c; });
+  const logoById = {};
+  (fullStats || []).forEach(c => {
+    statsById[c.id] = c;
+    logoById[c.id] = c.clubs?.logo_url || null;
+  });
 
   const sorted = clubIds.slice().sort((a, b) => {
     const sa = statsById[a] || {};
@@ -344,6 +372,66 @@ async function loadCompetition() {
     if (diffB !== diffA) return diffB - diffA;
     return (sb.buts_pour ?? 0) - (sa.buts_pour ?? 0);
   });
+
+  // Zones qualificatives europeennes (une seule par competition europeenne,
+  // couleur alignee UEFA) : seule l'elite (tier 1) de chaque nation qualifie
+  // pour l'Europe. On s'appuie d'abord sur les places evolutives propres a
+  // la partie (game_places_europeennes), sinon sur la baseline reelle
+  // (classement_uefa_places) tant que le coefficient evolutif n'est pas
+  // encore simule pour cette nation.
+  let euroZones = [];
+  if (comp.tier === 1) {
+    let placesRows = [];
+    const { data: gamePlaces } = await supabaseClient
+      .from("game_places_europeennes")
+      .select("coupe_europe_ref, phase, nb_places, saison")
+      .eq("game_id", gameId)
+      .eq("nation", comp.nation);
+    if (gamePlaces && gamePlaces.length > 0) {
+      const derniereSaison = Math.max(...gamePlaces.map(r => r.saison));
+      placesRows = gamePlaces.filter(r => r.saison === derniereSaison);
+    } else {
+      const { data: basePlaces } = await supabaseClient
+        .from("classement_uefa_places")
+        .select("coupe_europe_ref, phase, nb_places")
+        .eq("nation", comp.nation);
+      placesRows = basePlaces || [];
+    }
+
+    if (placesRows.length > 0) {
+      const slotsByCoupe = {};
+      placesRows.forEach(r => {
+        slotsByCoupe[r.coupe_europe_ref] = (slotsByCoupe[r.coupe_europe_ref] || 0) + (r.nb_places || 0);
+      });
+      const coupeIds = Object.keys(slotsByCoupe);
+      const { data: coupes } = await supabaseClient
+        .from("competitions")
+        .select("id, nom, tier")
+        .in("id", coupeIds);
+      const EURO_COLORS = { 1: "zone-euro-1", 2: "zone-euro-2", 3: "zone-euro-3" };
+      const ordered = (coupes || []).slice().sort((a, b) => a.tier - b.tier);
+      let cursor = 1;
+      euroZones = ordered.map(c => {
+        const nb = slotsByCoupe[c.id] || 0;
+        const zone = { startRank: cursor, endRank: cursor + nb - 1, colorClass: EURO_COLORS[c.tier] || "zone-euro-3", label: c.nom };
+        cursor += nb;
+        return zone;
+      }).filter(z => z.endRank >= z.startRank);
+    }
+  }
+
+  // Zone de relegation : les nb_relegation derniers du classement.
+  const nbRelegation = comp.nb_relegation || 0;
+  const releguable = nbRelegation > 0
+    ? { startRank: sorted.length - nbRelegation + 1, endRank: sorted.length }
+    : null;
+
+  const zoneClassForRank = (rank) => {
+    const euro = euroZones.find(z => rank >= z.startRank && rank <= z.endRank);
+    if (euro) return euro.colorClass;
+    if (releguable && rank >= releguable.startRank && rank <= releguable.endRank) return "zone-releg";
+    return "";
+  };
 
   document.getElementById("compStandings").innerHTML = `
     <table class="fm-table">
@@ -359,10 +447,17 @@ async function loadCompetition() {
           const rank = s.classement ?? (i + 1);
           const joues = (s.victoires ?? 0) + (s.nuls ?? 0) + (s.defaites ?? 0);
           const diff = (s.buts_pour ?? 0) - (s.buts_contre ?? 0);
+          const logo = logoById[id];
+          const rowClasses = [id === myClubId ? "me" : "", zoneClassForRank(rank)].filter(Boolean).join(" ");
           return `
-            <tr class="${id === myClubId ? "me" : ""}">
+            <tr class="${rowClasses}">
               <td class="clt">${rank}e</td>
-              <td><span class="fm-club-link" data-club-id="${id}">${escapeHtml(nameById[id])}</span></td>
+              <td>
+                <span class="fm-club-link" data-club-id="${id}">
+                  ${logo ? `<img class="fm-club-logo" src="${escapeHtml(logo)}" alt="">` : ""}
+                  ${escapeHtml(nameById[id])}
+                </span>
+              </td>
               <td class="num">${joues}</td>
               <td class="num">${s.victoires ?? 0}</td>
               <td class="num">${s.nuls ?? 0}</td>
@@ -380,6 +475,16 @@ async function loadCompetition() {
   document.querySelectorAll("#compStandings .fm-club-link").forEach(el => {
     el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
   });
+
+  const legendItems = euroZones.map(z => `
+    <span class="legend-item"><span class="legend-dot" style="background:${
+      z.colorClass === "zone-euro-1" ? "#3b82f6" : z.colorClass === "zone-euro-2" ? "#f97316" : "#22c55e"
+    };"></span>${escapeHtml(z.label)}</span>
+  `);
+  if (releguable) {
+    legendItems.push(`<span class="legend-item"><span class="legend-dot" style="background:var(--danger);"></span>Relégation</span>`);
+  }
+  document.getElementById("compStandingsLegend").innerHTML = legendItems.join("");
 
   // Prochains matchs : la prochaine journee non jouee de la competition
   const { data: upcoming } = await supabaseClient
