@@ -910,28 +910,55 @@
   }
   .mdet-overlay.hidden { display: none !important; }
   .mdet-modal {
-    width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px;
+    width: 100%; max-width: 1120px; max-height: 92vh; overflow-y: auto; overflow-x: hidden;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px 26px;
   }
-  .mdet-header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
-  .mdet-header-teams { flex: 1; font-size: 15px; font-weight: 800; text-align: center; }
-  .mdet-header-teams .score { color: var(--gold); font-variant-numeric: tabular-nums; margin: 0 8px; }
+  .mdet-header { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
+  .mdet-header-teams { flex: 1; display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 16px; font-weight: 800; text-align: center; min-width: 0; }
+  .mdet-header-teams .score { color: var(--gold); font-variant-numeric: tabular-nums; margin: 0 4px; font-size: 20px; flex-shrink: 0; }
+  .mdet-header-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-header-team-name.dom { text-align: right; }
+  .mdet-header-team-name.ext { text-align: left; }
   .mdet-close {
     background: none; border: none; color: var(--text-dim); font-size: 18px;
-    cursor: pointer; line-height: 1; padding: 4px;
+    cursor: pointer; line-height: 1; padding: 4px; flex-shrink: 0;
   }
   .mdet-close:hover { color: var(--text); }
   .mdet-meta { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-bottom: 16px; }
   .mdet-resume { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 18px; padding: 10px 12px; background: #14171d; border-radius: 8px; }
 
+  .mdet-club-logo {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
+    background: #1c2029; border: 1px solid var(--border);
+  }
+  .mdet-club-logo-fallback {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; color: #0b0d12; border: 1px solid var(--border);
+  }
+  .mdet-club-logo-fallback.small { width: 20px; height: 20px; font-size: 9px; }
+
   .mdet-section-title {
     font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--text-dim); margin: 18px 0 8px;
   }
-  .mdet-stats-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px 10px; font-size: 12.5px; }
-  .mdet-stats-grid .label { grid-column: 2; text-align: center; color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; }
+  .mdet-stats-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 5px 10px; font-size: 12.5px; }
+  .mdet-stats-grid .label { grid-column: 2; text-align: center; color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; white-space: nowrap; }
   .mdet-stats-grid .val-dom { text-align: right; font-weight: 700; }
   .mdet-stats-grid .val-ext { text-align: left; font-weight: 700; }
+
+  /* Barres de domination (possession, tirs, tirs cadres, corners) */
+  .mdet-bars { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+  .mdet-bar-row { display: flex; align-items: center; gap: 10px; }
+  .mdet-bar-val { font-size: 12.5px; font-weight: 800; width: 34px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .mdet-bar-val.dom { text-align: right; }
+  .mdet-bar-val.ext { text-align: left; }
+  .mdet-bar-mid { flex: 1; min-width: 0; }
+  .mdet-bar-label { text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 3px; }
+  .mdet-bar-track { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: #14171d; }
+  .mdet-bar-fill { height: 100%; }
+  .mdet-bar-fill.dom { background: var(--gold); border-radius: 999px 0 0 999px; margin-left: auto; }
+  .mdet-bar-fill.ext { background: var(--accent, #4ade80); border-radius: 0 999px 999px 0; }
 
   .mdet-event-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
   .mdet-event-minute { color: var(--gold); font-weight: 700; width: 34px; flex-shrink: 0; text-align: right; }
@@ -939,16 +966,42 @@
   .mdet-event-detail { color: var(--text-dim); }
   .mdet-empty { color: var(--text-dim); font-size: 12.5px; padding: 6px 0; }
 
-  .mdet-notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-  .mdet-note-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
-  .mdet-note-row .nom { color: var(--text-dim); }
-  .mdet-note-row .nom .entrant-tag { color: var(--text-dim); font-size: 10px; margin-left: 3px; }
-  .mdet-note-row .note { font-weight: 800; font-variant-numeric: tabular-nums; }
-  .mdet-note-row .note.motm { color: var(--gold); }
+  /* ---- Compositions (titulaires + remplacants), 2 colonnes ---- */
+  .mdet-roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+  .mdet-roster-col { min-width: 0; }
+  .mdet-roster-team-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; overflow: hidden; }
+  .mdet-roster-team-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-roster-subhead {
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 10px 0 4px;
+  }
+  .mdet-player-row {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 4px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mdet-player-row:last-child { border-bottom: none; }
+  .mdet-player-sub-icon { flex-shrink: 0; font-size: 11px; width: 14px; text-align: center; }
+  .mdet-player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .mdet-player-name.motm { color: var(--gold); }
+  .mdet-player-note {
+    flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 11px;
+    padding: 1px 7px; border-radius: 999px; min-width: 30px; text-align: center;
+  }
+  .mdet-note-elite { background: rgba(74,222,128,0.18); color: #4ade80; }
+  .mdet-note-bon { background: rgba(163,230,53,0.15); color: #a3e635; }
+  .mdet-note-moyen { background: rgba(148,163,184,0.15); color: var(--text-dim); }
+  .mdet-note-faible { background: rgba(251,191,36,0.15); color: var(--gold); }
+  .mdet-note-mauvais { background: rgba(239,68,68,0.18); color: var(--danger); }
+
   .mdet-motm-banner {
     display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700;
     color: var(--gold); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
     border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;
+  }
+  @media (max-width: 640px) {
+    .mdet-roster-grid { grid-template-columns: 1fr; gap: 14px 0; }
+    .mdet-header-teams { font-size: 13px; gap: 8px; }
+    .mdet-header-teams .score { font-size: 16px; }
   }
 
   /* ---- BDD Staff (sous-onglet) : cartes façon "Effectif" (club.html) ---- */
@@ -8321,22 +8374,109 @@ function mdetRenderEvenements(stats, clubDomId, nomDom, nomExt) {
   `).join("");
 }
 
-function mdetRenderNotes(notesJoueurs, hommeDuMatch) {
-  if (!notesJoueurs) return "";
-  const colonne = (notes) => (notes || [])
-    .slice()
-    .sort((a, b) => b.note - a.note)
-    .map(n => {
-      const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
-      return `
-        <div class="mdet-note-row">
-          <div class="nom">${escapeHtml(n.player_nom)}${n.entrant ? `<span class="entrant-tag">(banc)</span>` : ""}</div>
-          <div class="note${isMotm ? " motm" : ""}">${n.note.toFixed(1)}</div>
-        </div>
-      `;
-    }).join("");
+function mdetNoteClass(note) {
+  const n = Number(note);
+  if (!Number.isFinite(n)) return "mdet-note-moyen";
+  if (n >= 7.5) return "mdet-note-elite";
+  if (n >= 6.5) return "mdet-note-bon";
+  if (n >= 5.5) return "mdet-note-moyen";
+  if (n >= 4.5) return "mdet-note-faible";
+  return "mdet-note-mauvais";
+}
 
-  return `<div class="mdet-notes-grid"><div>${colonne(notesJoueurs.domicile)}</div><div>${colonne(notesJoueurs.exterieur)}</div></div>`;
+function mdetPlayerRow(n, hommeDuMatch) {
+  const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
+  return `
+    <div class="mdet-player-row">
+      <div class="mdet-player-sub-icon">${n.entrant ? "🔄" : ""}</div>
+      <div class="mdet-player-name${isMotm ? " motm" : ""}">${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+      <div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>
+    </div>
+  `;
+}
+
+function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe) {
+  const titulaires = (notes || []).filter(n => !n.entrant);
+  const remplacants = (notes || []).filter(n => n.entrant);
+  return `
+    <div class="mdet-roster-col">
+      <div class="mdet-roster-team-head">${logoHtml}<span>${escapeHtml(nomEquipe)}</span></div>
+      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
+      ${remplacants.length ? `<div class="mdet-roster-subhead">Remplaçants</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch)).join("")}` : ""}
+    </div>
+  `;
+}
+
+function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt) {
+  if (!notesJoueurs) return "";
+  return `
+    <div class="mdet-roster-grid">
+      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom)}
+      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt)}
+    </div>
+  `;
+}
+
+// ---- Logos de club (table `clubs`, colonne photo_url) ------------------
+function mdetLogoFallback(nom, small) {
+  return `<div class="mdet-club-logo-fallback${small ? " small" : ""}" style="background:${colorFromName(nom || "")};">${initialsFromName(nom || "?")}</div>`;
+}
+
+function mdetLogoHtml(url, nom, small) {
+  const fallback = mdetLogoFallback(nom, small);
+  if (!url) return fallback;
+  const cls = small ? "mdet-club-logo" : "mdet-club-logo";
+  const size = small ? 20 : 34;
+  return `<img class="${cls}" style="width:${size}px;height:${size}px;" src="${escapeHtml(url)}" alt="" loading="lazy" onerror="this.outerHTML=${JSON.stringify(fallback).replace(/"/g, "&quot;")};">`;
+}
+
+async function mdetFetchClubLogos(clubIds) {
+  const ids = [...new Set(clubIds.filter(Boolean))];
+  const logos = {};
+  if (!ids.length) return logos;
+  try {
+    const { data: gameClubs } = await supabaseClient.from("game_clubs").select("id, club_ref").in("id", ids);
+    const refs = (gameClubs || []).map(g => g.club_ref).filter(Boolean);
+    if (!refs.length) return logos;
+    const { data: clubRows } = await supabaseClient.from("clubs").select("id, photo_url").in("id", [...new Set(refs)]);
+    const photoByRef = Object.fromEntries((clubRows || []).map(c => [c.id, c.photo_url]));
+    (gameClubs || []).forEach(g => {
+      if (g.club_ref && photoByRef[g.club_ref]) logos[g.id] = photoByRef[g.club_ref];
+    });
+  } catch (e) {
+    console.error(e);
+  }
+  return logos;
+}
+
+// Barre de "domination" pour comparer une stat des deux equipes (possession,
+// tirs, tirs cadres, corners...). Si isPercent est vrai, valDom/valExt sont
+// deja des pourcentages sommant a ~100 ; sinon on calcule la part relative.
+function mdetBarStat(label, valDom, valExt, isPercent) {
+  if (valDom == null && valExt == null) return "";
+  const d = Number(valDom) || 0;
+  const e = Number(valExt) || 0;
+  let pctDom, pctExt;
+  if (isPercent) {
+    pctDom = d; pctExt = e;
+  } else {
+    const total = d + e;
+    pctDom = total > 0 ? (d / total) * 100 : 50;
+    pctExt = total > 0 ? (e / total) * 100 : 50;
+  }
+  return `
+    <div class="mdet-bar-row">
+      <div class="mdet-bar-val dom">${valDom ?? "-"}</div>
+      <div class="mdet-bar-mid">
+        <div class="mdet-bar-label">${label}</div>
+        <div class="mdet-bar-track">
+          <div class="mdet-bar-fill dom" style="width:${pctDom}%"></div>
+          <div class="mdet-bar-fill ext" style="width:${pctExt}%"></div>
+        </div>
+      </div>
+      <div class="mdet-bar-val ext">${valExt ?? "-"}</div>
+    </div>
+  `;
 }
 
 async function openMatchDetails(matchId) {
@@ -8366,10 +8506,21 @@ async function openMatchDetails(matchId) {
   const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
 
   const motm = stats.homme_du_match;
+  const logos = await mdetFetchClubLogos([m.club_domicile_id, m.club_exterieur_id]);
+  const logoDom = mdetLogoHtml(logos[m.club_domicile_id], nomDom, false);
+  const logoExt = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, false);
+  const logoDomSmall = mdetLogoHtml(logos[m.club_domicile_id], nomDom, true);
+  const logoExtSmall = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, true);
 
   content.innerHTML = `
     <div class="mdet-header">
-      <div class="mdet-header-teams">${escapeHtml(nomDom)} <span class="score">${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}</span> ${escapeHtml(nomExt)}</div>
+      <div class="mdet-header-teams">
+        ${logoDom}
+        <div class="mdet-header-team-name dom">${escapeHtml(nomDom)}</div>
+        <span class="score">${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}</span>
+        <div class="mdet-header-team-name ext">${escapeHtml(nomExt)}</div>
+        ${logoExt}
+      </div>
       <button class="mdet-close" id="mdetCloseBtn">✕</button>
     </div>
     <div class="mdet-meta">${dateLabel}${m.journee ? ` · J${m.journee}` : ""}</div>
@@ -8379,12 +8530,14 @@ async function openMatchDetails(matchId) {
     ${motm ? `<div class="mdet-motm-banner">⭐ Homme du match : ${escapeHtml(motm.player_nom)} (${Number(motm.note).toFixed(1)})</div>` : ""}
 
     <div class="mdet-section-title">Statistiques</div>
+    <div class="mdet-bars">
+      ${mdetBarStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null, true)}
+      ${mdetBarStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur, false)}
+      ${mdetBarStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur, false)}
+      ${mdetBarStat("Corners", stats.corners?.domicile, stats.corners?.exterieur, false)}
+    </div>
     <div class="mdet-stats-grid">
-      ${mdetLigneStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null)}
-      ${mdetLigneStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur)}
-      ${mdetLigneStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur)}
       ${mdetLigneStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur)}
-      ${mdetLigneStat("Corners", stats.corners?.domicile, stats.corners?.exterieur)}
       ${mdetLigneStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur)}
       ${mdetLigneStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur)}
       ${mdetLigneStat("Centres", stats.centres?.domicile, stats.centres?.exterieur)}
@@ -8395,8 +8548,8 @@ async function openMatchDetails(matchId) {
     <div class="mdet-section-title">Faits de match</div>
     ${mdetRenderEvenements(stats, m.club_domicile_id, nomDom, nomExt)}
 
-    <div class="mdet-section-title">Notes des joueurs</div>
-    ${mdetRenderNotes(stats.notes_joueurs, motm) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
+    <div class="mdet-section-title">Compositions</div>
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
   `;
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
