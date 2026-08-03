@@ -1005,6 +1005,8 @@
   .mdet-player-sub-icon { flex-shrink: 0; font-size: 11px; width: 14px; text-align: center; }
   .mdet-player-name-wrap { flex: 1; min-width: 0; }
   .mdet-player-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .mdet-player-name.clickable { cursor: pointer; }
+  .mdet-player-name.clickable:hover { color: var(--gold); text-decoration: underline; }
   .mdet-player-name.motm { color: var(--gold); }
   .mdet-player-sub-detail { font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mdet-player-note {
@@ -8410,14 +8412,22 @@ function mdetNoteClass(note) {
   return "mdet-note-mauvais";
 }
 
-function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant) {
+// Ouvre la fiche du joueur clique (meme motif que les autres liens
+// fiche.html du dashboard : game + club + player en query string).
+window.mdetGoToPlayer = function (clubId, playerId) {
+  if (!playerId) return;
+  window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId || "")}&player=${encodeURIComponent(playerId)}`;
+};
+
+function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
   const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
+  const clickable = n.player_id ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(clubId || "")).replace(/'/g, "&#39;")}', '${escapeHtml(String(n.player_id)).replace(/'/g, "&#39;")}')"` : "";
   return `
     <div class="mdet-player-row">
       <div class="mdet-player-sub-icon">${n.entrant ? "🔄" : ""}</div>
       <div class="mdet-player-name-wrap">
-        <div class="mdet-player-name${isMotm ? " motm" : ""}">${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+        <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
         ${sortant ? `<div class="mdet-player-sub-detail">↔ ${escapeHtml(sortant.sortant_nom)}${sortant.minute != null ? ` · ${sortant.minute}e` : ""}</div>` : ""}
       </div>
       <div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>
@@ -8425,7 +8435,7 @@ function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant) {
   `;
 }
 
-function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements) {
+function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId) {
   const titulaires = (notes || []).filter(n => !n.entrant);
   const remplacants = (notes || []).filter(n => n.entrant);
   // Associe chaque entrant a son sortant (par nom), a partir de stats.remplacements.
@@ -8434,21 +8444,22 @@ function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacem
   return `
     <div class="mdet-roster-col">
       <div class="mdet-roster-team-head">${logoHtml}<span>${escapeHtml(nomEquipe)}</span></div>
-      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
-      ${remplacants.length ? `<div class="mdet-roster-subhead">Remplacements</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant)).join("")}` : ""}
+      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
+      ${remplacants.length ? `<div class="mdet-roster-subhead">Remplacements</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("")}` : ""}
     </div>
   `;
 }
 
-function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt) {
+function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt, clubDomId, clubExtId) {
   if (!notesJoueurs) return "";
   return `
     <div class="mdet-roster-grid">
-      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom)}
-      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt)}
+      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom, clubDomId)}
+      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt, clubExtId)}
     </div>
   `;
 }
+
 
 // ---- Logos de club (referentiel public.clubs, colonne logo_url,
 // rattache via game_clubs.club_ref — meme motif que club.html) ----------
@@ -8594,7 +8605,7 @@ async function openMatchDetails(matchId) {
     ${mdetRenderEvenements(stats, m.club_domicile_id, nomDom, nomExt)}
 
     <div class="mdet-section-title">Compositions</div>
-    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, m.club_domicile_id, m.club_exterieur_id) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
   `;
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
