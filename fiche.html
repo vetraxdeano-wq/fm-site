@@ -1707,18 +1707,31 @@ function fitScale() {
 
   if (window.innerWidth <= 800) {
     root.style.transform = "none";
+    root.style.width = "100%";
     outer.style.height = "auto";
     return;
   }
 
+  // Passe 1 : mesure de la hauteur naturelle a largeur normale (100%).
   root.style.transform = "none";
+  root.style.width = "100%";
   outer.style.height = "auto";
-  // Force un reflow avant mesure pour avoir la vraie hauteur naturelle du contenu.
-  const naturalHeight = root.scrollHeight;
+  let naturalHeight = root.scrollHeight;
   const available = outer.parentElement.clientHeight || window.innerHeight;
 
-  let scale = Math.min(1, available / naturalHeight);
-  scale = Math.max(SCALE_MIN, scale);
+  let scale = Math.max(SCALE_MIN, Math.min(1, available / naturalHeight));
+
+  // Passe 2 : scale() retrecit AUSSI la largeur (d'ou les bandes vides sur les
+  // cotes) — on elargit donc la racine en amont dans la meme proportion
+  // (100/scale %) pour qu'une fois reduite par le transform, elle occupe de
+  // nouveau 100% de la largeur disponible. On re-mesure a cette largeur (peut
+  // legerement changer le wrap du contenu) pour affiner le scale final.
+  if (scale < 1) {
+    root.style.width = (100 / scale) + "%";
+    naturalHeight = root.scrollHeight;
+    scale = Math.max(SCALE_MIN, Math.min(1, available / naturalHeight));
+    root.style.width = (100 / scale) + "%";
+  }
 
   root.style.transform = `scale(${scale})`;
   outer.style.height = Math.round(naturalHeight * scale) + "px";
