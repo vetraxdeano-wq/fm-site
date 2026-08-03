@@ -130,6 +130,18 @@ function profilRole(role) {
 }
 
 /**
+ * Axe de poste défense → attaque, utilisé pour juger de la cohérence d'un
+ * remplacement (un attaquant doit remplacer un attaquant/ailier, pas un
+ * défenseur ou un milieu défensif, et inversement). Le gardien n'y figure
+ * pas : il n'est jamais concerné par un changement de champ dans ce modèle.
+ */
+const ORDRE_AXE_POSTE = ['defenseur', 'milieu', 'milieu_offensif', 'ailier', 'attaquant'];
+function axePoste(role) {
+  const idx = ORDRE_AXE_POSTE.indexOf(profilRole(role).categorie);
+  return idx === -1 ? 2 : idx;
+}
+
+/**
  * Déduit un rôle générique (clé de PROFILS_ROLE) à partir de `poste_brut`
  * (ex. "AL/M (G), MO (GC), BT (C)") pour un joueur qui n'a PAS de slot de
  * composition assigné — typiquement un remplaçant pris sur le banc, dont on
@@ -508,10 +520,25 @@ function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabilit
     const entrant = bancEligible[i];
     if (!entrant) break;
 
-    // Le sortant : titulaire de champ restant sur le pré le moins bien noté (fatigue/forme du jour)
     const candidatsSortants = compositions.filter((c) => c.role !== 'GB' && !dejaSorti.has(c.player_id));
     if (!candidatsSortants.length) break;
-    const sortant = candidatsSortants.reduce((pire, c) => (c.note ?? 50) < (pire.note ?? 50) ? c : pire, candidatsSortants[0]);
+
+    // Remplacement cohérent : parmi les titulaires encore sur le terrain, on fait
+    // sortir celui dont le poste est le plus proche de celui de l'entrant (un
+    // attaquant remplace un attaquant/ailier, pas un défenseur ou un milieu
+    // défensif) — la distance de poste prime. À distance égale, c'est le moins
+    // bien noté (fatigue/prestation la plus faible) qui cède sa place.
+    const axeEntrant = axePoste(entrant.role);
+    let sortant = candidatsSortants[0];
+    let meilleurScore = Infinity;
+    for (const c of candidatsSortants) {
+      const distancePoste = Math.abs(axePoste(c.role) - axeEntrant);
+      const score = distancePoste * 1000 + (c.note ?? 50);
+      if (score < meilleurScore) {
+        meilleurScore = score;
+        sortant = c;
+      }
+    }
     dejaSorti.add(sortant.player_id);
 
     // Minute d'entrée : progresse au fil des changements ; un coach mieux préparé anticipe un peu plus tôt.
@@ -792,6 +819,80 @@ function genererResume({ nomDom, nomExt, scoreDom, scoreExt, statsDom, buteurs }
 }
 
 // ============================================================
+// ÉTAPE 11 — IMPACT POST-MATCH (condition physique & moral)
+// ============================================================
+
+/**
+ * Minutes jouées par un joueur sur CE match, déduites des remplacements de
+ * son équipe : 90 si titulaire jamais remplacé, minute de sortie si remplacé,
+ * (90 - minute d'entrée) si entrant, 0 s'il n'a pas du tout été utilisé.
+ */
+function minutesJoueesParJoueur(playerId, compositions, remplacements) {
+  const slotTitulaire = compositions.find((c) => c.player_id === playerId);
+  if (slotTitulaire) {
+    const sortie = remplacements.find((r) => r.slot_id === slotTitulaire.slot_id);
+    return sortie ? sortie.minute : 90;
+  }
+  const entree = remplacements.find((r) => r.entrant_id === playerId);
+  if (entree) return clamp(90 - entree.minute, 0, 90);
+  return 0;
+}
+
+/**
+ * Impact d'un match sur la condition physique (`forme`) et le moral de TOUT
+ * l'effectif équipe_a d'un club (pas seulement les 11 + le banc utilisé) :
+ *
+ *  - Condition physique : baisse dégressive selon les minutes réellement
+ *    jouées (-15 pour 90 minutes complètes, proportionnellement moins pour un
+ *    match écourté ou une entrée tardive), aucune perte pour un joueur non
+ *    utilisé (il récupère plutôt que de fatiguer).
+ *  - Moral : +5 pour un titulaire (a débuté la rencontre, quel que soit son
+ *    temps de jeu ensuite). Pour un joueur qui n'a PAS joué DU TOUT, on
+ *    compare son niveau (CA / `niveau_actuel`) à celui de ses coéquipiers
+ *    équipe_a pour savoir s'il fait partie du "onze attendu" : si oui (il
+ *    aurait dû jouer et ne l'a pas fait) il perd 10 de moral ; si c'est un
+ *    joueur de rotation/réserve pour qui ne pas jouer est normal, son moral
+ *    ne bouge pas. Un joueur blessé qui n'a pas joué n'est jamais pénalisé.
+ *
+ * Fonction pure : ne modifie rien en base, renvoie la liste des nouvelles
+ * valeurs à appliquer par l'appelant (edge function) sur `game_players`.
+ */
+function calculerImpactPostMatch({ compositions, joueurs, remplacements = [] }) {
+  // "Onze attendu" : les joueurs équipe_a au CA le plus élevé (autant que de
+  // titulaires dans la compo, 11 normalement). Un joueur de ce groupe qui ne
+  // joue pas du tout est légitimement frustré ; un joueur en dehors ne l'est pas.
+  const effectifTrieParCA = joueurs
+    .slice()
+    .sort((a, b) => (b.niveau_actuel ?? b.ca ?? 0) - (a.niveau_actuel ?? a.ca ?? 0));
+  const tailleOnzeAttendu = compositions.length || 11;
+  const idsOnzeAttendu = new Set(effectifTrieParCA.slice(0, tailleOnzeAttendu).map((j) => j.id));
+
+  return joueurs.map((jr) => {
+    const minutes = minutesJoueesParJoueur(jr.id, compositions, remplacements);
+    const estTitulaire = compositions.some((c) => c.player_id === jr.id);
+    const aJoue = minutes > 0;
+    const estBlesse = (jr.blessure_jours ?? 0) > 0;
+
+    const perteForme = aJoue ? Math.round((15 * clamp(minutes, 0, 90)) / 90) : 0;
+
+    let deltaMoral = 0;
+    if (estTitulaire) deltaMoral = 5;
+    else if (!aJoue && !estBlesse && idsOnzeAttendu.has(jr.id)) deltaMoral = -10;
+
+    const formeActuelle = clamp(jr.forme ?? 100, 0, 150);
+    const moralActuel = clamp(jr.moral ?? 100, 0, 150);
+
+    return {
+      player_id: jr.id,
+      minutes_jouees: minutes,
+      titulaire: estTitulaire,
+      forme: clamp(formeActuelle - perteForme, 0, 150),
+      moral: clamp(moralActuel + deltaMoral, 0, 150),
+    };
+  });
+}
+
+// ============================================================
 // ORCHESTRATEUR
 // ============================================================
 
@@ -915,9 +1016,19 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
     buteurs: tousLesButs,
   });
 
+  // Étape 11 — impact du match sur la condition physique et le moral de TOUT
+  // l'effectif équipe_a (pas que les 11 + le banc utilisé), à appliquer par
+  // l'appelant sur `game_players.forme` / `game_players.moral`.
+  const impactDom = calculerImpactPostMatch({ compositions: compoDom, joueurs: domicile.joueurs, remplacements: remplacementsDom });
+  const impactExt = calculerImpactPostMatch({ compositions: compoExt, joueurs: exterieur.joueurs, remplacements: remplacementsExt });
+
   return {
     score_domicile: scoreDom,
     score_exterieur: scoreExt,
+    impact_joueurs: {
+      domicile: impactDom,
+      exterieur: impactExt,
+    },
     stats: {
       possession: { domicile: stats.domicile.possession, exterieur: stats.exterieur.possession },
       tirs: { domicile: stats.domicile.tirs, exterieur: stats.exterieur.tirs },
@@ -957,6 +1068,9 @@ const MOTEUR_MATCH_EXPORTS = {
   calculerNotesJoueurs,
   genererResume,
   noteJoueurMatch,
+  // impact post-match (forme / moral)
+  calculerImpactPostMatch,
+  minutesJoueesParJoueur,
   // impact tactique
   profilTactique,
   calculerMismatchTactique,
@@ -965,6 +1079,7 @@ const MOTEUR_MATCH_EXPORTS = {
   genererRemplacements,
   compositionEffective,
   inferRolePrincipal,
+  axePoste,
 };
 
 if (typeof module !== 'undefined' && module.exports) {
