@@ -2022,6 +2022,37 @@ async function loadDashboard() {
   }
 
   subscribeToGameUpdates();
+
+  if (isHost && game.statut !== "lobby") {
+    backfillMissingTactiquesOnce();
+  }
+}
+
+// Filet de securite pour les parties deja demarrees avant l'ajout de la
+// generation automatique des tactiques IA (ex: la partie de test) : au
+// premier chargement du dashboard par le host, verifie discretement si des
+// clubs des championnats geres n'ont encore aucune tactique et, si oui, les
+// genere (memes regles que pour un club humain). Ne s'execute qu'une fois
+// par session de navigation pour ne pas re-interroger la base a chaque
+// rafraichissement temps reel.
+let backfillTactiquesDone = false;
+async function backfillMissingTactiquesOnce() {
+  if (backfillTactiquesDone) return;
+  backfillTactiquesDone = true;
+  try {
+    const [{ data: trackedClubs }, { data: existing }] = await Promise.all([
+      supabaseClient.from("game_clubs").select("id").eq("game_id", gameId).not("competition_ref", "is", null),
+      supabaseClient.from("tactiques").select("game_club_id").eq("game_id", gameId),
+    ]);
+    const existingIds = new Set((existing || []).map(t => t.game_club_id));
+    const missing = (trackedClubs || []).map(c => c.id).filter(id => !existingIds.has(id));
+    if (missing.length) {
+      console.log(`Génération des tactiques manquantes pour ${missing.length} club(s)...`);
+      await genererTactiquesPourClubs(missing, { force: true });
+    }
+  } catch (e) {
+    console.error("backfillMissingTactiquesOnce:", e);
+  }
 }
 
 // Ecoute en temps reel les changements sur la ligne `games` de cette partie
@@ -3509,7 +3540,12 @@ async function showFmTactiqueView(clubId) {
   await computeAndRenderTactic(clubId, { force: false });
 }
 
-async function computeAndRenderTactic(clubId, { force }) {
+// Calcule ET persiste la tactique d'un club (formation, composition,
+// consignes), sans rien toucher au DOM : reutilisable aussi bien pour
+// l'onglet Tactique (avec rendu) que pour la generation en masse des clubs
+// geres par l'IA (voir genererTactiquesPourClubs) ou apres un changement de
+// coach (voir regenererTactiqueApresChangementCoach).
+async function generateTactiqueForClub(clubId) {
   const [staffMembers, effectif] = await Promise.all([
     staffViewLoadedForClub === clubId ? Promise.resolve(staffViewMembers) : fetchClubStaffMembers(clubId),
     fetchClubTacticEffectif(clubId),
@@ -3517,21 +3553,87 @@ async function computeAndRenderTactic(clubId, { force }) {
   const coachRows = staffMembers.filter(m => COACH_TEAM_POSTES.includes((m.poste || "").trim()));
   const resolved = resolveTeamCoaches(coachRows);
   const coach = resolved.equipe_a;
+  if (!coach) return null; // pas d'entraineur "Equipe A" : rien a persister
 
-  if (!coach) {
+  const choice = tacChooseFormation(coach, effectif);
+  const adaptability = tacCoachAdaptability(coach);
+  const instructions = tacComputeInstructions(coach, adaptability, choice.result.assigned);
+  await persistTactique(clubId, coach, choice, instructions);
+  return { coach, choice, instructions, effectif, clubId };
+}
+
+// Petit executeur a concurrence limitee (evite de degainer 200+ requetes
+// Supabase toutes en meme temps lors d'une generation en masse).
+async function runWithConcurrencyLimit(items, limit, worker) {
+  let index = 0;
+  async function next() {
+    while (index < items.length) {
+      const i = index++;
+      try { await worker(items[i], i); } catch (e) { console.error("runWithConcurrencyLimit:", items[i], e); }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
+}
+
+// (Re)genere la tactique des clubs de `clubIds` dont le coach "Equipe A"
+// actuel ne correspond pas (ou plus) a la tactique persistee — typiquement :
+// tous les clubs geres par l'IA au demarrage de la partie (aucune tactique
+// encore enregistree), ou n'importe quel club apres un changement de coach.
+// Avec { force: true }, regenere sans condition (utile pour un vrai
+// changement de coach qu'on sait deja survenu). Meme moteur que l'onglet
+// Tactique cote joueur humain (tacChooseFormation / tacComputeInstructions) :
+// aucune logique separee pour l'IA.
+async function genererTactiquesPourClubs(clubIds, { force = false } = {}) {
+  if (!clubIds || !clubIds.length) return;
+
+  let existingByClub = {};
+  if (!force) {
+    const { data: existing } = await supabaseClient
+      .from("tactiques")
+      .select("game_club_id, coach_staff_ref")
+      .in("game_club_id", clubIds);
+    existingByClub = Object.fromEntries((existing || []).map(t => [t.game_club_id, t.coach_staff_ref]));
+  }
+
+  const { data: allStaff } = await supabaseClient
+    .from("game_staff")
+    .select("id, staff_ref, poste, game_club_id, est_adjoint, equipe_assignee")
+    .eq("game_id", gameId)
+    .in("game_club_id", clubIds)
+    .in("poste", COACH_TEAM_POSTES);
+
+  const staffByClub = {};
+  (allStaff || []).forEach(s => { (staffByClub[s.game_club_id] = staffByClub[s.game_club_id] || []).push(s); });
+
+  const toGenerate = clubIds.filter(id => {
+    if (force) return true;
+    const resolved = resolveTeamCoaches(staffByClub[id] || []);
+    const currentCoachRef = resolved.equipe_a?.staff_ref || null;
+    return currentCoachRef && currentCoachRef !== existingByClub[id];
+  });
+  if (!toGenerate.length) return;
+
+  await runWithConcurrencyLimit(toGenerate, 10, id => generateTactiqueForClub(id));
+}
+
+// A appeler juste apres l'embauche ou le depart d'un entraineur "Equipe A"
+// (des que cette action existera cote UI) pour resynchroniser la tactique
+// du club concerne sur son nouveau coach.
+async function regenererTactiqueApresChangementCoach(clubId) {
+  await genererTactiquesPourClubs([clubId], { force: true });
+}
+
+async function computeAndRenderTactic(clubId, { force }) {
+  const result = await generateTactiqueForClub(clubId);
+  if (!result) {
     document.getElementById("tacCoachPanel").innerHTML = `<div class="tac-card"><div class="fm-empty">Aucun entraîneur "Équipe A" n'est en poste : impossible de définir une tactique.</div></div>`;
     document.getElementById("tacPitch").innerHTML = "";
     document.getElementById("tacBench").innerHTML = "";
     return;
   }
-
-  const choice = tacChooseFormation(coach, effectif);
-  const adaptability = tacCoachAdaptability(coach);
-  const instructions = tacComputeInstructions(coach, adaptability, choice.result.assigned);
   tacLoadedForClub = clubId;
-  tacCurrentResult = { coach, choice, instructions, effectif, clubId };
-  renderTacticResult(tacCurrentResult);
-  persistTactique(clubId, coach, choice, instructions);
+  tacCurrentResult = result;
+  renderTacticResult(result);
 }
 
 function tacMentalityIndex(label) {
@@ -8435,6 +8537,26 @@ async function startGame(participantCount) {
       .eq("id", gameId);
 
     if (error) throw error;
+
+    // Bootstrap de la saison 1 : affecte chaque club des 12 championnats
+    // geres a sa competition, cree les lignes game_competitions, puis
+    // genere le calendrier (round-robin aller/retour, vendredi/samedi/
+    // dimanche, 15 aout -> 15 mai). Idempotent (ne fait rien si deja fait).
+    const { error: bootErr } = await supabaseClient.rpc("demarrer_saison_1", { p_game_id: gameId });
+    if (bootErr) console.error("Erreur bootstrap saison 1 :", bootErr);
+
+    // Genere une tactique (formation + composition + consignes) pour tous
+    // les clubs des championnats geres, y compris ceux pilotes par l'IA
+    // (memes regles que pour un club humain) : necessaire pour que le
+    // moteur de simulation ait un onze reel a analyser des le premier match.
+    toast("Génération des tactiques des clubs...");
+    const { data: trackedClubs, error: clubsErr } = await supabaseClient
+      .from("game_clubs")
+      .select("id")
+      .eq("game_id", gameId)
+      .not("competition_ref", "is", null);
+    if (clubsErr) console.error("Erreur chargement des clubs a tacticiser :", clubsErr);
+    await genererTactiquesPourClubs((trackedClubs || []).map(c => c.id));
 
     toast("Partie demarree !");
     document.getElementById("floatingStart").classList.add("hidden");
