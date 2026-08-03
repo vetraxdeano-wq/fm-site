@@ -142,10 +142,11 @@
     display: grid;
     gap: clamp(10px, 1.2vw, 18px);
     grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(260px, 380px);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto auto auto;
     grid-template-areas:
       "identity attrs radar"
       "postes   attrs radar"
+      "saison   attrs radar"
       "footer   footer footer";
     align-items: stretch;
   }
@@ -155,6 +156,7 @@
       grid-template-areas:
         "identity radar"
         "postes   radar"
+        "saison   radar"
         "attrs    attrs"
         "footer   footer";
     }
@@ -166,6 +168,7 @@
         "identity"
         "attrs"
         "postes"
+        "saison"
         "radar"
         "footer";
     }
@@ -187,6 +190,65 @@
   .area-radar { grid-area: radar; }
   .area-footer { grid-area: footer; display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(10px,1.2vw,18px); }
   @media (max-width: 980px) { .area-footer { grid-template-columns: 1fr; } }
+
+  /* --- Saison en cours (card compacte, comble l'espace vide sous "Postes") --- */
+  .area-saison { grid-area: saison; }
+  .stat-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-tile {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .stat-tile .stat-val { font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1.1; }
+  .stat-tile .stat-val.gold { color: var(--gold); }
+  .stat-tile .stat-lbl { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .saison-empty-hint { font-size: 12px; color: var(--text-dim); margin-top: 8px; line-height: 1.4; }
+
+  /* --- Sous-onglets de la fiche : Aperçu / Stats (meme habillage que dashboard.html) --- */
+  .fiche-subtab-bar {
+    display: flex; gap: 4px; flex: 0 0 auto; background: #14171d;
+    border-bottom: 1px solid var(--border); padding: 0 clamp(10px,1.4vw,20px);
+  }
+  .fiche-subtab-btn {
+    display: flex; align-items: center; gap: 8px; background: transparent; border: none;
+    border-bottom: 3px solid transparent; color: var(--text-dim);
+    padding: 12px 16px 10px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .fiche-subtab-btn:hover { color: var(--text); }
+  .fiche-subtab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .fiche-subtab-icon { font-size: 14px; line-height: 1; }
+  #statsPanel.hidden, .wrap.hidden { display: none !important; }
+
+  /* --- Sous-onglet Stats : saison en cours + historique de carriere --- */
+  #statsPanel { padding: clamp(10px, 1.4vw, 20px); display: flex; flex-direction: column; gap: clamp(10px,1.2vw,18px); }
+  .stats-tiles-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(8px,1vw,14px); }
+  @media (max-width: 700px) { .stats-tiles-row { grid-template-columns: repeat(2, 1fr); } }
+  .stats-big-tile {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; text-align: center;
+  }
+  .stats-big-tile .stat-val { font-size: 28px; font-weight: 800; color: var(--accent); }
+  .stats-big-tile .stat-val.gold { color: var(--gold); }
+  .stats-big-tile .stat-lbl { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+
+  .stats-table-wrap { overflow-x: auto; }
+  table.fm-stats-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.fm-stats-table th, table.fm-stats-table td { padding: 8px 10px; text-align: left; white-space: nowrap; }
+  table.fm-stats-table thead th {
+    color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border); font-weight: 600;
+  }
+  table.fm-stats-table tbody tr { border-bottom: 1px solid rgba(38,42,51,0.6); }
+  table.fm-stats-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+  table.fm-stats-table tbody tr.total-row { border-top: 2px solid var(--border); font-weight: 700; background: rgba(74,222,128,0.05); }
+  table.fm-stats-table tbody tr.total-row td { color: var(--text); }
+  .res-chip { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+  .res-chip.V { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .res-chip.N { background: rgba(251,191,36,0.15); color: var(--gold); }
+  .res-chip.D { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .stats-empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 30px 20px; }
+  .stats-loading { text-align: center; color: var(--text-dim); font-size: 13px; padding: 20px; }
+  .card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .card-title-row h3 { margin: 0; }
 
   /* --- Attributs : écran le plus important, mis en valeur --- */
   .area-attrs {
@@ -352,6 +414,11 @@
       <div id="scaleOuter">
       <div id="scaleRoot">
 
+      <div class="fiche-subtab-bar" id="ficheSubtabBar">
+        <button type="button" class="fiche-subtab-btn active" data-subtab="apercu"><span class="fiche-subtab-icon">🧍</span>Aperçu</button>
+        <button type="button" class="fiche-subtab-btn" data-subtab="stats"><span class="fiche-subtab-icon">📊</span>Stats</button>
+      </div>
+
       <div class="wrap" id="content">
   <div class="card area-identity">
     <div class="player-photo-wrap" id="playerPhotoWrap"></div>
@@ -378,6 +445,15 @@
     <div id="posteChips" style="margin-top:10px"></div>
   </div>
 
+  <div class="card area-saison">
+    <div class="card-title-row">
+      <h3>Saison en cours</h3>
+      <span class="poste-select-label empty" id="saisonBadge">Saison -</span>
+    </div>
+    <div class="stat-tiles" id="saisonTiles"></div>
+    <div class="saison-empty-hint" id="saisonEmptyHint" hidden>Ce joueur n'a pas encore disputé de match cette saison.</div>
+  </div>
+
   <div class="card area-radar">
     <h3>Profil global</h3>
     <div class="radar-wrap">
@@ -402,6 +478,25 @@
     </div>
   </div>
 </div>
+
+      <div id="statsPanel" class="hidden">
+        <div class="card">
+          <div class="card-title-row">
+            <h3>Saison en cours — <span id="statsSaisonLabel">Saison -</span></h3>
+          </div>
+          <div class="stats-tiles-row" id="statsSaisonTiles"></div>
+        </div>
+
+        <div class="card">
+          <h3>Matchs de la saison</h3>
+          <div id="statsMatchLogHolder"><div class="stats-loading">Chargement des matchs…</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Historique de carrière</h3>
+          <div id="statsCareerHolder"><div class="stats-loading">Chargement de l'historique…</div></div>
+        </div>
+      </div>
 
       </div>
       </div>
@@ -671,6 +766,24 @@ function ageFromDob(dob) {
 }
 
 let gameCurrentDate = null;
+let currentSeason = null;
+let currentGamePlayer = null;
+
+// ---------- Tuiles stats (reutilisees dans la carte "Saison en cours" et le sous-onglet Stats) ----------
+function statTilesHtml(row, big) {
+  const cls = big ? "stats-big-tile" : "stat-tile";
+  const buts = row.buts ?? row.buts_saison ?? 0;
+  const passes = row.passes_decisives ?? row.passes_decisives_saison ?? 0;
+  const matchs = row.matchs_joues ?? row.matchs_joues_saison ?? 0;
+  const note = row.note_moyenne ?? row.note_moyenne_saison;
+  return `
+    <div class="${cls}"><span class="stat-val">${buts}</span><span class="stat-lbl">Buts</span></div>
+    <div class="${cls}"><span class="stat-val">${passes}</span><span class="stat-lbl">Passes déc.</span></div>
+    <div class="${cls}"><span class="stat-val">${matchs}</span><span class="stat-lbl">Matchs joués</span></div>
+    <div class="${cls}"><span class="stat-val gold">${note != null ? Number(note).toFixed(1) : "-"}</span><span class="stat-lbl">Note moyenne</span></div>
+  `;
+}
+
 function isContractSoon(d) {
   if (!d || !gameCurrentDate) return false;
   const months = (new Date(d) - gameCurrentDate) / (1000 * 60 * 60 * 24 * 30);
@@ -1285,6 +1398,7 @@ async function loadFiche() {
 
   if (!gameId || !playerId) {
     document.getElementById("fmSearchInput").placeholder = "Joueur introuvable";
+    document.getElementById("ficheSubtabBar").classList.add("hidden");
     document.getElementById("content").classList.add("hidden");
     document.getElementById("emptyState").classList.remove("hidden");
     return;
@@ -1299,6 +1413,7 @@ async function loadFiche() {
     gameCurrentDate = new Date(game.date_debut);
     gameCurrentDate.setDate(gameCurrentDate.getDate() + (game.jour_actuel || 0));
     renderFmDateBadge(game);
+    currentSeason = game.saison ?? null;
   }
 
   // IMPORTANT : on ne sélectionne jamais ca / potentiel / traits cachés ici.
@@ -1308,6 +1423,7 @@ async function loadFiche() {
     "nationalite", "poste_brut", "postes", "statut_special", "reputation_mondiale",
     "personnalite", "pied_gauche", "pied_droit", "date_naissance",
     "contrat_expire", "salaire_actuel", "valeur_marchande_actuelle",
+    "buts_saison", "passes_decisives_saison", "matchs_joues_saison", "note_moyenne_saison",
     ...ALL_ATTR_KEYS,
   ].join(", ");
 
@@ -1320,11 +1436,14 @@ async function loadFiche() {
 
   if (error || !gp) {
     document.getElementById("fmSearchInput").placeholder = "Joueur introuvable";
+    document.getElementById("ficheSubtabBar").classList.add("hidden");
     document.getElementById("content").classList.add("hidden");
     document.getElementById("emptyState").classList.remove("hidden");
     toast("Impossible de charger ce joueur", true);
     return;
   }
+
+  currentGamePlayer = gp;
 
   const extra = gp.players || {};
   clubIdParam = clubIdParam || gp.game_club_id;
@@ -1362,6 +1481,11 @@ async function loadFiche() {
   document.getElementById("posteChips").innerHTML = (gp.postes || [])
     .map(p => `<span class="poste-chip">${escapeHtml(p)}</span>`)
     .join("") || `<span class="poste-chip">${escapeHtml(gp.poste_brut || "-")}</span>`;
+
+  // Saison en cours (comble l'espace vide sous "Postes")
+  document.getElementById("saisonBadge").textContent = currentSeason != null ? `Saison ${currentSeason}` : "Saison -";
+  document.getElementById("saisonTiles").innerHTML = statTilesHtml(gp, false);
+  document.getElementById("saisonEmptyHint").hidden = (gp.matchs_joues_saison || 0) > 0;
 
   // Attributs
   const isGK = (gp.poste_brut || "").toUpperCase().includes("GB");
@@ -1413,6 +1537,161 @@ async function loadFiche() {
 
   scheduleFitScale();
 }
+
+// ===================== SOUS-ONGLETS DE LA FICHE : Aperçu / Stats =====================
+let ficheStatsLoaded = false;
+let ficheStatsRows = null;
+
+function showFicheSubtab(key) {
+  document.querySelectorAll(".fiche-subtab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-subtab") === key));
+  document.getElementById("content").classList.toggle("hidden", key !== "apercu");
+  document.getElementById("statsPanel").classList.toggle("hidden", key !== "stats");
+  if (key === "stats" && !ficheStatsLoaded) {
+    ficheStatsLoaded = true;
+    loadPlayerStats();
+  }
+  scheduleFitScale();
+}
+function initFicheSubtabs() {
+  document.querySelectorAll(".fiche-subtab-btn").forEach(btn => {
+    btn.addEventListener("click", () => showFicheSubtab(btn.getAttribute("data-subtab")));
+  });
+}
+
+// ---------- Chargement des stats (sous-onglet "Stats") ----------
+// Reconstruit à la volée depuis calendrier.stats (buteurs/passeurs/cartons/notes,
+// écrits par l'edge function simulate-match) via le RPC get_player_match_history.
+// Aucune donnée inventée : si le moteur n'a pas encore simulé de match pour ce
+// joueur, les deux tableaux affichent un état vide explicite.
+async function loadPlayerStats() {
+  document.getElementById("statsSaisonLabel").textContent = currentSeason != null ? `Saison ${currentSeason}` : "-";
+
+  if (!currentGamePlayer) return;
+
+  const { data, error } = await supabaseClient.rpc("get_player_match_history", { p_game_player_id: currentGamePlayer.id });
+
+  if (error) {
+    console.error(error);
+    document.getElementById("statsMatchLogHolder").innerHTML = `<div class="stats-empty">Impossible de charger les statistiques.</div>`;
+    document.getElementById("statsCareerHolder").innerHTML = `<div class="stats-empty">Impossible de charger les statistiques.</div>`;
+    document.getElementById("statsSaisonTiles").innerHTML = statTilesHtml(currentGamePlayer, true);
+    return;
+  }
+
+  ficheStatsRows = data || [];
+
+  const rowsThisSeason = ficheStatsRows.filter(r => currentSeason == null || String(r.saison) === String(currentSeason));
+
+  // Tuiles "saison en cours" recalculées depuis le detail des matchs (coherent avec le tableau ci-dessous).
+  if (rowsThisSeason.length) {
+    document.getElementById("statsSaisonTiles").innerHTML = statTilesHtml(aggregateRows(rowsThisSeason), true);
+  } else {
+    // Repli sur les compteurs agrégés déjà présents sur game_players (au cas où aucun
+    // detail de match n'est encore disponible mais que les compteurs, eux, le sont).
+    document.getElementById("statsSaisonTiles").innerHTML = statTilesHtml(currentGamePlayer, true);
+  }
+
+  renderMatchLogTable(rowsThisSeason);
+  renderCareerTable(ficheStatsRows);
+}
+
+function aggregateRows(rows) {
+  const buts = rows.reduce((s, r) => s + (r.buts || 0), 0);
+  const passes = rows.reduce((s, r) => s + (r.passes_decisives || 0), 0);
+  const notes = rows.map(r => r.note).filter(n => n != null).map(Number);
+  const note = notes.length ? notes.reduce((a, b) => a + b, 0) / notes.length : null;
+  return { buts, passes_decisives: passes, matchs_joues: rows.length, note_moyenne: note };
+}
+
+function cartonsIcons(row) {
+  let s = "";
+  if (row.jaunes) s += "🟨".repeat(Math.min(row.jaunes, 2));
+  if (row.rouges) s += "🟥";
+  return s || "-";
+}
+
+function renderMatchLogTable(rows) {
+  const holder = document.getElementById("statsMatchLogHolder");
+  if (!rows.length) {
+    holder.innerHTML = `<div class="stats-empty">Aucun match simulé pour ce joueur cette saison pour le moment.</div>`;
+    return;
+  }
+  const sorted = rows.slice().sort((a, b) => new Date(b.date_match) - new Date(a.date_match));
+  const body = sorted.map(r => `
+    <tr>
+      <td>${r.journee ?? "-"}</td>
+      <td>${formatDate(r.date_match)}</td>
+      <td>${r.domicile ? "🏠 Domicile" : "✈️ Extérieur"}</td>
+      <td>${escapeHtml(r.adversaire_nom || "-")}</td>
+      <td><span class="res-chip ${r.resultat}">${r.resultat}</span> ${r.score_pour}-${r.score_contre}</td>
+      <td>${r.buts || 0}</td>
+      <td>${r.passes_decisives || 0}</td>
+      <td>${r.note != null ? Number(r.note).toFixed(1) : "-"}</td>
+      <td>${r.minutes_joues ?? "-"}'</td>
+      <td>${cartonsIcons(r)}</td>
+    </tr>
+  `).join("");
+  holder.innerHTML = `
+    <div class="stats-table-wrap">
+      <table class="fm-stats-table">
+        <thead><tr>
+          <th>J.</th><th>Date</th><th>Lieu</th><th>Adversaire</th><th>Score</th>
+          <th>Buts</th><th>Passes D.</th><th>Note</th><th>Min.</th><th>Cartons</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderCareerTable(rows) {
+  const holder = document.getElementById("statsCareerHolder");
+  if (!rows.length) {
+    holder.innerHTML = `<div class="stats-empty">Aucun match simulé pour ce joueur pour le moment : l'historique de carrière apparaîtra ici au fil des saisons jouées.</div>`;
+    return;
+  }
+  const bySaison = new Map();
+  rows.forEach(r => {
+    const key = r.saison;
+    if (!bySaison.has(key)) bySaison.set(key, { saison: key, club_nom: r.club_nom, rows: [] });
+    const entry = bySaison.get(key);
+    entry.rows.push(r);
+    entry.club_nom = r.club_nom; // dernier club connu de la saison (le plus récent chronologiquement)
+  });
+  const saisons = [...bySaison.values()].sort((a, b) => (a.saison ?? 0) - (b.saison ?? 0));
+
+  const body = saisons.map(s => {
+    const agg = aggregateRows(s.rows);
+    return `
+      <tr>
+        <td>Saison ${s.saison ?? "-"}</td>
+        <td>${escapeHtml(s.club_nom || "-")}</td>
+        <td>${agg.matchs_joues}</td>
+        <td>${agg.buts}</td>
+        <td>${agg.passes_decisives}</td>
+        <td>${agg.note_moyenne != null ? agg.note_moyenne.toFixed(1) : "-"}</td>
+      </tr>`;
+  }).join("");
+
+  const total = aggregateRows(rows);
+  const totalRow = `
+    <tr class="total-row">
+      <td>Carrière (total)</td>
+      <td>${saisons.length} saison${saisons.length > 1 ? "s" : ""}</td>
+      <td>${total.matchs_joues}</td>
+      <td>${total.buts}</td>
+      <td>${total.passes_decisives}</td>
+      <td>${total.note_moyenne != null ? total.note_moyenne.toFixed(1) : "-"}</td>
+    </tr>`;
+
+  holder.innerHTML = `
+    <div class="stats-table-wrap">
+      <table class="fm-stats-table">
+        <thead><tr><th>Saison</th><th>Club</th><th>MJ</th><th>Buts</th><th>Passes D.</th><th>Note moy.</th></tr></thead>
+        <tbody>${body}${totalRow}</tbody>
+      </table>
+    </div>`;
+}
+initFicheSubtabs();
 
 // ---------- Mise à l'échelle globale ----------
 // Plutôt que de compresser l'intérieur de chaque module, on réduit l'ensemble
