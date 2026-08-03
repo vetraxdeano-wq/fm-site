@@ -143,7 +143,6 @@
   .club-badge {
     width: 96px; height: 138px; border-radius: 16px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 30px; font-weight: 800; color: #1a1300;
     box-shadow: 0 6px 18px rgba(0,0,0,0.4);
   }
   .club-badge img { width: 100%; height: 100%; object-fit: contain; border-radius: 16px; }
@@ -201,6 +200,8 @@
   .key-person-role { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); }
   .key-person-name { font-size: 13.5px; font-weight: 700; }
   .key-person-name.muted { color: var(--text-dim); font-weight: 500; }
+  .key-person-link { color: inherit; text-decoration: none; }
+  .key-person-link:hover { color: var(--gold); text-decoration: underline; }
 
   .palmares-list { display: flex; flex-direction: column; gap: 6px; }
   .palmares-item {
@@ -1030,7 +1031,7 @@ function getClubLogoUrl(rawClub) {
 function renderClubBadge(club, rawClub) {
   const logoUrl = getClubLogoUrl(rawClub);
   if (logoUrl) return `<img src="${escapeHtml(logoUrl)}" alt="">`;
-  return initials(club.nom);
+  return "";
 }
 
 // ===================== TERRAIN ILLUSTRE (derniere composition) =====================
@@ -1176,12 +1177,24 @@ function findByStatut(players, keyword) {
   return (players || []).find(p => (p.statut_special || "").toLowerCase().includes(keyword));
 }
 
-function renderKeyPeople(club, players) {
+function playerFicheLink(playerId) {
+  return `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}&player=${encodeURIComponent(playerId)}`;
+}
+
+function renderKeyPeople(club, players, rawClub) {
   const el = document.getElementById("clubKeyPeople");
   const capitaine = findByStatut(players, "capitaine") && !findByStatut(players, "vice-capitaine")
     ? findByStatut(players, "capitaine")
     : (players || []).find(p => (p.statut_special || "").toLowerCase() === "capitaine");
   const viceCapitaine = findByStatut(players, "vice");
+  const meilleurJoueurId = rawClub?.meilleur_joueur_id || null;
+  const meilleurJoueurNom = club.meilleur_joueur_nom || null;
+
+  const nameOrLink = (nom, id) => {
+    if (!nom) return "-";
+    if (!id) return escapeHtml(nom);
+    return `<a href="${playerFicheLink(id)}" class="key-person-link">${escapeHtml(nom)}</a>`;
+  };
 
   el.innerHTML = `
     <div class="key-people">
@@ -1189,21 +1202,21 @@ function renderKeyPeople(club, players) {
         <div class="key-person-icon">©</div>
         <div>
           <div class="key-person-role">Capitaine</div>
-          <div class="key-person-name ${capitaine ? "" : "muted"}">${capitaine ? escapeHtml(capitaine.nom) : "Non désigné"}</div>
+          <div class="key-person-name ${capitaine ? "" : "muted"}">${capitaine ? nameOrLink(capitaine.nom, capitaine.id) : "Non désigné"}</div>
         </div>
       </div>
       <div class="key-person">
         <div class="key-person-icon">Ⓥ</div>
         <div>
           <div class="key-person-role">Vice-capitaine</div>
-          <div class="key-person-name ${viceCapitaine ? "" : "muted"}">${viceCapitaine ? escapeHtml(viceCapitaine.nom) : "Non désigné"}</div>
+          <div class="key-person-name ${viceCapitaine ? "" : "muted"}">${viceCapitaine ? nameOrLink(viceCapitaine.nom, viceCapitaine.id) : "Non désigné"}</div>
         </div>
       </div>
       <div class="key-person">
         <div class="key-person-icon">★</div>
         <div>
           <div class="key-person-role">Meilleur joueur</div>
-          <div class="key-person-name ${club.meilleur_joueur_nom ? "" : "muted"}">${club.meilleur_joueur_nom ? escapeHtml(club.meilleur_joueur_nom) : "-"}</div>
+          <div class="key-person-name ${meilleurJoueurNom ? "" : "muted"}">${nameOrLink(meilleurJoueurNom, meilleurJoueurId)}</div>
         </div>
       </div>
     </div>
@@ -1955,7 +1968,7 @@ async function renderCompetitionsTab(viewedClubId) {
 function renderClubHero(club, rawClub) {
   const el = document.getElementById("clubHero");
   el.innerHTML = `
-    <div class="club-badge" style="background:${getClubLogoUrl(rawClub) ? "transparent" : colorFromName(club.nom)};">
+    <div class="club-badge">
       ${renderClubBadge(club, rawClub)}
     </div>
     <div class="club-hero-info">
@@ -2065,7 +2078,7 @@ async function loadClub() {
   renderPitch();
   renderFinances(club);
   renderReputation(club, players || []);
-  renderKeyPeople(club, players || []);
+  renderKeyPeople(club, players || [], rawClub);
   renderPalmares(rawClub);
 }
 
