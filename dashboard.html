@@ -8672,13 +8672,19 @@ async function mdetDominantColorFromLogo(url) {
       image.onerror = () => reject(new Error("load failed"));
       image.src = url;
     });
-    const size = 24;
+    const size = 32;
     const canvas = document.createElement("canvas");
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, size, size);
     const { data } = ctx.getImageData(0, 0, size, size);
-    let r = 0, g = 0, b = 0, count = 0;
+    // Regroupe les pixels par teinte quantifiee (buckets de 12 degres) pour
+    // isoler la couleur LA PLUS FREQUENTE du blason plutot que la moyenne
+    // brute de tous les pixels colores : un simple moyennage RGB melange
+    // par exemple le bleu dominant d'un blason et le rouge d'un liseret
+    // tricolore en un violet qui ne ressemble a aucune des deux couleurs
+    // reelles du logo.
+    const buckets = {};
     for (let i = 0; i < data.length; i += 4) {
       const alpha = data[i + 3];
       if (alpha < 100) continue;
@@ -8686,10 +8692,17 @@ async function mdetDominantColorFromLogo(url) {
       const max = Math.max(rr, gg, bb), min = Math.min(rr, gg, bb);
       if (max > 240 && min > 225) continue; // quasi blanc (fond) : ignore
       if (max < 25) continue; // quasi noir : ignore
-      r += rr; g += gg; b += bb; count++;
+      if (max - min < 14) continue; // quasi gris/neutre : n'identifie aucune teinte
+      const [hh] = mdetRgbToHsl(rr, gg, bb);
+      const bucket = Math.round(hh / 12) % 30;
+      if (!buckets[bucket]) buckets[bucket] = { count: 0, r: 0, g: 0, b: 0 };
+      buckets[bucket].count++;
+      buckets[bucket].r += rr; buckets[bucket].g += gg; buckets[bucket].b += bb;
     }
-    if (!count) return null;
-    const [h, s, l] = mdetRgbToHsl(r / count, g / count, b / count);
+    let best = null;
+    Object.values(buckets).forEach(bk => { if (!best || bk.count > best.count) best = bk; });
+    if (!best) return null;
+    const [h, s, l] = mdetRgbToHsl(best.r / best.count, best.g / best.count, best.b / best.count);
     // Sature/eclaircit un minimum pour rester lisible sur fond sombre.
     return [h, Math.max(s, 45), Math.min(Math.max(l, 40), 62)];
   } catch (e) {
