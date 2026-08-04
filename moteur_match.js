@@ -77,7 +77,8 @@ function minuteAleatoire() {
 // ============================================================
 // MAPPING RÔLES (issus de tactiques.compositions[].role)
 // GB = gardien, D = défenseur, MD = milieu défensif/relayeur,
-// MO = milieu offensif, AL = ailier, BT = buteur/attaquant de pointe
+// MO = milieu offensif (inclut les ailiers/attaquants de couloir, MOD/MOG),
+// AL = arrière latéral, BT = buteur/attaquant de pointe
 // ============================================================
 
 const PROFILS_ROLE = {
@@ -110,11 +111,15 @@ const PROFILS_ROLE = {
     poidsCarton: 0.8,
   },
   AL: {
-    categorie: 'ailier',
-    attributsCles: ['vitesse', 'dribbles', 'centres', 'technique', 'finition', 'controle_de_balle'],
-    poidsButeur: 1.6,
-    poidsPasseur: 1.5,
-    poidsCarton: 0.6,
+    // Arrière Latéral (poste_brut "AL (G/D)") : un défenseur de couloir, un peu plus
+    // porté vers l'attaque qu'un axial pur (montées, centres) mais qui reste
+    // fondamentalement un défenseur — ne pas confondre avec un ailier offensif
+    // (les vrais ailiers/attaquants de couloir sont les postes "MO" latéraux, MOD/MOG).
+    categorie: 'defenseur',
+    attributsCles: ['marquage', 'tacles', 'placement', 'anticipation', 'vitesse', 'endurance', 'centres'],
+    poidsButeur: 0.6,
+    poidsPasseur: 0.9,
+    poidsCarton: 1.0,
   },
   BT: {
     categorie: 'attaquant',
@@ -135,7 +140,7 @@ function profilRole(role) {
  * défenseur ou un milieu défensif, et inversement). Le gardien n'y figure
  * pas : il n'est jamais concerné par un changement de champ dans ce modèle.
  */
-const ORDRE_AXE_POSTE = ['defenseur', 'milieu', 'milieu_offensif', 'ailier', 'attaquant'];
+const ORDRE_AXE_POSTE = ['defenseur', 'milieu', 'milieu_offensif', 'attaquant'];
 function axePoste(role) {
   const idx = ORDRE_AXE_POSTE.indexOf(profilRole(role).categorie);
   return idx === -1 ? 2 : idx;
@@ -350,7 +355,7 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, gro
 
   return {
     noteGlobale,
-    noteAttaque: (parCategorie('attaquant') * 0.4 + parCategorie('ailier') * 0.3 + parCategorie('milieu_offensif') * 0.3),
+    noteAttaque: (parCategorie('attaquant') * 0.42 + parCategorie('milieu_offensif') * 0.58),
     noteMilieu: (parCategorie('milieu') * 0.5 + parCategorie('milieu_offensif') * 0.5),
     noteDefense: (parCategorie('defenseur') * 0.7 + parCategorie('milieu') * 0.3),
     noteGardien: parCategorie('gardien'),
