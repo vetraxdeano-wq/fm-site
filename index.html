@@ -372,11 +372,6 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
 
     if (gameErr || !game) { toast("Room introuvable pour ce code", true); return; }
 
-    if (game.statut !== "lobby") {
-      toast("Cette partie a deja demarre, impossible de la rejoindre", true);
-      return;
-    }
-
     const { data: existing } = await supabaseClient
       .from("game_participants")
       .select("id")
