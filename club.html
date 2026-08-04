@@ -782,8 +782,9 @@
   .tac-slot-dot {
     width: 34px; height: 34px; border-radius: 50%; background: var(--panel);
     border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; color: var(--text);
+    font-size: 11px; font-weight: 700; color: var(--text); overflow: hidden;
   }
+  .tac-slot-dot img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
   .tac-slot.empty .tac-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
   .tac-slot[data-player-id] { cursor: pointer; }
   .tac-slot[data-player-id]:hover .tac-slot-name { color: var(--gold); }
@@ -2456,7 +2457,26 @@ function clubTacCoachPanelHtml(t) {
   `;
 }
 
-function clubTacRenderPitch(compositions, viewedClubId) {
+// Photos des joueurs titulaires (referentiel public.players, colonne
+// photo_url, reliee via game_players -> players). Les compositions
+// persistees ne stockent que player_id/player_nom : la photo est recuperee
+// a part, pour le lot de joueurs affiches sur le terrain.
+async function tacFetchPlayerPhotos(playerIds) {
+  const ids = [...new Set((playerIds || []).filter(id => id != null))];
+  const photos = {};
+  if (!ids.length) return photos;
+  const { data } = await supabaseClient
+    .from("game_players")
+    .select("id, players(photo_url)")
+    .in("id", ids);
+  (data || []).forEach(p => {
+    const url = p.players?.photo_url;
+    if (url) photos[p.id] = url;
+  });
+  return photos;
+}
+
+function clubTacRenderPitch(compositions, viewedClubId, photos = {}) {
   const el = document.getElementById("clubTacPitch");
   if (!compositions || !compositions.length) {
     el.innerHTML = `<div class="fm-empty">Aucune composition disponible.</div>`;
@@ -2465,9 +2485,13 @@ function clubTacRenderPitch(compositions, viewedClubId) {
   el.innerHTML = compositions.map(c => {
     const cls = !c.player_id ? "empty" : "";
     const initials = c.player_nom ? escapeHtml(c.player_nom.split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase()) : "?";
+    const photoUrl = c.player_id ? photos[c.player_id] : null;
+    const dotHtml = photoUrl
+      ? `<img src="${escapeHtml(photoUrl)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent:'${initials}'}))">`
+      : initials;
     return `
       <div class="tac-slot ${cls}" style="left:${c.x}%; top:${c.y}%;" title="${c.player_nom ? escapeHtml(c.player_nom) : "Aucun joueur disponible"} — ${escapeHtml(c.label || "")}" ${c.player_id ? `data-player-id="${escapeHtml(String(c.player_id))}"` : ""}>
-        <div class="tac-slot-dot">${initials}</div>
+        <div class="tac-slot-dot">${dotHtml}</div>
         <div class="tac-slot-name">${c.player_nom ? escapeHtml(c.player_nom) : escapeHtml(c.label || "")}</div>
       </div>
     `;
@@ -2493,7 +2517,8 @@ async function renderTactiqueTab(viewedClubId) {
   }
 
   document.getElementById("clubTacCoachPanel").innerHTML = clubTacCoachPanelHtml(t);
-  clubTacRenderPitch(t.compositions, viewedClubId);
+  const photos = await tacFetchPlayerPhotos((t.compositions || []).map(c => c.player_id));
+  clubTacRenderPitch(t.compositions, viewedClubId, photos);
 }
 
 async function renderCompetitionsTab(viewedClubId) {
