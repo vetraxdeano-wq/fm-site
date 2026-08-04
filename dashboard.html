@@ -1631,6 +1631,16 @@
               </div>
             </div>
           </div>
+          <div class="pdb-field pdb-nation-field">
+            <label for="pdbClubTrigger">Club</label>
+            <div class="pdb-nation-select" id="pdbClubSelectWrap">
+              <button type="button" class="pdb-nation-trigger" id="pdbClubTrigger">Tous</button>
+              <div class="pdb-nation-panel hidden" id="pdbClubPanel">
+                <input type="text" class="pdb-nation-search" id="pdbClubSearch" placeholder="Rechercher un club...">
+                <div class="pdb-nation-options" id="pdbClubOptions"></div>
+              </div>
+            </div>
+          </div>
           <div class="pdb-field">
             <label for="pdbContractSelect">Contrat</label>
             <select id="pdbContractSelect">
@@ -1772,6 +1782,16 @@
                 <div class="pdb-nation-panel hidden" id="sdbNationPanel">
                   <input type="text" class="pdb-nation-search" id="sdbNationSearch" placeholder="Rechercher une nation...">
                   <div class="pdb-nation-options" id="sdbNationOptions"></div>
+                </div>
+              </div>
+            </div>
+            <div class="pdb-field pdb-nation-field">
+              <label for="sdbClubTrigger">Club</label>
+              <div class="pdb-nation-select" id="sdbClubSelectWrap">
+                <button type="button" class="pdb-nation-trigger" id="sdbClubTrigger">Tous</button>
+                <div class="pdb-nation-panel hidden" id="sdbClubPanel">
+                  <input type="text" class="pdb-nation-search" id="sdbClubSearch" placeholder="Rechercher un club...">
+                  <div class="pdb-nation-options" id="sdbClubOptions"></div>
                 </div>
               </div>
             </div>
@@ -5009,7 +5029,9 @@ let sdbKnownClubIds = new Set();
 let sdbUserClubId = null;
 let sdbFiltersWired = false;
 let sdbNationValue = "";
+let sdbClubValue = "";
 let sdbAllNationsCache = [];
+let sdbAllClubsCache = [];
 let sdbCategoryValue = "";
 // Reputation "officielle" (table clubs) des clubs rencontres dans la BDD
 // Staff, et reputation du club du manager : sert au mode "interesse par
@@ -5403,6 +5425,7 @@ function getSdbFiltersSnapshot() {
     poste: document.getElementById("sdbPosteSelect")?.value || "",
     category: sdbCategoryValue || "",
     nation: sdbNationValue || "",
+    club: sdbClubValue || "",
     contractValue: document.getElementById("sdbContractSelect")?.value || "",
     ageMin: document.getElementById("sdbAgeMinInput")?.value || "",
     ageMax: document.getElementById("sdbAgeMaxInput")?.value || "",
@@ -5450,6 +5473,9 @@ function restoreSdbFiltersFromCache() {
   sdbNationValue = state.nation || "";
   updateSdbNationTriggerLabel();
 
+  sdbClubValue = state.club || "";
+  updateSdbClubTriggerLabel();
+
   const contractSelect = document.getElementById("sdbContractSelect");
   if (contractSelect) contractSelect.value = state.contractValue || "";
 
@@ -5491,6 +5517,12 @@ function populateStaffDbFilterOptions() {
     .sort((a, b) => nationDisplayName(a).localeCompare(nationDisplayName(b), "fr"));
   renderSdbNationOptions(sdbAllNationsCache);
   updateSdbNationTriggerLabel();
+
+  sdbAllClubsCache = Object.keys(sdbClubNameById)
+    .map(id => ({ id, nom: sdbClubNameById[id] }))
+    .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
+  renderSdbClubOptions(sdbAllClubsCache);
+  updateSdbClubTriggerLabel();
 }
 
 // ---- Filtres avances "+ Ajouter des filtres" (BDD Staff) ------------------
@@ -5731,6 +5763,40 @@ function closeSdbNationPanel() {
   if (panel) panel.classList.add("hidden");
 }
 
+// ---- Dropdown Club custom (meme composant, repris de la BDD de joueurs) ----
+function renderSdbClubOptions(clubs, filterText = "") {
+  const q = filterText.trim().toLowerCase();
+  const list = q ? clubs.filter(c => (c.nom || "").toLowerCase().includes(q)) : clubs;
+  const optionsEl = document.getElementById("sdbClubOptions");
+  if (!optionsEl) return;
+  const allActiveClass = sdbClubValue === "" ? " active" : "";
+  optionsEl.innerHTML = `<div class="pdb-nation-option${allActiveClass}" data-value="">Tous</div>` +
+    list.map(c => `<div class="pdb-nation-option${String(sdbClubValue) === String(c.id) ? " active" : ""}" data-value="${escapeHtml(String(c.id))}">${escapeHtml(c.nom || "?")}</div>`).join("");
+}
+
+function updateSdbClubTriggerLabel() {
+  const trigger = document.getElementById("sdbClubTrigger");
+  if (!trigger) return;
+  trigger.innerHTML = sdbClubValue ? escapeHtml(sdbClubNameById[sdbClubValue] || "?") : "Tous";
+}
+
+function toggleSdbClubPanel() {
+  const panel = document.getElementById("sdbClubPanel");
+  const willOpen = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden");
+  if (willOpen) {
+    const search = document.getElementById("sdbClubSearch");
+    search.value = "";
+    renderSdbClubOptions(sdbAllClubsCache);
+    search.focus();
+  }
+}
+
+function closeSdbClubPanel() {
+  const panel = document.getElementById("sdbClubPanel");
+  if (panel) panel.classList.add("hidden");
+}
+
 function staffPassesContractFilter(s, contractValue) {
   if (!contractValue) return true;
   if (contractValue === "libre") return !s.game_club_id;
@@ -5803,6 +5869,7 @@ function applyStaffDbFilters(opts = {}) {
   if (poste) filtered = filtered.filter(s => (s.poste || "").trim() === poste);
   if (sdbCategoryValue) filtered = filtered.filter(s => staffDbCategoryFor(s.poste) === sdbCategoryValue);
   if (nation) filtered = filtered.filter(s => s.nationalite === nation);
+  if (sdbClubValue) filtered = filtered.filter(s => String(s.game_club_id) === String(sdbClubValue));
   if (contractValue) filtered = filtered.filter(s => staffPassesContractFilter(s, contractValue));
   if (ageMin !== "") filtered = filtered.filter(s => Number.isFinite(Number(s.age)) && Number(s.age) >= Number(ageMin));
   if (ageMax !== "") filtered = filtered.filter(s => Number.isFinite(Number(s.age)) && Number(s.age) <= Number(ageMax));
@@ -5983,6 +6050,26 @@ function wireStaffDbFilters(clubId) {
     if (wrap && !wrap.contains(e.target)) closeSdbNationPanel();
   });
 
+  document.getElementById("sdbClubTrigger").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleSdbClubPanel();
+  });
+  document.getElementById("sdbClubSearch").addEventListener("input", (e) => {
+    renderSdbClubOptions(sdbAllClubsCache, e.target.value);
+  });
+  document.getElementById("sdbClubOptions").addEventListener("click", (e) => {
+    const opt = e.target.closest(".pdb-nation-option");
+    if (!opt) return;
+    sdbClubValue = opt.dataset.value || "";
+    updateSdbClubTriggerLabel();
+    closeSdbClubPanel();
+    applyStaffDbFilters();
+  });
+  document.addEventListener("click", (e) => {
+    const wrap = document.getElementById("sdbClubSelectWrap");
+    if (wrap && !wrap.contains(e.target)) closeSdbClubPanel();
+  });
+
   document.getElementById("sdbResetBtn").addEventListener("click", () => {
     document.getElementById("sdbSearchInput").value = "";
     document.getElementById("sdbPosteSelect").value = "";
@@ -5993,11 +6080,13 @@ function wireStaffDbFilters(clubId) {
     document.getElementById("sdbSalMaxInput").value = "";
     document.getElementById("sdbTransferCheckbox").checked = true;
     sdbNationValue = "";
+    sdbClubValue = "";
     sdbCategoryValue = "";
     document.querySelectorAll("#sdbCategoryFilters .staff-role-chip").forEach(c => {
       c.classList.toggle("active", (c.getAttribute("data-category") || "") === "");
     });
     updateSdbNationTriggerLabel();
+    updateSdbClubTriggerLabel();
     sdbSortKey = null;
     sdbSortDir = "asc";
     updateSdbSortHeaderIndicators();
@@ -6040,6 +6129,7 @@ let pdbClubReputationById = {};
 let pdbUserClubId = null;
 let pdbFiltersWired = false;
 let pdbNationValue = "";
+let pdbClubValue = "";
 let pdbContinentValue = "";
 
 // Chargement progressif : on affiche une premiere vague de joueurs tout de
@@ -6430,6 +6520,7 @@ function getPdbFiltersSnapshot() {
     q: document.getElementById("pdbSearchInput")?.value || "",
     poste: document.getElementById("pdbPosteSelect")?.value || "",
     nation: pdbNationValue || "",
+    club: pdbClubValue || "",
     contractValue: document.getElementById("pdbContractSelect")?.value || "",
     continent: pdbContinentValue || "",
     interestedOnly: !!document.getElementById("pdbTransferCheckbox")?.checked,
@@ -6468,6 +6559,9 @@ function restorePdbFiltersFromCache() {
 
   pdbNationValue = state.nation || "";
   updateNationTriggerLabel();
+
+  pdbClubValue = state.club || "";
+  updatePdbClubTriggerLabel();
 
   const contractSelect = document.getElementById("pdbContractSelect");
   if (contractSelect) contractSelect.value = state.contractValue || "";
@@ -6677,12 +6771,34 @@ function wirePlayersDbFilters(clubId) {
     if (wrap && !wrap.contains(e.target)) closeNationPanel();
   });
 
+  document.getElementById("pdbClubTrigger").addEventListener("click", (e) => {
+    e.stopPropagation();
+    togglePdbClubPanel();
+  });
+  document.getElementById("pdbClubSearch").addEventListener("input", (e) => {
+    renderPdbClubOptions(pdbAllClubsCache, e.target.value);
+  });
+  document.getElementById("pdbClubOptions").addEventListener("click", (e) => {
+    const opt = e.target.closest(".pdb-nation-option");
+    if (!opt) return;
+    pdbClubValue = opt.dataset.value || "";
+    updatePdbClubTriggerLabel();
+    closePdbClubPanel();
+    applyPlayersDbFilters(clubId);
+  });
+  document.addEventListener("click", (e) => {
+    const wrap = document.getElementById("pdbClubSelectWrap");
+    if (wrap && !wrap.contains(e.target)) closePdbClubPanel();
+  });
+
   document.getElementById("pdbResetBtn").addEventListener("click", () => {
     document.getElementById("pdbSearchInput").value = "";
     document.getElementById("pdbPosteSelect").value = "";
     document.getElementById("pdbContractSelect").value = "";
     pdbNationValue = "";
     updateNationTriggerLabel();
+    pdbClubValue = "";
+    updatePdbClubTriggerLabel();
     pdbContinentValue = "";
     document.getElementById("pdbContinentSelect").value = "";
     document.getElementById("pdbTransferCheckbox").checked = false;
@@ -7086,6 +7202,7 @@ async function fetchClubReputationsByGameClubId(clubIds) {
 }
 
 let pdbAllNationsCache = [];
+let pdbAllClubsCache = [];
 
 function populatePlayersDbFilterOptions() {
   const posteSet = new Set();
@@ -7093,6 +7210,9 @@ function populatePlayersDbFilterOptions() {
   const postes = [...posteSet].sort(comparePostesAtomic);
   pdbAllNationsCache = [...new Set(pdbAllPlayers.map(p => p.nationalite).filter(Boolean))]
     .sort((a, b) => nationDisplayName(a).localeCompare(nationDisplayName(b), "fr"));
+  pdbAllClubsCache = Object.keys(pdbClubNameById)
+    .map(id => ({ id, nom: pdbClubNameById[id] }))
+    .sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
 
   const posteSelect = document.getElementById("pdbPosteSelect");
   const currentPoste = posteSelect.value;
@@ -7101,6 +7221,8 @@ function populatePlayersDbFilterOptions() {
 
   renderNationOptions(pdbAllNationsCache);
   updateNationTriggerLabel();
+  renderPdbClubOptions(pdbAllClubsCache);
+  updatePdbClubTriggerLabel();
 }
 
 // ---- Dropdown Nation custom (avec drapeaux, reprend nationLabel() deja
@@ -7136,6 +7258,42 @@ function toggleNationPanel() {
 
 function closeNationPanel() {
   const panel = document.getElementById("pdbNationPanel");
+  if (panel) panel.classList.add("hidden");
+}
+
+// ---- Dropdown Club custom (meme composant que Nation) : recherche par nom
+// de club parmi tous les clubs deja rencontres dans la BDD de joueurs
+// (pdbClubNameById, alimente au chargement des joueurs).
+function renderPdbClubOptions(clubs, filterText = "") {
+  const q = filterText.trim().toLowerCase();
+  const list = q ? clubs.filter(c => (c.nom || "").toLowerCase().includes(q)) : clubs;
+  const optionsEl = document.getElementById("pdbClubOptions");
+  if (!optionsEl) return;
+  const allActiveClass = pdbClubValue === "" ? " active" : "";
+  optionsEl.innerHTML = `<div class="pdb-nation-option${allActiveClass}" data-value="">Tous</div>` +
+    list.map(c => `<div class="pdb-nation-option${String(pdbClubValue) === String(c.id) ? " active" : ""}" data-value="${escapeHtml(String(c.id))}">${escapeHtml(c.nom || "?")}</div>`).join("");
+}
+
+function updatePdbClubTriggerLabel() {
+  const trigger = document.getElementById("pdbClubTrigger");
+  if (!trigger) return;
+  trigger.innerHTML = pdbClubValue ? escapeHtml(pdbClubNameById[pdbClubValue] || "?") : "Tous";
+}
+
+function togglePdbClubPanel() {
+  const panel = document.getElementById("pdbClubPanel");
+  const willOpen = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden");
+  if (willOpen) {
+    const search = document.getElementById("pdbClubSearch");
+    search.value = "";
+    renderPdbClubOptions(pdbAllClubsCache);
+    search.focus();
+  }
+}
+
+function closePdbClubPanel() {
+  const panel = document.getElementById("pdbClubPanel");
   if (panel) panel.classList.add("hidden");
 }
 
@@ -7228,6 +7386,9 @@ function applyPlayersDbFilters(clubId, opts = {}) {
   }
   if (nation) {
     filtered = filtered.filter(p => p.nationalite === nation);
+  }
+  if (pdbClubValue) {
+    filtered = filtered.filter(p => String(p.game_club_id) === String(pdbClubValue));
   }
   if (pdbContinentValue) {
     filtered = filtered.filter(p => continentForNation(p.nationalite) === pdbContinentValue);
