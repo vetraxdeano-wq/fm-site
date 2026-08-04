@@ -1019,6 +1019,42 @@
   .mdet-note-faible { background: rgba(251,191,36,0.15); color: var(--gold); }
   .mdet-note-mauvais { background: rgba(239,68,68,0.18); color: var(--danger); }
 
+  /* ---- Plan de terrain (schema de formation, base sur stats.notes_joueurs[].role) ---- */
+  .mdet-pitch {
+    position: relative; width: 100%; height: 300px; border-radius: 10px; overflow: hidden;
+    margin-bottom: 10px; border: 1px solid var(--border);
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0 34px, transparent 34px 68px),
+      linear-gradient(180deg, #1d4a28, #163a20);
+  }
+  .mdet-pitch::before {
+    content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+    width: 36%; height: 15%; border: 2px solid rgba(255,255,255,0.32); border-bottom: none; border-radius: 3px 3px 0 0;
+  }
+  .mdet-pitch::after {
+    content: ""; position: absolute; left: 6%; right: 6%; top: 9%; height: 2px; background: rgba(255,255,255,0.22);
+  }
+  .mdet-pitch-player {
+    position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column;
+    align-items: center; gap: 3px; cursor: pointer; z-index: 1; width: 64px;
+  }
+  .mdet-pitch-player:hover .mdet-pitch-name { color: var(--gold); text-decoration: underline; }
+  .mdet-pitch-dot {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 800; border: 2px solid rgba(255,255,255,0.55); box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    font-variant-numeric: tabular-nums;
+  }
+  .mdet-pitch-player.motm .mdet-pitch-dot { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(251,191,36,0.45); }
+  .mdet-pitch-name {
+    font-size: 9.5px; color: #fff; text-align: center; max-width: 64px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.85); font-weight: 600;
+  }
+  .mdet-pitch-dot.mdet-note-elite { background: #4ade80; color: #06280f; }
+  .mdet-pitch-dot.mdet-note-bon { background: #a3e635; color: #1a2705; }
+  .mdet-pitch-dot.mdet-note-moyen { background: #cbd5e1; color: #1f2937; }
+  .mdet-pitch-dot.mdet-note-faible { background: var(--gold); color: #3a2a02; }
+  .mdet-pitch-dot.mdet-note-mauvais { background: var(--danger); color: #3a0a0a; }
+
   .mdet-motm-banner {
     display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700;
     color: var(--gold); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
@@ -1030,6 +1066,7 @@
     .mdet-header-teams .score { font-size: 16px; }
     .mdet-header-teams .mdet-club-logo,
     .mdet-header-teams .mdet-club-logo-fallback { width: 40px !important; height: 40px !important; font-size: 13px !important; }
+    .mdet-pitch { height: 250px; }
   }
 
   /* ---- BDD Staff (sous-onglet) : cartes façon "Effectif" (club.html) ---- */
@@ -8435,16 +8472,74 @@ function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   `;
 }
 
+// ---- Plan de terrain (schema de formation) --------------------------
+// Necessite que chaque titulaire porte un champ `role` (GB/D/MD/MO/AL/BT),
+// ecrit par moteur_match.js dans stats.notes_joueurs. Les matchs simules
+// avant cette evolution n'ont pas ce champ : on retombe alors sur la liste
+// simple (mdetPlayerRow) plutot que d'afficher un terrain incomplet.
+function mdetPitchRows(titulaires) {
+  const bands = { GB: [], DEF: [], MD: [], MO: [], BT: [] };
+  titulaires.forEach(p => {
+    if (p.role === "GB") bands.GB.push(p);
+    else if (p.role === "D" || p.role === "AL") bands.DEF.push(p);
+    else if (p.role === "MD") bands.MD.push(p);
+    else if (p.role === "MO") bands.MO.push(p);
+    else if (p.role === "BT") bands.BT.push(p);
+    else bands.MD.push(p);
+  });
+  // Ligne de défense : les arrières latéraux (AL) sont places aux extremites,
+  // les défenseurs axiaux (D) au centre, pour ressembler a une vraie ligne.
+  const al = bands.DEF.filter(p => p.role === "AL");
+  const d = bands.DEF.filter(p => p.role !== "AL");
+  const defOrdered = [];
+  if (al[0]) defOrdered.push(al[0]);
+  defOrdered.push(...d);
+  if (al[1]) defOrdered.push(al[1]);
+  if (al.length > 2) defOrdered.push(...al.slice(2));
+  return [
+    { y: 91, players: bands.GB },
+    { y: 70, players: defOrdered },
+    { y: 48, players: bands.MD },
+    { y: 26, players: bands.MO },
+    { y: 8, players: bands.BT },
+  ].filter(row => row.players.length);
+}
+
+function mdetPitchPlayerHtml(p, hommeDuMatch, clubId, xPct, yPct) {
+  const isMotm = hommeDuMatch && hommeDuMatch.player_id === p.player_id;
+  const clickable = p.player_id ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(clubId || "")).replace(/'/g, "&#39;")}', '${escapeHtml(String(p.player_id)).replace(/'/g, "&#39;")}')"` : "";
+  const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
+  return `
+    <div class="mdet-pitch-player${isMotm ? " motm" : ""}" style="left:${xPct}%; top:${yPct}%;"${clickable}>
+      <div class="mdet-pitch-dot ${mdetNoteClass(p.note)}">${Number(p.note).toFixed(1)}</div>
+      <div class="mdet-pitch-name">${isMotm ? "⭐ " : ""}${escapeHtml(nomCourt)}</div>
+    </div>
+  `;
+}
+
+function mdetRenderPitch(titulaires, hommeDuMatch, clubId) {
+  const rows = mdetPitchRows(titulaires);
+  const dots = rows.flatMap(row => {
+    const n = row.players.length;
+    return row.players.map((p, i) => mdetPitchPlayerHtml(p, hommeDuMatch, clubId, ((i + 1) / (n + 1)) * 100, row.y));
+  }).join("");
+  return `<div class="mdet-pitch">${dots}</div>`;
+}
+
 function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId) {
   const titulaires = (notes || []).filter(n => !n.entrant);
   const remplacants = (notes || []).filter(n => n.entrant);
   // Associe chaque entrant a son sortant (par nom), a partir de stats.remplacements.
   const sortantParEntrant = {};
   (remplacements || []).forEach(r => { sortantParEntrant[r.entrant_nom] = r; });
+  const aDesPostes = titulaires.some(n => n.role);
+  const titulairesHtml = aDesPostes
+    ? mdetRenderPitch(titulaires, hommeDuMatch, clubId)
+    : (titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`);
   return `
     <div class="mdet-roster-col">
       <div class="mdet-roster-team-head">${logoHtml}<span>${escapeHtml(nomEquipe)}</span></div>
-      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
+      ${titulairesHtml}
       ${remplacants.length ? `<div class="mdet-roster-subhead">Remplacements</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("")}` : ""}
     </div>
   `;
