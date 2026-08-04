@@ -343,13 +343,19 @@ async function chargerDonneesClub(gameClubId) {
 
   // composition_par_defaut() ne fournit pas player_nom/side/fit_score/slot_id : on complete
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
-  const compositions = (tactique.compositions || []).map((slot, i) => ({
+  const compositionsDesignees = (tactique.compositions || []).map((slot, i) => ({
     fit_score: 2,
     side: "C",
     slot_id: `s${i}`,
     ...slot,
     player_nom: slot.player_nom || joueursParId.get(slot.player_id)?.nom || "?",
   }));
+
+  // Compo du jour : le coach part de la compo désignée par la tactique mais
+  // sort systématiquement un titulaire blessé, et peut préférer un remplaçant
+  // au même poste si sa forme/note récente est nettement meilleure. La
+  // tactique elle-même (formation, mentalité, style...) n'est jamais touchée.
+  const { compositions, changements: changementsCompo } = choisirCompositionDuJour(compositionsDesignees, joueurs);
 
   // coach principal (non adjoint en priorite) assigne a l'equipe A, aplati avec ses attributs staff
   const coachBrut = (staffBruts || []).slice().sort(
@@ -363,6 +369,7 @@ async function chargerDonneesClub(gameClubId) {
     nom: gc?.nom || "?",
     joueurs,
     tactique: { ...tactique, compositions },
+    changementsCompo,
     coach,
     club: gc?.clubs || {},
     groupe: (groupeRows && groupeRows[0]) || null,
@@ -407,7 +414,7 @@ async function simulerMatchsDuJour(dateIso, onProgress) {
     });
     if (rpcErr) throw rpcErr;
 
-    await appliquerImpactPostMatch(resultat.impact_joueurs);
+    await appliquerImpactPostMatch(resultat);
   }
 
   return matches.length;
@@ -415,20 +422,51 @@ async function simulerMatchsDuJour(dateIso, onProgress) {
 
 // Ecrit en base la forme/moral post-match calcules par le moteur (etape 11
 // de simulerMatch), pour TOUT l'effectif equipe_a concerne (domicile +
-// exterieur). Sans cet appel, forme/moral restent figes et les notes/
-// remplacements deviennent quasi-deterministes d'un match a l'autre.
-async function appliquerImpactPostMatch(impactJoueurs) {
-  if (!impactJoueurs) return;
-  const tous = [...(impactJoueurs.domicile || []), ...(impactJoueurs.exterieur || [])];
+// exterieur), et met a jour note_moyenne_saison/matchs_joues_saison (+ buts/
+// passes) des joueurs ayant reellement joue. Sans cet appel, forme/moral
+// restent figes, les remplacements deviennent quasi-deterministes d'un match
+// a l'autre, et choisirCompositionDuJour n'a jamais de "note recente" a
+// comparer au titulaire designe.
+async function appliquerImpactPostMatch(resultat) {
+  const impact = resultat?.impact_joueurs;
+  if (!impact) return;
+  const tous = [...(impact.domicile || []), ...(impact.exterieur || [])];
   if (!tous.length) return;
 
+  const notesParId = new Map();
+  for (const n of [...(resultat.stats?.notes_joueurs?.domicile || []), ...(resultat.stats?.notes_joueurs?.exterieur || [])]) {
+    notesParId.set(n.player_id, n.note);
+  }
+  const butsParId = new Map();
+  for (const b of resultat.stats?.buteurs || []) butsParId.set(b.player_id, (butsParId.get(b.player_id) || 0) + 1);
+  const passesParId = new Map();
+  for (const p of resultat.stats?.passeurs || []) passesParId.set(p.player_id, (passesParId.get(p.player_id) || 0) + 1);
+
+  const idsAyantJoue = tous.filter((j) => j.minutes_jouees > 0).map((j) => j.player_id);
+  let statsActuelles = new Map();
+  if (idsAyantJoue.length) {
+    const { data: rows, error: selErr } = await supabaseClient
+      .from("game_players")
+      .select("id, matchs_joues_saison, note_moyenne_saison, buts_saison, passes_decisives_saison")
+      .in("id", idsAyantJoue);
+    if (selErr) throw selErr;
+    statsActuelles = new Map((rows || []).map((r) => [r.id, r]));
+  }
+
   const resultats = await Promise.all(
-    tous.map((j) =>
-      supabaseClient
-        .from("game_players")
-        .update({ forme: j.forme, moral: j.moral })
-        .eq("id", j.player_id)
-    )
+    tous.map((j) => {
+      const patch = { forme: j.forme, moral: j.moral };
+      if (j.minutes_jouees > 0) {
+        const actuel = statsActuelles.get(j.player_id) || { matchs_joues_saison: 0, note_moyenne_saison: 0, buts_saison: 0, passes_decisives_saison: 0 };
+        const noteMatch = notesParId.get(j.player_id) ?? 6;
+        const nbMatchsAvant = actuel.matchs_joues_saison || 0;
+        patch.matchs_joues_saison = nbMatchsAvant + 1;
+        patch.note_moyenne_saison = Math.round((((actuel.note_moyenne_saison || 0) * nbMatchsAvant + noteMatch) / (nbMatchsAvant + 1)) * 100) / 100;
+        patch.buts_saison = (actuel.buts_saison || 0) + (butsParId.get(j.player_id) || 0);
+        patch.passes_decisives_saison = (actuel.passes_decisives_saison || 0) + (passesParId.get(j.player_id) || 0);
+      }
+      return supabaseClient.from("game_players").update(patch).eq("id", j.player_id);
+    })
   );
   const erreur = resultats.find((r) => r.error);
   if (erreur) throw erreur.error;
@@ -470,7 +508,7 @@ async function simulerBarragesDuJour(dateIso, onProgress) {
     });
     if (rpcErr) throw rpcErr;
 
-    await appliquerImpactPostMatch(resultat.impact_joueurs);
+    await appliquerImpactPostMatch(resultat);
   }
 
   return aTraiter.length;
