@@ -785,6 +785,7 @@ function calculerNotesJoueurs({ compositions, joueurs = [], remplacements = [], 
       player_id: slot.player_id,
       player_nom: slot.player_nom,
       entrant: slot.entrant || false,
+      role: slot.role || null,
       note: Math.round(clamp(note, 2, 10) * 10) / 10,
     };
   });
@@ -1051,6 +1052,7 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
       blessures: toutesLesBlessures,
       remplacements: [...remplacementsDom, ...remplacementsExt].sort((a, b) => a.minute - b.minute),
       notes_joueurs: { domicile: notesDom, exterieur: notesExt },
+      formation: { domicile: domicile.tactique?.formation ?? null, exterieur: exterieur.tactique?.formation ?? null },
       homme_du_match: hommeDuMatch,
       resume,
     },
