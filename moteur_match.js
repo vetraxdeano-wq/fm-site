@@ -1167,6 +1167,12 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
       formation: { domicile: domicile.tactique?.formation ?? null, exterieur: exterieur.tactique?.formation ?? null },
       homme_du_match: hommeDuMatch,
       resume,
+      // Forme/moral post-match de TOUT l'effectif équipe_a (étape 11) — inclus
+      // dans `stats` pour transiter par la RPC enregistrer_resultat_match /
+      // enregistrer_resultat_barrage (SECURITY DEFINER) jusqu'à
+      // appliquer_stats_joueurs_apres_match, seule capable d'écrire dans
+      // game_players (RLS interdit l'update direct côté client).
+      forme_moral: { domicile: impactDom, exterieur: impactExt },
     },
   };
 }
