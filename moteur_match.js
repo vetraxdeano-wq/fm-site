@@ -152,13 +152,35 @@ function axePoste(role) {
  * composition assigné — typiquement un remplaçant pris sur le banc, dont on
  * a besoin d'estimer la note/le poids buteur-passeur-carton sans tactique.
  */
+const MAP_TOKEN_ROLE = { GB: 'GB', D: 'D', DL: 'D', MD: 'MD', M: 'MD', MO: 'MO', AL: 'AL', BT: 'BT' };
+
 function inferRolePrincipal(joueurRow) {
   const brut = joueurRow?.poste_brut || '';
   const premierSegment = brut.split(',')[0] || '';
   const tokenPoste = premierSegment.split('(')[0].trim();
   const premierToken = tokenPoste.split('/')[0].trim().toUpperCase();
-  const MAP = { GB: 'GB', D: 'D', DL: 'D', MD: 'MD', M: 'MD', MO: 'MO', AL: 'AL', BT: 'BT' };
-  return MAP[premierToken] || 'MD';
+  return MAP_TOKEN_ROLE[premierToken] || 'MD';
+}
+
+/**
+ * Un joueur peut-il tenir le rôle `role` (clé PROFILS_ROLE, ex. "MO", "BT") ?
+ * Contrairement à inferRolePrincipal (qui ne regarde que le tout premier
+ * poste listé, pour estimer un rôle par défaut sur le banc), celle-ci
+ * parcourt TOUT `poste_brut` (ex. "AL/M (G), MO (GC), BT (C)") pour savoir
+ * si le joueur est éligible à un poste précis de la compo — utilisé pour
+ * choisir un remplaçant au même poste qu'un titulaire désigné.
+ */
+function joueurPeutJouerRole(joueurRow, role) {
+  const brut = joueurRow?.poste_brut || '';
+  const segments = brut.split(',');
+  for (const segment of segments) {
+    const tokenPoste = segment.split('(')[0].trim();
+    const tokens = tokenPoste.split('/').map((t) => t.trim().toUpperCase());
+    for (const token of tokens) {
+      if (MAP_TOKEN_ROLE[token] === role) return true;
+    }
+  }
+  return false;
 }
 
 // ============================================================
@@ -899,6 +921,96 @@ function calculerImpactPostMatch({ compositions, joueurs, remplacements = [] }) 
 }
 
 // ============================================================
+// ÉTAPE 0bis — COMPOSITION DU JOUR (coach ajuste la compo désignée
+// selon blessures/forme/note récente — distinct de la tactique)
+// ============================================================
+
+/**
+ * Score de sélection d'un joueur pour un rôle donné, à date de match : mix
+ * de sa forme du jour (attributs + CA + forme/moral actuels, via
+ * noteJoueurMatch) et de sa note moyenne récente en club (note_moyenne_saison,
+ * échelle 0-10 -> ramenée sur 100). En dessous de 3 matchs joués cette
+ * saison, l'historique est jugé trop mince et on retombe entièrement sur la
+ * note du jour.
+ */
+function scoreSelectionJoueur(joueurRow, role) {
+  if (!joueurRow) return 0;
+  const noteJour = noteJoueurMatch(joueurRow, role);
+  const nbMatchs = joueurRow.matchs_joues_saison ?? 0;
+  const noteRecente = nbMatchs >= 3 ? clamp((joueurRow.note_moyenne_saison ?? 0) * 10, 0, 100) : noteJour;
+  return noteJour * 0.55 + noteRecente * 0.45;
+}
+
+/**
+ * Ajuste la compo désignée (tactique.compositions) pour le jour du match,
+ * poste pour poste (le slot/rôle de chaque titulaire ne change pas, seul le
+ * joueur qui l'occupe peut changer) :
+ *  - un titulaire blessé (blessure_jours > 0) est TOUJOURS sorti, remplacé
+ *    par le meilleur joueur dispo et compatible avec le même rôle ;
+ *  - un titulaire non blessé est conservé sauf si un autre joueur dispo au
+ *    même rôle a un score de sélection nettement supérieur (marge
+ *    `seuilPromotion`, par défaut 4 points/100) — évite les changements sur
+ *    un simple bruit statistique d'un match à l'autre.
+ *
+ * N'ordonne PAS un poste par CA/qualité absolue : ne considère, pour chaque
+ * slot, que le titulaire désigné par la tactique + les joueurs compatibles
+ * avec ce rôle précis, un joueur ne pouvant occuper qu'un seul slot.
+ *
+ * @param {Array} compositionsBase - tactique.compositions (slot_id, role, player_id, player_nom, ...)
+ * @param {Array} joueurs - TOUT l'effectif équipe_a du club (game_players)
+ * @returns {{ compositions: Array, changements: Array }}
+ */
+function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 4 } = {}) {
+  const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
+  const dejaUtilises = new Set();
+  const changements = [];
+
+  const compositions = (compositionsBase || []).map((slot) => {
+    const designe = joueursParId.get(slot.player_id);
+    const role = slot.role;
+    const designeBlesse = !designe || (designe.blessure_jours ?? 0) > 0;
+
+    const candidats = joueurs
+      .filter((j) => !dejaUtilises.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
+      .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role) }))
+      .sort((a, b) => b.score - a.score);
+
+    let choisi;
+    if (designeBlesse) {
+      choisi = candidats[0]?.joueur ?? designe;
+      if (designe && choisi && choisi.id !== designe.id) {
+        changements.push({ slot_id: slot.slot_id, role, raison: 'blessure', sortant_id: designe.id, sortant_nom: designe.nom, entrant_id: choisi.id, entrant_nom: choisi.nom });
+      }
+    } else {
+      const scoreDesigne = scoreSelectionJoueur(designe, role);
+      const meilleureAlternative = candidats.find((c) => c.joueur.id !== designe.id);
+      if (meilleureAlternative && meilleureAlternative.score - scoreDesigne > seuilPromotion) {
+        choisi = meilleureAlternative.joueur;
+        changements.push({
+          slot_id: slot.slot_id,
+          role,
+          raison: 'forme',
+          sortant_id: designe.id,
+          sortant_nom: designe.nom,
+          entrant_id: choisi.id,
+          entrant_nom: choisi.nom,
+          ecart: Math.round(meilleureAlternative.score - scoreDesigne),
+        });
+      } else {
+        choisi = designe;
+      }
+    }
+
+    if (!choisi) return slot; // effectif insuffisant pour ce rôle : on garde le slot tel quel (edge case)
+
+    dejaUtilises.add(choisi.id);
+    return { ...slot, player_id: choisi.id, player_nom: choisi.nom };
+  });
+
+  return { compositions, changements };
+}
+
+// ============================================================
 // ORCHESTRATEUR
 // ============================================================
 
@@ -1078,6 +1190,10 @@ const MOTEUR_MATCH_EXPORTS = {
   // impact post-match (forme / moral)
   calculerImpactPostMatch,
   minutesJoueesParJoueur,
+  // composition du jour (coach ajuste selon blessure/forme/note récente)
+  choisirCompositionDuJour,
+  scoreSelectionJoueur,
+  joueurPeutJouerRole,
   // impact tactique
   profilTactique,
   calculerMismatchTactique,
