@@ -7908,6 +7908,9 @@ async function runGlobalSearch(q, dropdown) {
   let clubQuery = supabaseClient.from("game_clubs").select("id, nom").eq("game_id", gameId);
   words.forEach(w => { clubQuery = clubQuery.ilike("nom", `%${w}%`); });
 
+  let compQuery = supabaseClient.from("competitions").select("id, nom, nation, division").eq("game_id", gameId);
+  words.forEach(w => { compQuery = compQuery.ilike("nom", `%${w}%`); });
+
   let playerQuery = supabaseClient
     .from("game_players")
     .select("id, nom, poste_brut, game_club_id, reputation_mondiale")
@@ -7916,11 +7919,14 @@ async function runGlobalSearch(q, dropdown) {
 
   const [
     { data: clubs },
+    { data: competitions, error: competitionsError },
     { data: players, error: playersError },
   ] = await Promise.all([
     clubQuery.order("nom", { ascending: true }).limit(6),
+    compQuery.order("nom", { ascending: true }).limit(6),
     playerQuery.order("reputation_mondiale", { ascending: false, nullsFirst: false }).limit(8),
   ]);
+  if (competitionsError) console.error(competitionsError);
   if (playersError) console.error(playersError);
 
   // Noms de club recuperes a part (plutot qu'une jointure imbriquee
@@ -7940,9 +7946,10 @@ async function runGlobalSearch(q, dropdown) {
   }
 
   const hasClubs = clubs && clubs.length > 0;
+  const hasCompetitions = competitions && competitions.length > 0;
   const hasPlayers = players && players.length > 0;
 
-  if (!hasClubs && !hasPlayers) {
+  if (!hasClubs && !hasCompetitions && !hasPlayers) {
     dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${escapeHtml(q)}"</div>`;
     dropdown.classList.remove("hidden");
     return;
@@ -7955,6 +7962,18 @@ async function runGlobalSearch(q, dropdown) {
       <div class="search-result-item" data-type="club" data-id="${c.id}">
         <span class="search-result-icon">🛡️</span>
         <span>${escapeHtml(c.nom)}</span>
+      </div>
+    `).join("");
+  }
+  if (hasCompetitions) {
+    html += `<div class="search-group-label">Compétitions</div>`;
+    html += competitions.map(comp => `
+      <div class="search-result-item" data-type="competition" data-id="${comp.id}">
+        <span class="search-result-icon">🏆</span>
+        <span>
+          <div>${escapeHtml(comp.nom)}</div>
+          <div class="search-result-sub">${escapeHtml(comp.nation || "-")}${comp.division ? " · " + escapeHtml(comp.division) : ""}</div>
+        </span>
       </div>
     `).join("");
   }
@@ -7980,6 +7999,8 @@ async function runGlobalSearch(q, dropdown) {
       const id = item.getAttribute("data-id");
       if (type === "club") {
         window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
+      } else if (type === "competition") {
+        window.location.href = `competition.html?game=${encodeURIComponent(gameId)}&competition=${encodeURIComponent(id)}&club=${encodeURIComponent(myGameClubId || "")}`;
       } else {
         const clubId = item.getAttribute("data-club");
         window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}&player=${encodeURIComponent(id)}`;
