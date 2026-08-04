@@ -345,6 +345,17 @@
   .contract-row:last-child { border-bottom: none; }
   .contract-label { color: var(--text-dim); }
   .contract-value { font-weight: 600; }
+
+  /* Contrat & valeur : logo du club plaqué à gauche, sur toute la hauteur du module */
+  .card-contrat { flex-direction: row; align-items: stretch; padding: 0; overflow: hidden; }
+  .contrat-logo-wrap {
+    flex: 0 0 auto; width: clamp(64px, 9vw, 96px); align-self: stretch;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel-2); border-right: 1px solid var(--border); padding: 10px;
+  }
+  .contrat-logo-wrap img { max-width: 100%; max-height: 100%; height: auto; width: auto; object-fit: contain; }
+  .contrat-body { flex: 1 1 auto; min-width: 0; padding: 16px 18px; }
+  .contrat-body h3 { margin-bottom: 14px; }
   .contract-soon { color: var(--danger); }
 
   .bar-row { margin-bottom: 12px; }
@@ -467,9 +478,12 @@
   </div>
 
   <div class="area-footer">
-    <div class="card">
-      <h3>Contrat &amp; valeur</h3>
-      <div id="contractRows"></div>
+    <div class="card card-contrat">
+      <div class="contrat-logo-wrap hidden" id="contratLogoWrap"></div>
+      <div class="contrat-body">
+        <h3>Contrat &amp; valeur</h3>
+        <div id="contractRows"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -641,6 +655,18 @@ function renderPlayerPhoto(gp) {
   document.getElementById("topbarAvatar").innerHTML = gp.photo_url ? `<img src="${escapeHtml(gp.photo_url)}" alt="">` : avatarSVG(gp.nom);
 }
 
+function renderClubLogo(logoUrl) {
+  const wrap = document.getElementById("contratLogoWrap");
+  if (!wrap) return;
+  if (logoUrl) {
+    wrap.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="">`;
+    wrap.classList.remove("hidden");
+  } else {
+    wrap.innerHTML = "";
+    wrap.classList.add("hidden");
+  }
+}
+
 // ---------- Drapeaux ----------
 const GB_SUBCODES = { ENG: "gb-eng", SCO: "gb-sct", WAL: "gb-wls" };
 const NAT_CODE_TO_ISO2 = {
@@ -768,6 +794,7 @@ function ageFromDob(dob) {
 let gameCurrentDate = null;
 let currentSeason = null;
 let currentGamePlayer = null;
+let currentClubLogoUrl = "";
 
 // ---------- Tuiles stats (reutilisees dans la carte "Saison en cours" et le sous-onglet Stats) ----------
 function statTilesHtml(row, big) {
@@ -1429,7 +1456,7 @@ async function loadFiche() {
 
   const { data: gp, error } = await supabaseClient
     .from("game_players")
-    .select(`${selectCols}, players:player_ref ( taille_cm, poids_kg )`)
+    .select(`${selectCols}, players:player_ref ( taille_cm, poids_kg, photo_url )`)
     .eq("id", playerId)
     .eq("game_id", gameId)
     .single();
@@ -1453,14 +1480,22 @@ async function loadFiche() {
   renderFmSidebar(clubIdParam);
 
   let clubNom = "";
+  let clubLogoUrl = "";
   if (clubIdParam) {
-    const { data: club } = await supabaseClient.from("game_clubs").select("nom").eq("id", clubIdParam).single();
+    const { data: club } = await supabaseClient
+      .from("game_clubs")
+      .select("nom, clubs:club_ref ( logo_url )")
+      .eq("id", clubIdParam)
+      .single();
     clubNom = club?.nom || "";
+    clubLogoUrl = club?.clubs?.logo_url || "";
   }
+  currentClubLogoUrl = clubLogoUrl;
+  renderClubLogo(clubLogoUrl);
 
   document.getElementById("fmSearchInput").placeholder = (gp.nom || "").toUpperCase();
   document.getElementById("playerMeta").textContent = [gp.poste_brut, clubNom].filter(Boolean).join(" · ");
-  renderPlayerPhoto(gp);
+  renderPlayerPhoto({ ...gp, photo_url: extra.photo_url });
 
   // Identité
   document.getElementById("identityRows").innerHTML = `
