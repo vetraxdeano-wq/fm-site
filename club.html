@@ -106,8 +106,19 @@
 
   .fm-sidebar {
     width: 220px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
-    overflow-y: auto; padding: 10px 0;
+    overflow-y: auto; padding: 0; display: flex; flex-direction: column;
   }
+  /* Blason du club consulte sur cette fiche : logo seul, sans nom ni cadre
+     autour, au-dessus des onglets de navigation. */
+  .fm-sidebar-crest { flex-shrink: 0; display: flex; justify-content: center; padding: 22px 16px 14px; }
+  .fm-sidebar-crest-img, .fm-sidebar-crest-fallback {
+    width: 84px; height: 84px; object-fit: contain;
+  }
+  .fm-sidebar-crest-fallback {
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: 800; color: #0b0d12;
+  }
+  .fm-sidebar-nav { flex: 1; overflow-y: auto; padding: 10px 0; }
   .fm-nav-item {
     display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 13.5px;
     color: var(--text-dim); cursor: pointer; border-left: 3px solid transparent; user-select: none;
@@ -479,8 +490,10 @@
     .fm-body { flex-direction: column; }
     .fm-sidebar {
       width: 100%; height: auto; flex-shrink: 0; display: flex; overflow-x: auto;
-      overflow-y: hidden; padding: 4px; border-right: none; border-bottom: 1px solid var(--border);
+      overflow-y: hidden; padding: 0; border-right: none; border-bottom: 1px solid var(--border);
     }
+    .fm-sidebar-crest { display: none; }
+    .fm-sidebar-nav { display: flex; padding: 4px; overflow-x: auto; overflow-y: hidden; }
     .fm-nav-item { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
     .fm-nav-item.active { border-left-color: transparent; border-bottom-color: var(--gold); }
     .fm-subtabs { padding: 8px 12px 0; overflow-x: auto; }
@@ -1045,14 +1058,31 @@ const FM_NAV_VIEW_PARAM = {
   competitions: "competitions",
 };
 
-function renderFmSidebar(navClubId) {
+function fmSidebarCrestHtml(logoUrl, nom) {
+  if (logoUrl) {
+    return `
+      <div class="fm-sidebar-crest">
+        <img class="fm-sidebar-crest-img" src="${escapeHtml(logoUrl)}" alt=""
+          onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'fm-sidebar-crest-fallback', style:'background:${colorFromName(nom || "")}', textContent:'${escapeHtml(initials(nom || "?"))}'}))">
+      </div>
+    `;
+  }
+  return `
+    <div class="fm-sidebar-crest">
+      <div class="fm-sidebar-crest-fallback" style="background:${colorFromName(nom || "")}">${escapeHtml(initials(nom || "?"))}</div>
+    </div>
+  `;
+}
+
+function renderFmSidebar(navClubId, crestLogoUrl, crestNom) {
   const el = document.getElementById("fmSidebar");
-  el.innerHTML = FM_NAV_ITEMS.map(item => `
+  el.innerHTML = fmSidebarCrestHtml(crestLogoUrl, crestNom) + `<div class="fm-sidebar-nav">` +
+    FM_NAV_ITEMS.map(item => `
     <div class="fm-nav-item ${item.key === "infosclub" ? "active" : ""}" data-key="${item.key}">
       <span class="fm-nav-icon">${item.icon}</span>
       <span>${item.label}</span>
     </div>
-  `).join("");
+  `).join("") + `</div>`;
 
   el.querySelectorAll(".fm-nav-item").forEach(row => {
     const item = FM_NAV_ITEMS.find(i => i.key === row.getAttribute("data-key"));
@@ -2559,7 +2589,7 @@ async function loadClub() {
   document.getElementById("clubGrid").style.display = "";
 
   renderFmHeader(me.pseudo, headerClubName);
-  renderFmSidebar(myClubId);
+  renderFmSidebar(myClubId, getClubLogoUrl(rawClub), club.nom);
   renderFmSubtabs(gameClubId);
   renderClubHero(club, rawClub);
   renderPitch();
