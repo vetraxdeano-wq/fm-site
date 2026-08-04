@@ -369,6 +369,33 @@
   .fm-table td.num { color: var(--text-dim); text-align: center; width: 30px; }
   .fm-club-link { cursor: pointer; }
   .fm-club-link:hover { color: var(--accent); text-decoration: underline; }
+  .fm-club-logo { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; border-radius: 3px; }
+  .fm-table .fm-club-link, .fm-comp-mini-table .fm-club-link {
+    display: inline-flex; align-items: center; gap: 7px; min-width: 0;
+  }
+  .fm-comp-mini-table .fm-club-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Zones de qualification europeenne / relegation : liseret colore a
+     gauche de la ligne + tres legere teinte de fond (memes codes couleur
+     que sur la page Competition), une couleur par competition europeenne
+     et une couleur dediee pour la releguation. */
+  .fm-table tr.zone-euro-1 td:first-child, .fm-comp-mini-table tr.zone-euro-1 td:first-child { border-left: 3px solid #3b82f6; }
+  .fm-table tr.zone-euro-1 td, .fm-comp-mini-table tr.zone-euro-1 td { background: rgba(59,130,246,0.07); }
+  .fm-table tr.zone-euro-2 td:first-child, .fm-comp-mini-table tr.zone-euro-2 td:first-child { border-left: 3px solid #f97316; }
+  .fm-table tr.zone-euro-2 td, .fm-comp-mini-table tr.zone-euro-2 td { background: rgba(249,115,22,0.07); }
+  .fm-table tr.zone-euro-3 td:first-child, .fm-comp-mini-table tr.zone-euro-3 td:first-child { border-left: 3px solid #22c55e; }
+  .fm-table tr.zone-euro-3 td, .fm-comp-mini-table tr.zone-euro-3 td { background: rgba(34,197,94,0.07); }
+  .fm-table tr.zone-releg td:first-child, .fm-comp-mini-table tr.zone-releg td:first-child { border-left: 3px solid var(--danger); }
+  .fm-table tr.zone-releg td, .fm-comp-mini-table tr.zone-releg td { background: rgba(239,68,68,0.07); }
+  .fm-table tr.me.zone-euro-1 td, .fm-table tr.me.zone-euro-2 td, .fm-table tr.me.zone-euro-3 td, .fm-table tr.me.zone-releg td,
+  .fm-comp-mini-table tr.me.zone-euro-1 td, .fm-comp-mini-table tr.me.zone-euro-2 td,
+  .fm-comp-mini-table tr.me.zone-euro-3 td, .fm-comp-mini-table tr.me.zone-releg td { background: rgba(251,191,36,0.12); }
+
+  .fm-standings-legend {
+    display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 2px 0; font-size: 10.5px; color: var(--text-dim);
+  }
+  .fm-standings-legend .legend-item { display: flex; align-items: center; gap: 6px; }
+  .fm-standings-legend .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 
   /* ---- Base de donnees de joueurs (sous-onglet du dashboard) ---- */
   .fm-players-db {
@@ -8257,7 +8284,7 @@ async function getDivisionStandings(nation, division) {
   // diff de buts) partout ou getDivisionStandings est utilisee.
   const { data: full } = await supabaseClient
     .from("game_clubs")
-    .select("id, classement, points, victoires, nuls, defaites, buts_pour, buts_contre")
+    .select("id, classement, points, victoires, nuls, defaites, buts_pour, buts_contre, clubs(logo_url)")
     .in("id", rivals.map(r => r.game_club_id));
 
   const nomMap = {};
@@ -8285,8 +8312,80 @@ async function getDivisionStandings(nation, division) {
       rank: r.classement ?? (i + 1),
       points: s.points ?? 0, joues, diff,
       victoires: s.victoires ?? 0, nuls: s.nuls ?? 0, defaites: s.defaites ?? 0,
+      logo: s.clubs?.logo_url || null,
     };
   });
+}
+
+// Zones qualificatives europeennes / relegation pour un classement donne,
+// calquees sur competition.html (memes couleurs UEFA, meme logique). `comp`
+// doit fournir nation, tier et nb_relegation ; `totalClubs` est la taille
+// du classement (pour placer la zone de releguation en fin de tableau).
+async function getStandingsZones(comp, totalClubs) {
+  let euroZones = [];
+  if (comp && comp.tier === 1) {
+    let placesRows = [];
+    const { data: gamePlaces } = await supabaseClient
+      .from("game_places_europeennes")
+      .select("coupe_europe_ref, phase, nb_places, saison")
+      .eq("game_id", gameId)
+      .eq("nation", comp.nation);
+    if (gamePlaces && gamePlaces.length > 0) {
+      const derniereSaison = Math.max(...gamePlaces.map(r => r.saison));
+      placesRows = gamePlaces.filter(r => r.saison === derniereSaison);
+    } else {
+      const { data: basePlaces } = await supabaseClient
+        .from("classement_uefa_places")
+        .select("coupe_europe_ref, phase, nb_places")
+        .eq("nation", comp.nation);
+      placesRows = basePlaces || [];
+    }
+
+    if (placesRows.length > 0) {
+      const slotsByCoupe = {};
+      placesRows.forEach(r => {
+        slotsByCoupe[r.coupe_europe_ref] = (slotsByCoupe[r.coupe_europe_ref] || 0) + (r.nb_places || 0);
+      });
+      const coupeIds = Object.keys(slotsByCoupe);
+      const { data: coupes } = await supabaseClient
+        .from("competitions")
+        .select("id, nom, tier")
+        .in("id", coupeIds);
+      const EURO_COLORS = { 1: "zone-euro-1", 2: "zone-euro-2", 3: "zone-euro-3" };
+      const ordered = (coupes || []).slice().sort((a, b) => a.tier - b.tier);
+      let cursor = 1;
+      euroZones = ordered.map(c => {
+        const nb = slotsByCoupe[c.id] || 0;
+        const zone = { startRank: cursor, endRank: cursor + nb - 1, colorClass: EURO_COLORS[c.tier] || "zone-euro-3", label: c.nom };
+        cursor += nb;
+        return zone;
+      }).filter(z => z.endRank >= z.startRank);
+    }
+  }
+
+  const nbRelegation = comp?.nb_relegation || 0;
+  const releguable = nbRelegation > 0
+    ? { startRank: totalClubs - nbRelegation + 1, endRank: totalClubs }
+    : null;
+
+  const zoneClassForRank = (rank) => {
+    const euro = euroZones.find(z => rank >= z.startRank && rank <= z.endRank);
+    if (euro) return euro.colorClass;
+    if (releguable && rank >= releguable.startRank && rank <= releguable.endRank) return "zone-releg";
+    return "";
+  };
+
+  const legendItems = euroZones.map(z => `
+    <span class="legend-item"><span class="legend-dot" style="background:${
+      z.colorClass === "zone-euro-1" ? "#3b82f6" : z.colorClass === "zone-euro-2" ? "#f97316" : "#22c55e"
+    };"></span>${escapeHtml(z.label)}</span>
+  `);
+  if (releguable) {
+    legendItems.push(`<span class="legend-item"><span class="legend-dot" style="background:var(--danger);"></span>Relégation</span>`);
+  }
+  const legendHtml = legendItems.length ? `<div class="fm-standings-legend">${legendItems.join("")}</div>` : "";
+
+  return { zoneClassForRank, legendHtml };
 }
 
 // Map game_club_id -> rang, derivee de getDivisionStandings.
@@ -8940,7 +9039,7 @@ async function renderCompetitionsView(gameClubId) {
   // l'instant ; les coupes viendront s'ajouter ici) ---
   const { data: comp, error: compError } = await supabaseClient
     .from("competitions")
-    .select("id, nom, tier, nb_clubs")
+    .select("id, nom, tier, nb_clubs, nb_relegation")
     .eq("nation", myClubNation)
     .eq("division", myClubDivision)
     .eq("type", "championnat")
@@ -8961,10 +9060,17 @@ async function renderCompetitionsView(gameClubId) {
   const nbClubs = comp.nb_clubs || standingsList.length;
   const diff = (clubRow?.buts_pour ?? 0) - (clubRow?.buts_contre ?? 0);
 
+  const { zoneClassForRank, legendHtml } = await getStandingsZones(
+    { ...comp, nation: myClubNation },
+    standingsList.length
+  );
+
   // Mini-classement complet (comme l'onglet Classement) : Clt / Club / J /
   // Diff / Pts pour chaque club de la division, avec le club du joueur mis
-  // en avant. La carte etant carree et remplissant l'espace vertical
-  // disponible, la table scrolle en interne si la division est grande.
+  // en avant, logos de club et zones qualificatives/relégation surlignées
+  // (memes codes couleur que la page Competition). La carte etant carree et
+  // remplissant l'espace vertical disponible, la table scrolle en interne
+  // si la division est grande.
   const miniStandingsHtml = standingsList.length ? `
     <div class="fm-comp-mini-standings-wrap">
       <table class="fm-comp-mini-table">
@@ -8972,17 +9078,26 @@ async function renderCompetitionsView(gameClubId) {
           <tr><th>Clt</th><th>Club</th><th>J</th><th>Diff</th><th>Pts</th></tr>
         </thead>
         <tbody>
-          ${standingsList.map(r => `
-            <tr class="${String(r.id) === String(gameClubId) ? "me" : ""}">
+          ${standingsList.map(r => {
+            const rowClasses = [String(r.id) === String(gameClubId) ? "me" : "", zoneClassForRank(r.rank)].filter(Boolean).join(" ");
+            return `
+            <tr class="${rowClasses}">
               <td class="clt">${r.rank}e</td>
-              <td class="nm"><span class="fm-club-link" data-club-id="${r.id}">${escapeHtml(r.nom)}</span></td>
+              <td class="nm">
+                <span class="fm-club-link" data-club-id="${r.id}">
+                  ${r.logo ? `<img class="fm-club-logo" src="${escapeHtml(r.logo)}" alt="">` : ""}
+                  <span>${escapeHtml(r.nom)}</span>
+                </span>
+              </td>
               <td class="num">${r.joues}</td>
               <td class="num">${r.diff >= 0 ? "+" : ""}${r.diff}</td>
               <td class="pts">${r.points}</td>
             </tr>
-          `).join("")}
+          `;
+          }).join("")}
         </tbody>
       </table>
+      ${legendHtml}
     </div>
   ` : "";
 
@@ -9037,23 +9152,45 @@ async function renderStandings(club) {
     return;
   }
 
+  const { data: comp } = await supabaseClient
+    .from("competitions")
+    .select("id, nom, tier, nb_relegation")
+    .eq("nation", club.nation)
+    .eq("division", club.division)
+    .eq("type", "championnat")
+    .maybeSingle();
+
+  const { zoneClassForRank, legendHtml } = await getStandingsZones(
+    comp ? { ...comp, nation: club.nation } : null,
+    rivals.length
+  );
+
   el.innerHTML = `
     <table class="fm-table">
       <thead>
         <tr><th>Clt</th><th>Équipe</th><th>J.</th><th>Diff</th><th>Pts</th></tr>
       </thead>
       <tbody>
-        ${rivals.map(r => `
-          <tr class="${r.id === club.game_club_id ? "me" : ""}">
+        ${rivals.map(r => {
+          const rowClasses = [r.id === club.game_club_id ? "me" : "", zoneClassForRank(r.rank)].filter(Boolean).join(" ");
+          return `
+          <tr class="${rowClasses}">
             <td class="clt">${r.rank}e</td>
-            <td><span class="fm-club-link" data-club-id="${r.id}">${escapeHtml(r.nom)}</span></td>
+            <td>
+              <span class="fm-club-link" data-club-id="${r.id}">
+                ${r.logo ? `<img class="fm-club-logo" src="${escapeHtml(r.logo)}" alt="">` : ""}
+                <span>${escapeHtml(r.nom)}</span>
+              </span>
+            </td>
             <td class="num">${r.joues}</td>
             <td class="num">${r.diff >= 0 ? "+" : ""}${r.diff}</td>
             <td class="num">${r.points}</td>
           </tr>
-        `).join("")}
+        `;
+        }).join("")}
       </tbody>
     </table>
+    ${legendHtml}
   `;
 
   el.querySelectorAll(".fm-club-link").forEach(linkEl => {
