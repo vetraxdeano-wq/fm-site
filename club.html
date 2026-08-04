@@ -604,12 +604,14 @@
   .mdet-player-name.motm { color: var(--gold); }
   .mdet-player-sub-detail { font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Remplacement affiche sur 3 lignes : titulaire sorti / icone verticale / entrant */
-  .mdet-sub-row { align-items: flex-start; }
-  .mdet-sub-flow { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 1px 0; }
-  .mdet-sub-out { font-size: 10.5px; color: var(--text-dim); text-decoration: line-through; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mdet-sub-icon-vert { font-size: 10px; line-height: 1; transform: rotate(90deg); margin: 2px 0; }
-  .mdet-sub-in-wrap { display: flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; }
-  .mdet-sub-in-wrap .mdet-player-name { min-width: 0; }
+  /* ---- Remplacement dans la timeline "Faits de match" : affiche sur 3
+     lignes (titulaire sorti / icone de remplacement / entrant) au lieu
+     d'une seule ligne "entrant <-> sortant" pouvant retomber sur 2 lignes
+     par manque de place. */
+  .mdet-timeline-sub { display: flex; flex-direction: column; align-items: center; gap: 1px; margin-top: 2px; }
+  .mdet-timeline-sub-name { font-size: 11px; color: var(--text); line-height: 1.25; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-timeline-sub-name.out { color: var(--text-dim); }
+  .mdet-timeline-sub-icon { font-size: 10px; line-height: 1; transform: rotate(90deg); margin: 1px 0; }
   .mdet-player-note {
     flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 11px;
     padding: 1px 7px; border-radius: 999px; min-width: 30px; text-align: center;
@@ -2623,7 +2625,14 @@ function mdetRenderEvenements(stats, clubDomId, nomDom, nomExt) {
   (stats.remplacements || []).forEach(r => {
     evts.push({
       minute: r.minute, icone: MDET_ICONES.remplacement,
-      texte: `${escapeHtml(r.entrant_nom)} ↔ ${escapeHtml(r.sortant_nom)} <span class="mdet-event-detail">(${escapeHtml(mdetNomEquipe(r.game_club_id, clubDomId, nomDom, nomExt))})</span>`,
+      // Affiche le remplacement sur 3 lignes : titulaire sorti, icone de
+      // remplacement (verticale), puis entrant.
+      texte: `<div class="mdet-timeline-sub">
+          <div class="mdet-timeline-sub-name out">${escapeHtml(r.sortant_nom)}</div>
+          <div class="mdet-timeline-sub-icon">🔄</div>
+          <div class="mdet-timeline-sub-name">${escapeHtml(r.entrant_nom)}</div>
+        </div>
+        <span class="mdet-event-detail">(${escapeHtml(mdetNomEquipe(r.game_club_id, clubDomId, nomDom, nomExt))})</span>`,
     });
   });
 
@@ -2660,34 +2669,14 @@ function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
   const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
   const clickable = n.player_id ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(clubId || "")).replace(/'/g, "&#39;")}', '${escapeHtml(String(n.player_id)).replace(/'/g, "&#39;")}')"` : "";
-  const noteHtml = `<div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>`;
-
-  // Remplacement avec sortant identifie : affichage vertical sur 3 lignes
-  // (titulaire sorti / icone de remplacement / entrant) plutot que le
-  // sortant relegue en petit texte secondaire sur la meme ligne.
-  if (n.entrant && sortant) {
-    return `
-      <div class="mdet-player-row mdet-sub-row">
-        <div class="mdet-sub-flow">
-          <div class="mdet-sub-out">${escapeHtml(sortant.sortant_nom)}</div>
-          <div class="mdet-sub-icon-vert">🔄</div>
-          <div class="mdet-sub-in-wrap">
-            <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
-            ${sortant.minute != null ? `<div class="mdet-player-sub-detail">${sortant.minute}e</div>` : ""}
-          </div>
-        </div>
-        ${noteHtml}
-      </div>
-    `;
-  }
-
   return `
     <div class="mdet-player-row">
       <div class="mdet-player-sub-icon">${n.entrant ? "🔄" : ""}</div>
       <div class="mdet-player-name-wrap">
         <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+        ${sortant ? `<div class="mdet-player-sub-detail">↔ ${escapeHtml(sortant.sortant_nom)}${sortant.minute != null ? ` · ${sortant.minute}e` : ""}</div>` : ""}
       </div>
-      ${noteHtml}
+      <div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>
     </div>
   `;
 }
@@ -2860,18 +2849,21 @@ async function mdetDominantColorFromLogo(url) {
       image.onerror = () => reject(new Error("load failed"));
       image.src = url;
     });
-    const size = 32;
+    const size = 40;
     const canvas = document.createElement("canvas");
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, size, size);
     const { data } = ctx.getImageData(0, 0, size, size);
-    // Regroupe les pixels par teinte quantifiee (buckets de 12 degres) pour
-    // isoler la couleur LA PLUS FREQUENTE du blason plutot que la moyenne
-    // brute de tous les pixels colores : un simple moyennage RGB melange
-    // par exemple le bleu dominant d'un blason et le rouge d'un liseret
-    // tricolore en un violet qui ne ressemble a aucune des deux couleurs
-    // reelles du logo.
+    // Regroupe les pixels par couleur RVB quantifiee (et non par teinte
+    // seule : un bucket de teinte peut eclater a tort un meme bleu en
+    // plusieurs paniers a cause d'un degrade/anti-aliasing, ce qui laissait
+    // gagner par erreur un petit element plus uniforme du blason, comme les
+    // etoiles dorees). On isole ainsi la couleur LA PLUS FREQUENTE plutot
+    // qu'une moyenne de toutes les couleurs presentes (qui melangerait par
+    // exemple le bleu dominant et le rouge d'un liseret tricolore en un
+    // violet ne ressemblant a aucune des deux couleurs reelles du logo).
+    const step = 22;
     const buckets = {};
     for (let i = 0; i < data.length; i += 4) {
       const alpha = data[i + 3];
@@ -2880,12 +2872,11 @@ async function mdetDominantColorFromLogo(url) {
       const max = Math.max(rr, gg, bb), min = Math.min(rr, gg, bb);
       if (max > 240 && min > 225) continue; // quasi blanc (fond) : ignore
       if (max < 25) continue; // quasi noir : ignore
-      if (max - min < 14) continue; // quasi gris/neutre : n'identifie aucune teinte
-      const [hh] = mdetRgbToHsl(rr, gg, bb);
-      const bucket = Math.round(hh / 12) % 30;
-      if (!buckets[bucket]) buckets[bucket] = { count: 0, r: 0, g: 0, b: 0 };
-      buckets[bucket].count++;
-      buckets[bucket].r += rr; buckets[bucket].g += gg; buckets[bucket].b += bb;
+      if (max - min < 20) continue; // quasi gris/neutre : n'identifie aucune teinte
+      const key = `${Math.round(rr / step)}-${Math.round(gg / step)}-${Math.round(bb / step)}`;
+      if (!buckets[key]) buckets[key] = { count: 0, r: 0, g: 0, b: 0 };
+      buckets[key].count++;
+      buckets[key].r += rr; buckets[key].g += gg; buckets[key].b += bb;
     }
     let best = null;
     Object.values(buckets).forEach(bk => { if (!best || bk.count > best.count) best = bk; });
