@@ -625,6 +625,117 @@
     .mdet-header-teams .mdet-club-logo,
     .mdet-header-teams .mdet-club-logo-fallback { width: 40px !important; height: 40px !important; font-size: 13px !important; }
   }
+
+  /* ---- Plan de terrain (schema de formation, base sur stats.notes_joueurs[].role) ---- */
+  .mdet-pitch {
+    position: relative; width: 100%; height: 300px; border-radius: 10px; overflow: hidden;
+    margin-bottom: 10px; border: 1px solid var(--border);
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0 34px, transparent 34px 68px),
+      linear-gradient(180deg, #1d4a28, #163a20);
+  }
+  .mdet-pitch::before {
+    content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+    width: 36%; height: 15%; border: 2px solid rgba(255,255,255,0.32); border-bottom: none; border-radius: 3px 3px 0 0;
+  }
+  .mdet-pitch::after {
+    content: ""; position: absolute; left: 6%; right: 6%; top: 9%; height: 2px; background: rgba(255,255,255,0.22);
+  }
+  .mdet-pitch-player {
+    position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column;
+    align-items: center; gap: 3px; cursor: pointer; z-index: 1; width: 64px;
+  }
+  .mdet-pitch-player:hover .mdet-pitch-name { color: var(--gold); text-decoration: underline; }
+  .mdet-pitch-dot {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 800; border: 2px solid rgba(255,255,255,0.55); box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    font-variant-numeric: tabular-nums;
+  }
+  .mdet-pitch-player.motm .mdet-pitch-dot { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(251,191,36,0.45); }
+  .mdet-pitch-name {
+    font-size: 9.5px; color: #fff; text-align: center; max-width: 64px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.85); font-weight: 600;
+  }
+  .mdet-pitch-dot.mdet-note-elite { background: #4ade80; color: #06280f; }
+  .mdet-pitch-dot.mdet-note-bon { background: #a3e635; color: #1a2705; }
+  .mdet-pitch-dot.mdet-note-moyen { background: #cbd5e1; color: #1f2937; }
+  .mdet-pitch-dot.mdet-note-faible { background: var(--gold); color: #3a2a02; }
+  .mdet-pitch-dot.mdet-note-mauvais { background: var(--danger); color: #3a0a0a; }
+
+  /* ---- Composition sur le mini-terrain "Derniere composition utilisee" ---- */
+  .compo-pitch-player { cursor: pointer; }
+  .compo-pitch-player:hover text { fill: var(--gold) !important; }
+
+  /* ---- Tactique (sous-onglet) : version simplifiee de l'onglet Tactique du dashboard ---- */
+  .tac-simple-grid {
+    display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start;
+  }
+  @media (max-width: 900px) {
+    .tac-simple-grid { grid-template-columns: 1fr; }
+  }
+  .tac-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .tac-card h3 {
+    margin: 0 0 12px; font-size: 13px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .tac-coach-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .tac-coach-avatar {
+    width: 42px; height: 42px; border-radius: 50%; background: #1c2029;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    border: 1px solid var(--border); flex-shrink: 0;
+  }
+  .tac-coach-name { font-weight: 700; font-size: 14px; }
+  .tac-coach-sub { font-size: 12px; color: var(--text-dim); }
+  .tac-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+  .tac-row:last-child { border-bottom: none; }
+  .tac-row .tac-label { color: var(--text-dim); }
+  .tac-row .tac-value { font-weight: 600; text-align: right; }
+  .tac-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .tac-badge.preferee { background: rgba(74,222,128,0.15); color: var(--accent); border: 1px solid var(--accent-dim, #1f6b3f); }
+  .tac-badge.deuxieme_preferee { background: rgba(251,191,36,0.15); color: var(--gold); border: 1px solid #7a5c0f; }
+  .tac-badge.adaptee { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid #7a1f1f; }
+  .tac-mentality-scale { display: flex; gap: 3px; margin-top: 6px; }
+  .tac-mentality-dot { flex: 1; height: 6px; border-radius: 3px; background: #1c2029; border: 1px solid var(--border); }
+  .tac-mentality-dot.on { background: var(--gold); border-color: var(--gold); }
+  .tac-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tac-chip { font-size: 11.5px; background: #14171d; border: 1px solid var(--border); padding: 4px 9px; border-radius: 999px; }
+  .tac-pitch-wrap { display: flex; flex-direction: column; gap: 10px; }
+  .tac-pitch {
+    position: relative; width: 100%; max-width: 460px; margin: 0 auto;
+    aspect-ratio: 68 / 100;
+    background:
+      linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px) 0 0/100% 12.5%,
+      repeating-linear-gradient(180deg, #1c3d24 0, #1c3d24 10%, #193a21 10%, #193a21 20%);
+    border: 2px solid rgba(255,255,255,0.25); border-radius: 10px; overflow: hidden;
+  }
+  .tac-pitch::before {
+    content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+    background: rgba(255,255,255,0.25); transform: translateY(-50%);
+  }
+  .tac-pitch::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 22%; aspect-ratio: 1/1;
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; transform: translate(-50%,-50%);
+  }
+  .tac-slot {
+    position: absolute; transform: translate(-50%, -50%); width: 66px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: default;
+  }
+  .tac-slot-dot {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--panel);
+    border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--text);
+  }
+  .tac-slot.empty .tac-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
+  .tac-slot[data-player-id] { cursor: pointer; }
+  .tac-slot[data-player-id]:hover .tac-slot-name { color: var(--gold); }
+  .tac-slot[data-player-id]:hover .tac-slot-dot { border-color: var(--gold); }
+  .tac-slot-name { font-size: 10.5px; font-weight: 600; background: rgba(0,0,0,0.55); border-radius: 4px; padding: 1px 4px; max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -678,6 +789,14 @@
           <div class="fm-comp-calendar-list" id="fmCompCalendarList"></div>
         </div>
         <div class="fm-comp-right-pane" id="fmCompRightPane"></div>
+      </div>
+
+      <div class="tac-simple-grid hidden" id="fmTactiqueView">
+        <div id="clubTacCoachPanel"></div>
+        <div class="tac-card tac-pitch-wrap">
+          <h3>Formation</h3>
+          <div class="tac-pitch" id="clubTacPitch"></div>
+        </div>
       </div>
 
       <div id="clubError" class="empty-state hidden"></div>
@@ -961,6 +1080,9 @@ function renderFmSubtabs(viewedClubId) {
     <div class="fm-subtab" data-key="competitions">
       <span class="fm-subtab-icon">🏆</span><span>Compétitions</span>
     </div>
+    <div class="fm-subtab" data-key="tactique">
+      <span class="fm-subtab-icon">♟️</span><span>Tactique</span>
+    </div>
   `;
   el.querySelector('[data-key="effectif"]').addEventListener("click", () => {
     window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(viewedClubId)}`;
@@ -979,6 +1101,11 @@ function renderFmSubtabs(viewedClubId) {
     el.querySelectorAll(".fm-subtab").forEach(t => t.classList.remove("active"));
     el.querySelector('[data-key="competitions"]').classList.add("active");
     showCompetitionsTab(viewedClubId);
+  });
+  el.querySelector('[data-key="tactique"]').addEventListener("click", () => {
+    el.querySelectorAll(".fm-subtab").forEach(t => t.classList.remove("active"));
+    el.querySelector('[data-key="tactique"]').classList.add("active");
+    showTactiqueTab(viewedClubId);
   });
 }
 
@@ -1176,15 +1303,118 @@ function renderClubBadge(club, rawClub) {
 }
 
 // ===================== TERRAIN ILLUSTRE (derniere composition) =====================
-// Pas encore de vraie composition/tactique enregistree cote base de donnees :
-// on affiche un terrain vide en attendant que cette donnee existe.
+// Alimente par calendrier.stats.notes_joueurs (jsonb ecrit par
+// moteur_match.js a chaque match simule) : on prend le dernier match joue
+// par ce club et on affiche ses 11 titulaires sur le terrain.
 
-function renderPitch() {
-  const el = document.getElementById("clubPitch");
-  el.innerHTML = `
-    <div class="pitch-caption">Aucune composition enregistrée pour l'instant.</div>
-    ${emptyPitchSvg()}
+function compoPitchRows(titulaires) {
+  const bands = { GB: [], DEF: [], MD: [], MO: [], BT: [] };
+  titulaires.forEach(p => {
+    if (p.role === "GB") bands.GB.push(p);
+    else if (p.role === "D" || p.role === "AL") bands.DEF.push(p);
+    else if (p.role === "MD") bands.MD.push(p);
+    else if (p.role === "MO") bands.MO.push(p);
+    else if (p.role === "BT") bands.BT.push(p);
+    else bands.MD.push(p);
+  });
+  // Ligne de defense : arrieres lateraux (AL) aux extremites, defenseurs
+  // axiaux (D) au centre (meme logique que mdetPitchRows du dashboard).
+  const al = bands.DEF.filter(p => p.role === "AL");
+  const d = bands.DEF.filter(p => p.role !== "AL");
+  const defOrdered = [];
+  if (al[0]) defOrdered.push(al[0]);
+  defOrdered.push(...d);
+  if (al[1]) defOrdered.push(al[1]);
+  if (al.length > 2) defOrdered.push(...al.slice(2));
+  return [
+    { y: 400, players: bands.GB },
+    { y: 322, players: defOrdered },
+    { y: 244, players: bands.MD },
+    { y: 152, players: bands.MO },
+    { y: 60, players: bands.BT },
+  ].filter(row => row.players.length);
+}
+
+function compoNoteColor(note) {
+  const n = Number(note);
+  if (!Number.isFinite(n)) return "#94a3b8";
+  if (n >= 7.5) return "#4ade80";
+  if (n >= 6.5) return "#a3e635";
+  if (n >= 5.5) return "#cbd5e1";
+  if (n >= 4.5) return "#fbbf24";
+  return "#ef4444";
+}
+
+function compoPitchSvg(titulaires) {
+  const rows = compoPitchRows(titulaires);
+  const dots = rows.flatMap(row => {
+    const n = row.players.length;
+    return row.players.map((p, i) => {
+      const x = ((i + 1) / (n + 1)) * 240 + 30;
+      const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
+      const attrs = p.player_id ? ` class="compo-pitch-player" data-player-id="${escapeHtml(String(p.player_id))}"` : "";
+      return `
+        <g${attrs} transform="translate(${x},${row.y})">
+          <circle r="15" fill="${compoNoteColor(p.note)}" stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
+          <text text-anchor="middle" dy="4" font-size="10" font-weight="800" fill="#0b0f14">${escapeHtml(Number.isFinite(Number(p.note)) ? Number(p.note).toFixed(1) : "-")}</text>
+          <text text-anchor="middle" y="27" font-size="10" font-weight="600" fill="#fff" stroke="rgba(0,0,0,0.75)" stroke-width="3" paint-order="stroke">${escapeHtml(nomCourt)}</text>
+        </g>
+      `;
+    });
+  }).join("");
+  return `
+    <div class="pitch-wrap">
+      <svg class="pitch-svg" viewBox="0 0 300 430" xmlns="http://www.w3.org/2000/svg">
+        ${pitchBackground()}
+        ${dots}
+      </svg>
+    </div>
   `;
+}
+
+async function renderPitch() {
+  const el = document.getElementById("clubPitch");
+  el.innerHTML = `<div class="pitch-caption">Chargement...</div>`;
+
+  const clubIdNum = Number(gameClubId);
+  const { data: matches, error } = await supabaseClient
+    .from("calendrier")
+    .select("id, date_match, journee, club_domicile_id, club_exterieur_id, stats")
+    .eq("game_id", gameId)
+    .or(`club_domicile_id.eq.${clubIdNum},club_exterieur_id.eq.${clubIdNum}`)
+    .not("score_domicile", "is", null)
+    .order("date_match", { ascending: false })
+    .limit(1);
+
+  const m = !error && matches && matches[0];
+  const isHome = m ? m.club_domicile_id === clubIdNum : false;
+  const notes = m ? (isHome ? m.stats?.notes_joueurs?.domicile : m.stats?.notes_joueurs?.exterieur) : null;
+  const titulaires = (notes || []).filter(n => !n.entrant);
+
+  if (!m || !titulaires.length) {
+    el.innerHTML = `
+      <div class="pitch-caption">Aucune composition enregistrée pour l'instant.</div>
+      ${emptyPitchSvg()}
+    `;
+    return;
+  }
+
+  const formation = isHome ? m.stats?.formation?.domicile : m.stats?.formation?.exterieur;
+  const oppId = isHome ? m.club_exterieur_id : m.club_domicile_id;
+  const { data: oppClub } = await supabaseClient.from("game_clubs").select("nom").eq("id", oppId).single();
+  const d = m.date_match ? new Date(m.date_match) : null;
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "";
+  const captionParts = [];
+  if (formation) captionParts.push(formation);
+  captionParts.push(`vs ${oppClub?.nom || "?"}${dateLabel ? ` (${dateLabel})` : ""}`);
+
+  el.innerHTML = `
+    <div class="pitch-caption">${escapeHtml(captionParts.join(" · "))}</div>
+    ${compoPitchSvg(titulaires)}
+  `;
+  el.querySelectorAll(".compo-pitch-player[data-player-id]").forEach(node => {
+    node.addEventListener("click", () => window.mdetGoToPlayer(gameClubId, node.getAttribute("data-player-id")));
+  });
 }
 
 function pitchBackground() {
@@ -1819,6 +2049,7 @@ async function showStaffTab(viewedClubId) {
   document.getElementById("clubGrid").style.display = "none";
   document.getElementById("clubError").classList.add("hidden");
   document.getElementById("fmCompetitionsView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
   document.getElementById("staffColumns").classList.remove("hidden");
 
   const locked = !isOwnClubView;
@@ -1841,6 +2072,7 @@ async function showStaffTab(viewedClubId) {
 function showInfosClubTab() {
   document.getElementById("staffColumns").classList.add("hidden");
   document.getElementById("fmCompetitionsView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
   document.getElementById("clubHero").classList.remove("hidden");
   document.getElementById("clubGrid").style.display = "";
 }
@@ -1993,8 +2225,105 @@ async function showCompetitionsTab(viewedClubId) {
   document.getElementById("clubGrid").style.display = "none";
   document.getElementById("clubError").classList.add("hidden");
   document.getElementById("staffColumns").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.add("hidden");
   document.getElementById("fmCompetitionsView").classList.remove("hidden");
   await renderCompetitionsTab(viewedClubId);
+}
+
+// ===================== TACTIQUE (sous-onglet) =====================
+// Version simplifiee du sous-onglet "Tactique" de dashboard.html : ne
+// recalcule rien, se contente de lire la tactique deja calculee et
+// persistee (table `tactiques`, une ligne par club, ecrite par
+// generateTactiqueForClub / genererTactiquesPourClubs cote dashboard) et
+// d'en afficher un resume (entraineur, formation, mentalite, style) plus
+// le plan de terrain (compositions[].x/y, memes coordonnees que le
+// sous-onglet complet).
+const TAC_MENTALITY_SCALE = ["Très prudent", "Prudent", "Équilibré", "Offensive", "Aventureux"];
+const TAC_SOURCE_LABEL = { preferee: "1ère formation préférée", deuxieme_preferee: "2e formation préférée", adaptee: "Formation adaptée" };
+
+async function showTactiqueTab(viewedClubId) {
+  document.getElementById("clubHero").classList.add("hidden");
+  document.getElementById("clubGrid").style.display = "none";
+  document.getElementById("clubError").classList.add("hidden");
+  document.getElementById("staffColumns").classList.add("hidden");
+  document.getElementById("fmCompetitionsView").classList.add("hidden");
+  document.getElementById("fmTactiqueView").classList.remove("hidden");
+  await renderTactiqueTab(viewedClubId);
+}
+
+function tacMentalityIndexClub(label) {
+  const i = TAC_MENTALITY_SCALE.indexOf(label);
+  return i === -1 ? 2 : i;
+}
+
+function clubTacCoachPanelHtml(t) {
+  const mentality = t.mentalite || "Équilibré";
+  const mIdx = tacMentalityIndexClub(mentality);
+  const dots = TAC_MENTALITY_SCALE.map((_, i) => `<div class="tac-mentality-dot ${i <= mIdx ? "on" : ""}"></div>`).join("");
+  const chips = [
+    t.style_tactique && t.style_tactique !== "-" ? t.style_tactique : null,
+    t.type_pressing ? `Pressing : ${t.type_pressing}` : null,
+    t.type_marquage ? `Marquage : ${t.type_marquage}` : null,
+  ].filter(Boolean).map(c => `<span class="tac-chip">${escapeHtml(c)}</span>`).join("");
+
+  return `
+    <div class="tac-card">
+      <h3>Entraîneur</h3>
+      <div class="tac-coach-head">
+        <div class="tac-coach-avatar">🧑‍🏫</div>
+        <div>
+          <div class="tac-coach-name">${escapeHtml(t.coach_nom || "-")}</div>
+        </div>
+      </div>
+      <div class="tac-row"><span class="tac-label">Formation utilisée</span><span class="tac-value">${escapeHtml(t.formation || "-")}</span></div>
+      ${t.formation_source ? `<div class="tac-row"><span class="tac-label">Origine</span><span class="tac-value"><span class="tac-badge ${escapeHtml(t.formation_source)}">${TAC_SOURCE_LABEL[t.formation_source] || t.formation_source}</span></span></div>` : ""}
+      ${t.connaissance_tactique != null ? `<div class="tac-row"><span class="tac-label">Connaissance tactique</span><span class="tac-value">${t.connaissance_tactique}/20</span></div>` : ""}
+      <h3 style="margin-top:16px;">Mentalité</h3>
+      <div class="tac-row"><span class="tac-label">${escapeHtml(mentality)}</span></div>
+      <div class="tac-mentality-scale">${dots}</div>
+      <div class="tac-chips">${chips}</div>
+    </div>
+  `;
+}
+
+function clubTacRenderPitch(compositions, viewedClubId) {
+  const el = document.getElementById("clubTacPitch");
+  if (!compositions || !compositions.length) {
+    el.innerHTML = `<div class="fm-empty">Aucune composition disponible.</div>`;
+    return;
+  }
+  el.innerHTML = compositions.map(c => {
+    const cls = !c.player_id ? "empty" : "";
+    const initials = c.player_nom ? escapeHtml(c.player_nom.split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase()) : "?";
+    return `
+      <div class="tac-slot ${cls}" style="left:${c.x}%; top:${c.y}%;" title="${c.player_nom ? escapeHtml(c.player_nom) : "Aucun joueur disponible"} — ${escapeHtml(c.label || "")}" ${c.player_id ? `data-player-id="${escapeHtml(String(c.player_id))}"` : ""}>
+        <div class="tac-slot-dot">${initials}</div>
+        <div class="tac-slot-name">${c.player_nom ? escapeHtml(c.player_nom) : escapeHtml(c.label || "")}</div>
+      </div>
+    `;
+  }).join("");
+  el.querySelectorAll(".tac-slot[data-player-id]").forEach(slotEl => {
+    slotEl.addEventListener("click", () => window.mdetGoToPlayer(viewedClubId, slotEl.getAttribute("data-player-id")));
+  });
+}
+
+async function renderTactiqueTab(viewedClubId) {
+  document.getElementById("clubTacCoachPanel").innerHTML = `<div class="tac-card"><div class="fm-empty">Chargement...</div></div>`;
+  document.getElementById("clubTacPitch").innerHTML = "";
+
+  const { data: t, error } = await supabaseClient
+    .from("tactiques")
+    .select("formation, formation_source, mentalite, style_tactique, type_pressing, type_marquage, connaissance_tactique, coach_nom, compositions")
+    .eq("game_club_id", viewedClubId)
+    .maybeSingle();
+
+  if (error || !t) {
+    document.getElementById("clubTacCoachPanel").innerHTML = `<div class="tac-card"><div class="fm-empty">Aucune tactique définie pour ce club pour l'instant.</div></div>`;
+    return;
+  }
+
+  document.getElementById("clubTacCoachPanel").innerHTML = clubTacCoachPanelHtml(t);
+  clubTacRenderPitch(t.compositions, viewedClubId);
 }
 
 async function renderCompetitionsTab(viewedClubId) {
@@ -2336,16 +2665,69 @@ function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   `;
 }
 
+function mdetPitchRows(titulaires) {
+  const bands = { GB: [], DEF: [], MD: [], MO: [], BT: [] };
+  titulaires.forEach(p => {
+    if (p.role === "GB") bands.GB.push(p);
+    else if (p.role === "D" || p.role === "AL") bands.DEF.push(p);
+    else if (p.role === "MD") bands.MD.push(p);
+    else if (p.role === "MO") bands.MO.push(p);
+    else if (p.role === "BT") bands.BT.push(p);
+    else bands.MD.push(p);
+  });
+  // Ligne de defense : les arrieres lateraux (AL) sont places aux extremites,
+  // les defenseurs axiaux (D) au centre, pour ressembler a une vraie ligne.
+  const al = bands.DEF.filter(p => p.role === "AL");
+  const d = bands.DEF.filter(p => p.role !== "AL");
+  const defOrdered = [];
+  if (al[0]) defOrdered.push(al[0]);
+  defOrdered.push(...d);
+  if (al[1]) defOrdered.push(al[1]);
+  if (al.length > 2) defOrdered.push(...al.slice(2));
+  return [
+    { y: 91, players: bands.GB },
+    { y: 70, players: defOrdered },
+    { y: 48, players: bands.MD },
+    { y: 26, players: bands.MO },
+    { y: 8, players: bands.BT },
+  ].filter(row => row.players.length);
+}
+
+function mdetPitchPlayerHtml(p, hommeDuMatch, clubId, xPct, yPct) {
+  const isMotm = hommeDuMatch && hommeDuMatch.player_id === p.player_id;
+  const clickable = p.player_id ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(clubId || "")).replace(/'/g, "&#39;")}', '${escapeHtml(String(p.player_id)).replace(/'/g, "&#39;")}')"` : "";
+  const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
+  return `
+    <div class="mdet-pitch-player${isMotm ? " motm" : ""}" style="left:${xPct}%; top:${yPct}%;"${clickable}>
+      <div class="mdet-pitch-dot ${mdetNoteClass(p.note)}">${Number(p.note).toFixed(1)}</div>
+      <div class="mdet-pitch-name">${isMotm ? "⭐ " : ""}${escapeHtml(nomCourt)}</div>
+    </div>
+  `;
+}
+
+function mdetRenderPitch(titulaires, hommeDuMatch, clubId) {
+  const rows = mdetPitchRows(titulaires);
+  const dots = rows.flatMap(row => {
+    const n = row.players.length;
+    return row.players.map((p, i) => mdetPitchPlayerHtml(p, hommeDuMatch, clubId, ((i + 1) / (n + 1)) * 100, row.y));
+  }).join("");
+  return `<div class="mdet-pitch">${dots}</div>`;
+}
+
 function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId) {
   const titulaires = (notes || []).filter(n => !n.entrant);
   const remplacants = (notes || []).filter(n => n.entrant);
   // Associe chaque entrant a son sortant (par nom), a partir de stats.remplacements.
   const sortantParEntrant = {};
   (remplacements || []).forEach(r => { sortantParEntrant[r.entrant_nom] = r; });
+  const aDesPostes = titulaires.some(n => n.role);
+  const titulairesHtml = aDesPostes
+    ? mdetRenderPitch(titulaires, hommeDuMatch, clubId)
+    : (titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`);
   return `
     <div class="mdet-roster-col">
       <div class="mdet-roster-team-head">${logoHtml}<span>${escapeHtml(nomEquipe)}</span></div>
-      ${titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`}
+      ${titulairesHtml}
       ${remplacants.length ? `<div class="mdet-roster-subhead">Remplacements</div>${remplacants.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("")}` : ""}
     </div>
   `;
