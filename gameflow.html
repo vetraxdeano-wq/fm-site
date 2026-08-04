@@ -406,9 +406,32 @@ async function simulerMatchsDuJour(dateIso, onProgress) {
       p_stats: resultat.stats,
     });
     if (rpcErr) throw rpcErr;
+
+    await appliquerImpactPostMatch(resultat.impact_joueurs);
   }
 
   return matches.length;
+}
+
+// Ecrit en base la forme/moral post-match calcules par le moteur (etape 11
+// de simulerMatch), pour TOUT l'effectif equipe_a concerne (domicile +
+// exterieur). Sans cet appel, forme/moral restent figes et les notes/
+// remplacements deviennent quasi-deterministes d'un match a l'autre.
+async function appliquerImpactPostMatch(impactJoueurs) {
+  if (!impactJoueurs) return;
+  const tous = [...(impactJoueurs.domicile || []), ...(impactJoueurs.exterieur || [])];
+  if (!tous.length) return;
+
+  const resultats = await Promise.all(
+    tous.map((j) =>
+      supabaseClient
+        .from("game_players")
+        .update({ forme: j.forme, moral: j.moral })
+        .eq("id", j.player_id)
+    )
+  );
+  const erreur = resultats.find((r) => r.error);
+  if (erreur) throw erreur.error;
 }
 
 // Simule et enregistre les manches de barrage promotion/relegation programmees
@@ -446,6 +469,8 @@ async function simulerBarragesDuJour(dateIso, onProgress) {
       p_stats: resultat.stats,
     });
     if (rpcErr) throw rpcErr;
+
+    await appliquerImpactPostMatch(resultat.impact_joueurs);
   }
 
   return aTraiter.length;
