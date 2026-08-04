@@ -603,6 +603,13 @@
   .mdet-player-name.clickable:hover { color: var(--gold); text-decoration: underline; }
   .mdet-player-name.motm { color: var(--gold); }
   .mdet-player-sub-detail { font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Remplacement affiche sur 3 lignes : titulaire sorti / icone verticale / entrant */
+  .mdet-sub-row { align-items: flex-start; }
+  .mdet-sub-flow { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 1px 0; }
+  .mdet-sub-out { font-size: 10.5px; color: var(--text-dim); text-decoration: line-through; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-sub-icon-vert { font-size: 10px; line-height: 1; transform: rotate(90deg); margin: 2px 0; }
+  .mdet-sub-in-wrap { display: flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; }
+  .mdet-sub-in-wrap .mdet-player-name { min-width: 0; }
   .mdet-player-note {
     flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 11px;
     padding: 1px 7px; border-radius: 999px; min-width: 30px; text-align: center;
@@ -2653,14 +2660,34 @@ function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
   const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
   const clickable = n.player_id ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(clubId || "")).replace(/'/g, "&#39;")}', '${escapeHtml(String(n.player_id)).replace(/'/g, "&#39;")}')"` : "";
+  const noteHtml = `<div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>`;
+
+  // Remplacement avec sortant identifie : affichage vertical sur 3 lignes
+  // (titulaire sorti / icone de remplacement / entrant) plutot que le
+  // sortant relegue en petit texte secondaire sur la meme ligne.
+  if (n.entrant && sortant) {
+    return `
+      <div class="mdet-player-row mdet-sub-row">
+        <div class="mdet-sub-flow">
+          <div class="mdet-sub-out">${escapeHtml(sortant.sortant_nom)}</div>
+          <div class="mdet-sub-icon-vert">🔄</div>
+          <div class="mdet-sub-in-wrap">
+            <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+            ${sortant.minute != null ? `<div class="mdet-player-sub-detail">${sortant.minute}e</div>` : ""}
+          </div>
+        </div>
+        ${noteHtml}
+      </div>
+    `;
+  }
+
   return `
     <div class="mdet-player-row">
       <div class="mdet-player-sub-icon">${n.entrant ? "🔄" : ""}</div>
       <div class="mdet-player-name-wrap">
         <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
-        ${sortant ? `<div class="mdet-player-sub-detail">↔ ${escapeHtml(sortant.sortant_nom)}${sortant.minute != null ? ` · ${sortant.minute}e` : ""}</div>` : ""}
       </div>
-      <div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>
+      ${noteHtml}
     </div>
   `;
 }
