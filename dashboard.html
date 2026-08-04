@@ -8746,83 +8746,38 @@ async function mdetFetchClubLogos(clubIds) {
 // tirs, tirs cadres, corners...). Si isPercent est vrai, valDom/valExt sont
 // deja des pourcentages sommant a ~100 ; sinon on calcule la part relative.
 // ---- Couleurs des barres de stats (dom/ext), derivees du logo de chaque
-// club (couleur dominante moyenne des pixels non transparents/non neutres).
-// Repli sur la teinte de substitution du blason (colorFromName) si le logo
-// est absent ou si son extraction echoue (ex: image sans en-tetes CORS). Si
-// les deux teintes obtenues sont trop proches pour se distinguer (ex: deux
-// logos majoritairement rouges), on decale celle de l'equipe exterieure.
-function mdetRgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h, s, l = (max + min) / 2;
-  if (max === min) { h = 0; s = 0; }
-  else {
-    const dlt = max - min;
-    s = l > 0.5 ? dlt / (2 - max - min) : dlt / (max + min);
-    switch (max) {
-      case r: h = (g - b) / dlt + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / dlt + 2; break;
-      default: h = (r - g) / dlt + 4;
-    }
-    h *= 60;
-  }
-  return [h, s * 100, l * 100];
-}
-
+// club. La couleur dominante (HSL) est precalculee cote SERVEUR par l'edge
+// function "compute-logo-colors" (fetch + decodage PNG server-to-server, sans
+// navigateur impliqué) et stockee dans clubs.couleur_dominante : plus aucune
+// dependance au CORS du bucket R2 cote client (l'ancienne version utilisait
+// un <canvas> + Image crossOrigin="anonymous", bloquee des que le bucket ne
+// renvoyait pas les bons en-tetes CORS). Repli sur une teinte deterministe
+// derivee du nom du club si la couleur n'a pas encore ete calculee pour ce
+// logo. Si les deux teintes obtenues sont trop proches pour se distinguer
+// (ex: deux logos majoritairement rouges), on decale celle de l'exterieur.
 function mdetHueFromName(nom) {
   let hash = 0;
   for (let i = 0; i < (nom || "").length; i++) hash = nom.charCodeAt(i) + ((hash << 5) - hash);
   return Math.abs(hash) % 360;
 }
 
-async function mdetDominantColorFromLogo(url) {
-  if (!url) return null;
+async function mdetFetchClubColors(clubIds) {
+  const ids = [...new Set(clubIds.filter(Boolean))];
+  const colors = {};
+  if (!ids.length) return colors;
   try {
-    const img = await new Promise((resolve, reject) => {
-      const image = new Image();
-      image.crossOrigin = "anonymous";
-      image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error("load failed"));
-      image.src = url;
+    const { data: gameClubs } = await supabaseClient
+      .from("game_clubs")
+      .select("id, clubs(couleur_dominante)")
+      .in("id", ids);
+    (gameClubs || []).forEach(g => {
+      const c = g?.clubs?.couleur_dominante;
+      if (c && c.h != null) colors[g.id] = c;
     });
-    const size = 40;
-    const canvas = document.createElement("canvas");
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, size, size);
-    const { data } = ctx.getImageData(0, 0, size, size);
-    // Regroupe les pixels par couleur RVB quantifiee (et non par teinte
-    // seule : un bucket de teinte peut eclater a tort un meme bleu en
-    // plusieurs paniers a cause d'un degrade/anti-aliasing, ce qui laissait
-    // gagner par erreur un petit element plus uniforme du blason, comme les
-    // etoiles dorees). On isole ainsi la couleur LA PLUS FREQUENTE plutot
-    // qu'une moyenne de toutes les couleurs presentes (qui melangerait par
-    // exemple le bleu dominant et le rouge d'un liseret tricolore en un
-    // violet ne ressemblant a aucune des deux couleurs reelles du logo).
-    const step = 22;
-    const buckets = {};
-    for (let i = 0; i < data.length; i += 4) {
-      const alpha = data[i + 3];
-      if (alpha < 100) continue;
-      const rr = data[i], gg = data[i + 1], bb = data[i + 2];
-      const max = Math.max(rr, gg, bb), min = Math.min(rr, gg, bb);
-      if (max > 240 && min > 225) continue; // quasi blanc (fond) : ignore
-      if (max < 25) continue; // quasi noir : ignore
-      if (max - min < 20) continue; // quasi gris/neutre : n'identifie aucune teinte
-      const key = `${Math.round(rr / step)}-${Math.round(gg / step)}-${Math.round(bb / step)}`;
-      if (!buckets[key]) buckets[key] = { count: 0, r: 0, g: 0, b: 0 };
-      buckets[key].count++;
-      buckets[key].r += rr; buckets[key].g += gg; buckets[key].b += bb;
-    }
-    let best = null;
-    Object.values(buckets).forEach(bk => { if (!best || bk.count > best.count) best = bk; });
-    if (!best) return null;
-    const [h, s, l] = mdetRgbToHsl(best.r / best.count, best.g / best.count, best.b / best.count);
-    // Sature/eclaircit un minimum pour rester lisible sur fond sombre.
-    return [h, Math.max(s, 45), Math.min(Math.max(l, 40), 62)];
   } catch (e) {
-    return null;
+    console.error(e);
   }
+  return colors;
 }
 
 function mdetHueDistance(h1, h2) {
@@ -8830,13 +8785,11 @@ function mdetHueDistance(h1, h2) {
   return d > 180 ? 360 - d : d;
 }
 
-async function mdetPickBarColors(logoDomUrl, nomDom, logoExtUrl, nomExt) {
-  const [domExtracted, extExtracted] = await Promise.all([
-    mdetDominantColorFromLogo(logoDomUrl),
-    mdetDominantColorFromLogo(logoExtUrl),
-  ]);
-  let [hDom, sDom, lDom] = domExtracted || [mdetHueFromName(nomDom), 62, 46];
-  let [hExt, sExt, lExt] = extExtracted || [mdetHueFromName(nomExt), 62, 46];
+function mdetPickBarColors(colorDom, nomDom, colorExt, nomExt) {
+  let hDom = colorDom?.h, sDom = colorDom?.s ?? 62, lDom = colorDom?.l ?? 46;
+  let hExt = colorExt?.h, sExt = colorExt?.s ?? 62, lExt = colorExt?.l ?? 46;
+  if (hDom == null) hDom = mdetHueFromName(nomDom);
+  if (hExt == null) hExt = mdetHueFromName(nomExt);
 
   if (mdetHueDistance(hDom, hExt) < 35 && Math.abs(lDom - lExt) < 18) {
     // Trop proches (meme teinte dominante) : on decale l'exterieur pour
@@ -8910,7 +8863,8 @@ async function openMatchDetails(matchId) {
   const logoExtSmall = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, 30);
   const remplacementsDom = (stats.remplacements || []).filter(r => r.game_club_id === m.club_domicile_id);
   const remplacementsExt = (stats.remplacements || []).filter(r => r.game_club_id === m.club_exterieur_id);
-  const barColors = await mdetPickBarColors(logos[m.club_domicile_id], nomDom, logos[m.club_exterieur_id], nomExt);
+  const clubColors = await mdetFetchClubColors([m.club_domicile_id, m.club_exterieur_id]);
+  const barColors = mdetPickBarColors(clubColors[m.club_domicile_id], nomDom, clubColors[m.club_exterieur_id], nomExt);
 
   content.innerHTML = `
     <div class="mdet-header">
