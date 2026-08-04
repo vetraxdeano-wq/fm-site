@@ -50,7 +50,7 @@
     width: 38px; height: 38px; border-radius: 50%; flex: 0 0 auto;
     border: 2px solid rgba(255,255,255,0.3); overflow: hidden; background: var(--panel-2);
   }
-  .topbar-avatar img, .topbar-avatar svg { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center top; }
+  .topbar-avatar img, .topbar-avatar svg { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center top; transform: scale(1.35); transform-origin: center top; }
 
   /* Le titre de la topbar est aussi un champ de recherche globale (clubs + joueurs),
      meme principe que sur dashboard.html : le nom du joueur s'affiche en placeholder. */
@@ -298,8 +298,8 @@
   .attr-row.stat-minor .attr-name { color: #fde8b4; font-weight: 600; }
 
   /* --- Identité / photo --- */
-  .player-photo-wrap { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--panel-2); margin-bottom: 14px; }
-  .player-photo-wrap img, .player-photo-wrap svg { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .player-photo-wrap { width: 100%; margin-bottom: 14px; display: flex; justify-content: center; }
+  .player-photo-wrap img, .player-photo-wrap svg { width: 100%; height: auto; max-height: 260px; display: block; object-fit: contain; }
 
   .identity-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
   .identity-row:last-child { border-bottom: none; }
