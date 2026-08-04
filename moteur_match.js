@@ -895,13 +895,24 @@ function calculerImpactPostMatch({ compositions, joueurs, remplacements = [] }) 
   const tailleOnzeAttendu = compositions.length || 11;
   const idsOnzeAttendu = new Set(effectifTrieParCA.slice(0, tailleOnzeAttendu).map((j) => j.id));
 
+  // Rôle effectivement tenu ce match (titulaire -> son slot ; entrant -> le
+  // rôle du slot qu'il occupe après le changement), pour moduler la fatigue :
+  // un gardien ne dépense presque rien physiquement comparé à un joueur de champ.
+  const roleParId = new Map();
+  for (const slot of compositions) roleParId.set(slot.player_id, slot.role);
+  for (const r of remplacements) roleParId.set(r.entrant_id, r.role);
+
   return joueurs.map((jr) => {
     const minutes = minutesJoueesParJoueur(jr.id, compositions, remplacements);
     const estTitulaire = compositions.some((c) => c.player_id === jr.id);
     const aJoue = minutes > 0;
     const estBlesse = (jr.blessure_jours ?? 0) > 0;
+    const estGardien = roleParId.get(jr.id) === 'GB';
 
-    const perteForme = aJoue ? Math.round((15 * clamp(minutes, 0, 90)) / 90) : 0;
+    // Un gardien s'épuise très peu comparé à un joueur de champ (peu de
+    // courses sur 90 minutes) : perte de forme réduite à 20% de la normale.
+    const facteurFatigue = estGardien ? 0.2 : 1;
+    const perteForme = aJoue ? Math.round((15 * clamp(minutes, 0, 90) * facteurFatigue) / 90) : 0;
 
     let deltaMoral = 0;
     if (estTitulaire) deltaMoral = 5;
