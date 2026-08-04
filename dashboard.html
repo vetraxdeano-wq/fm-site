@@ -1228,8 +1228,9 @@
   .tac-slot-dot {
     width: 34px; height: 34px; border-radius: 50%; background: var(--panel);
     border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; color: var(--text);
+    font-size: 11px; font-weight: 700; color: var(--text); overflow: hidden;
   }
+  .tac-slot-dot img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
   .tac-slot.empty .tac-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
   .tac-slot.weak .tac-slot-dot { border-color: var(--gold); }
   .tac-slot[data-player-id] { cursor: pointer; }
@@ -3761,7 +3762,7 @@ async function fetchClubTacticEffectif(clubId) {
   // sans casser le chargement.
   const { data, error } = await supabaseClient
     .from("game_players")
-    .select("*")
+    .select("*, players(photo_url)")
     .eq("game_id", gameId)
     .eq("game_club_id", clubId)
     .eq("categorie", "equipe_a");
@@ -3984,15 +3985,22 @@ function tacCoachPanelHtml(coach, source, formation, reason, instructions) {
   `;
 }
 
+function tacSlotDotHtml(player) {
+  if (!player) return "?";
+  const initials = escapeHtml((player.nom || "").split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase());
+  const photoUrl = player.players?.photo_url || null;
+  if (!photoUrl) return initials;
+  return `<img src="${escapeHtml(photoUrl)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent:'${initials}'}))">`;
+}
+
 function tacRenderPitch(slots, assigned) {
   const el = document.getElementById("tacPitch");
   el.innerHTML = assigned.map(a => {
     const s = a.slot;
     const cls = !a.player ? "empty" : (a.score < 2 ? "weak" : "");
-    const initials = a.player ? escapeHtml((a.player.nom || "").split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase()) : "?";
     return `
       <div class="tac-slot ${cls}" style="left:${s.x}%; top:${s.y}%;" title="${a.player ? escapeHtml(a.player.nom) : "Aucun joueur disponible"} — ${escapeHtml(s.label)}" ${a.player ? `data-player-id="${escapeHtml(String(a.player.id))}"` : ""}>
-        <div class="tac-slot-dot">${initials}</div>
+        <div class="tac-slot-dot">${tacSlotDotHtml(a.player)}</div>
         <div class="tac-slot-name">${a.player ? escapeHtml(a.player.nom) : s.label}</div>
       </div>
     `;
