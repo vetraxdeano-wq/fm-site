@@ -1009,6 +1009,13 @@
   .mdet-player-name.clickable:hover { color: var(--gold); text-decoration: underline; }
   .mdet-player-name.motm { color: var(--gold); }
   .mdet-player-sub-detail { font-size: 10px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Remplacement affiche sur 3 lignes : titulaire sorti / icone verticale / entrant */
+  .mdet-sub-row { align-items: flex-start; }
+  .mdet-sub-flow { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 1px 0; }
+  .mdet-sub-out { font-size: 10.5px; color: var(--text-dim); text-decoration: line-through; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-sub-icon-vert { font-size: 10px; line-height: 1; transform: rotate(90deg); margin: 2px 0; }
+  .mdet-sub-in-wrap { display: flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; }
+  .mdet-sub-in-wrap .mdet-player-name { min-width: 0; }
   .mdet-player-note {
     flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 11px;
     padding: 1px 7px; border-radius: 999px; min-width: 30px; text-align: center;
@@ -8460,14 +8467,34 @@ function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
   const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
   const clickable = n.player_id ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(clubId || "")).replace(/'/g, "&#39;")}', '${escapeHtml(String(n.player_id)).replace(/'/g, "&#39;")}')"` : "";
+  const noteHtml = `<div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>`;
+
+  // Remplacement avec sortant identifie : affichage vertical sur 3 lignes
+  // (titulaire sorti / icone de remplacement / entrant) plutot que le
+  // sortant relegue en petit texte secondaire sur la meme ligne.
+  if (n.entrant && sortant) {
+    return `
+      <div class="mdet-player-row mdet-sub-row">
+        <div class="mdet-sub-flow">
+          <div class="mdet-sub-out">${escapeHtml(sortant.sortant_nom)}</div>
+          <div class="mdet-sub-icon-vert">🔄</div>
+          <div class="mdet-sub-in-wrap">
+            <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
+            ${sortant.minute != null ? `<div class="mdet-player-sub-detail">${sortant.minute}e</div>` : ""}
+          </div>
+        </div>
+        ${noteHtml}
+      </div>
+    `;
+  }
+
   return `
     <div class="mdet-player-row">
       <div class="mdet-player-sub-icon">${n.entrant ? "🔄" : ""}</div>
       <div class="mdet-player-name-wrap">
         <div class="mdet-player-name${isMotm ? " motm" : ""}${n.player_id ? " clickable" : ""}"${clickable}>${isMotm ? "⭐ " : ""}${escapeHtml(n.player_nom)}</div>
-        ${sortant ? `<div class="mdet-player-sub-detail">↔ ${escapeHtml(sortant.sortant_nom)}${sortant.minute != null ? ` · ${sortant.minute}e` : ""}</div>` : ""}
       </div>
-      <div class="mdet-player-note ${mdetNoteClass(n.note)}">${Number(n.note).toFixed(1)}</div>
+      ${noteHtml}
     </div>
   `;
 }
@@ -8605,7 +8632,96 @@ async function mdetFetchClubLogos(clubIds) {
 // Barre de "domination" pour comparer une stat des deux equipes (possession,
 // tirs, tirs cadres, corners...). Si isPercent est vrai, valDom/valExt sont
 // deja des pourcentages sommant a ~100 ; sinon on calcule la part relative.
-function mdetBarStat(label, valDom, valExt, isPercent) {
+// ---- Couleurs des barres de stats (dom/ext), derivees du logo de chaque
+// club (couleur dominante moyenne des pixels non transparents/non neutres).
+// Repli sur la teinte de substitution du blason (colorFromName) si le logo
+// est absent ou si son extraction echoue (ex: image sans en-tetes CORS). Si
+// les deux teintes obtenues sont trop proches pour se distinguer (ex: deux
+// logos majoritairement rouges), on decale celle de l'equipe exterieure.
+function mdetRgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) { h = 0; s = 0; }
+  else {
+    const dlt = max - min;
+    s = l > 0.5 ? dlt / (2 - max - min) : dlt / (max + min);
+    switch (max) {
+      case r: h = (g - b) / dlt + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / dlt + 2; break;
+      default: h = (r - g) / dlt + 4;
+    }
+    h *= 60;
+  }
+  return [h, s * 100, l * 100];
+}
+
+function mdetHueFromName(nom) {
+  let hash = 0;
+  for (let i = 0; i < (nom || "").length; i++) hash = nom.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash) % 360;
+}
+
+async function mdetDominantColorFromLogo(url) {
+  if (!url) return null;
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("load failed"));
+      image.src = url;
+    });
+    const size = 24;
+    const canvas = document.createElement("canvas");
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+    let r = 0, g = 0, b = 0, count = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3];
+      if (alpha < 100) continue;
+      const rr = data[i], gg = data[i + 1], bb = data[i + 2];
+      const max = Math.max(rr, gg, bb), min = Math.min(rr, gg, bb);
+      if (max > 240 && min > 225) continue; // quasi blanc (fond) : ignore
+      if (max < 25) continue; // quasi noir : ignore
+      r += rr; g += gg; b += bb; count++;
+    }
+    if (!count) return null;
+    const [h, s, l] = mdetRgbToHsl(r / count, g / count, b / count);
+    // Sature/eclaircit un minimum pour rester lisible sur fond sombre.
+    return [h, Math.max(s, 45), Math.min(Math.max(l, 40), 62)];
+  } catch (e) {
+    return null;
+  }
+}
+
+function mdetHueDistance(h1, h2) {
+  const d = Math.abs(h1 - h2) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+async function mdetPickBarColors(logoDomUrl, nomDom, logoExtUrl, nomExt) {
+  const [domExtracted, extExtracted] = await Promise.all([
+    mdetDominantColorFromLogo(logoDomUrl),
+    mdetDominantColorFromLogo(logoExtUrl),
+  ]);
+  let [hDom, sDom, lDom] = domExtracted || [mdetHueFromName(nomDom), 62, 46];
+  let [hExt, sExt, lExt] = extExtracted || [mdetHueFromName(nomExt), 62, 46];
+
+  if (mdetHueDistance(hDom, hExt) < 35 && Math.abs(lDom - lExt) < 18) {
+    // Trop proches (meme teinte dominante) : on decale l'exterieur pour
+    // garder les deux barres lisibles l'une a cote de l'autre.
+    hExt = (hDom + 150) % 360;
+  }
+  return {
+    dom: `hsl(${Math.round(hDom)}, ${Math.round(sDom)}%, ${Math.round(lDom)}%)`,
+    ext: `hsl(${Math.round(hExt)}, ${Math.round(sExt)}%, ${Math.round(lExt)}%)`,
+  };
+}
+
+function mdetBarStat(label, valDom, valExt, isPercent, domColor, extColor) {
   if (valDom == null && valExt == null) return "";
   const d = parseFloat(valDom) || 0;
   const e = parseFloat(valExt) || 0;
@@ -8623,8 +8739,8 @@ function mdetBarStat(label, valDom, valExt, isPercent) {
       <div class="mdet-bar-mid">
         <div class="mdet-bar-label">${label}</div>
         <div class="mdet-bar-track">
-          <div class="mdet-bar-fill dom" style="width:${pctDom}%"></div>
-          <div class="mdet-bar-fill ext" style="width:${pctExt}%"></div>
+          <div class="mdet-bar-fill dom" style="width:${pctDom}%; background:${domColor || "var(--gold)"};"></div>
+          <div class="mdet-bar-fill ext" style="width:${pctExt}%; background:${extColor || "var(--accent)"};"></div>
         </div>
       </div>
       <div class="mdet-bar-val ext">${valExt ?? "-"}</div>
@@ -8666,6 +8782,7 @@ async function openMatchDetails(matchId) {
   const logoExtSmall = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, 30);
   const remplacementsDom = (stats.remplacements || []).filter(r => r.game_club_id === m.club_domicile_id);
   const remplacementsExt = (stats.remplacements || []).filter(r => r.game_club_id === m.club_exterieur_id);
+  const barColors = await mdetPickBarColors(logos[m.club_domicile_id], nomDom, logos[m.club_exterieur_id], nomExt);
 
   content.innerHTML = `
     <div class="mdet-header">
@@ -8684,16 +8801,16 @@ async function openMatchDetails(matchId) {
 
     <div class="mdet-section-title">Statistiques</div>
     <div class="mdet-bars">
-      ${mdetBarStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null, true)}
-      ${mdetBarStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur, false)}
-      ${mdetBarStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur, false)}
-      ${mdetBarStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur, false)}
-      ${mdetBarStat("Corners", stats.corners?.domicile, stats.corners?.exterieur, false)}
-      ${mdetBarStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur, false)}
-      ${mdetBarStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur, false)}
-      ${mdetBarStat("Centres", stats.centres?.domicile, stats.centres?.exterieur, false)}
-      ${mdetBarStat("Fautes", stats.fautes?.domicile, stats.fautes?.exterieur, false)}
-      ${mdetBarStat("Arrêts gardien", stats.arrets?.domicile, stats.arrets?.exterieur, false)}
+      ${mdetBarStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null, true, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Corners", stats.corners?.domicile, stats.corners?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Centres", stats.centres?.domicile, stats.centres?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Fautes", stats.fautes?.domicile, stats.fautes?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Arrêts gardien", stats.arrets?.domicile, stats.arrets?.exterieur, false, barColors.dom, barColors.ext)}
     </div>
 
     <div class="mdet-section-title">Faits de match</div>
