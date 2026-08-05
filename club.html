@@ -2565,9 +2565,7 @@ function renderMatchRow(m, standingsMap, opts = {}) {
       : (myScore > oppScore ? "victoire" : myScore < oppScore ? "defaite" : "nul");
     let scoreText = `${myScore}-${oppScore}`;
     if (isCoupe && m.myPen != null) scoreText += ` (tab ${m.myPen}-${m.oppPen})`;
-    // Le detail de match (moteur, note joueurs...) n'existe que pour les
-    // matchs de championnat (table calendrier) : pas de bouton pour la coupe.
-    const detailsBtn = isCoupe ? "" : `<button class="mdet-btn" data-match-id="${m.id}" type="button">Détails</button>`;
+    const detailsBtn = `<button class="mdet-btn" data-match-id="${m.id}" type="button">Détails</button>`;
     resultHtml = `<div class="fm-comp-match-score ${outcome}">${scoreText}</div>${detailsBtn}`;
   } else if (isCoupe) {
     resultHtml = `<div class="fm-comp-match-rank">à venir</div>`;
@@ -3398,11 +3396,82 @@ function mdetBarStat(label, valDom, valExt, isPercent, domColor, extColor) {
   `;
 }
 
+// Detail d'un match de coupe : contrairement au championnat, la table
+// game_coupe_nationale_tours ne stocke pas les stats detaillees du moteur
+// (possession, tirs, compositions...), seulement le score et le vainqueur.
+// On affiche donc un en-tete identique (logos, score, tab) mais sans les
+// sections statistiques/compositions.
+async function mdetRenderCoupeMatch(rowId) {
+  const content = document.getElementById("mdetContent");
+
+  const { data: m, error } = await supabaseClient
+    .from("game_coupe_nationale_tours")
+    .select("id, tour, competition_ref, saison, date_match, game_club_id_1, game_club_id_2, score_1, score_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut")
+    .eq("id", rowId)
+    .single();
+
+  if (error || !m) {
+    content.innerHTML = `<div class="mdet-header"><div class="mdet-header-teams">Match introuvable</div><button class="mdet-close" id="mdetCloseBtn">✕</button></div>`;
+    document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+    return;
+  }
+
+  const [{ data: clubs }, { data: comp }, { data: config }] = await Promise.all([
+    supabaseClient.from("game_clubs").select("id, nom").in("id", [m.game_club_id_1, m.game_club_id_2]),
+    supabaseClient.from("competitions").select("nom").eq("id", m.competition_ref).maybeSingle(),
+    supabaseClient.from("game_coupe_nationale_config").select("nb_tours").eq("game_id", gameId).eq("competition_ref", m.competition_ref).eq("saison", m.saison).maybeSingle(),
+  ]);
+  const nomClub = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
+  const nomDom = nomClub[m.game_club_id_1] || "?";
+  const nomExt = nomClub[m.game_club_id_2] || "?";
+  const d = m.date_match ? new Date(m.date_match) : null;
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
+  const roundLabel = coupeRoundLabel(m.tour, config?.nb_tours || null);
+
+  const logos = await mdetFetchClubLogos([m.game_club_id_1, m.game_club_id_2]);
+  const logoDom = mdetLogoHtml(logos[m.game_club_id_1], nomDom, 64);
+  const logoExt = mdetLogoHtml(logos[m.game_club_id_2], nomExt, 64);
+
+  const scoreText = `${m.score_1 ?? "-"} - ${m.score_2 ?? "-"}`;
+  const penaltyLine = m.tab_penalty_1 != null
+    ? `<div class="mdet-meta">Tirs au but : ${m.tab_penalty_1} - ${m.tab_penalty_2}</div>` : "";
+
+  let winnerBanner = "";
+  if (m.statut === "termine") {
+    const winnerName = m.game_club_vainqueur_id === m.game_club_id_1 ? nomDom
+      : m.game_club_vainqueur_id === m.game_club_id_2 ? nomExt : null;
+    if (winnerName) winnerBanner = `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} se qualifie</div>`;
+  }
+
+  content.innerHTML = `
+    <div class="mdet-header">
+      <div class="mdet-header-teams">
+        ${logoDom}
+        <div class="mdet-header-team-name dom">${escapeHtml(nomDom)}</div>
+        <span class="score">${scoreText}</span>
+        <div class="mdet-header-team-name ext">${escapeHtml(nomExt)}</div>
+        ${logoExt}
+      </div>
+      <button class="mdet-close" id="mdetCloseBtn">✕</button>
+    </div>
+    <div class="mdet-meta">${escapeHtml(comp?.nom || "Coupe nationale")} · ${escapeHtml(roundLabel)}${dateLabel ? ` · ${dateLabel}` : ""}</div>
+    ${penaltyLine}
+    ${winnerBanner}
+    <div class="mdet-empty" style="margin-top: 18px;">Pas de statistiques détaillées disponibles pour les matchs de coupe.</div>
+  `;
+  document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+}
+
 async function openMatchDetails(matchId) {
   const overlay = document.getElementById("mdetOverlay");
   const content = document.getElementById("mdetContent");
   content.innerHTML = `<div class="mdet-empty">Chargement...</div>`;
   overlay.classList.remove("hidden");
+
+  if (String(matchId).startsWith("coupe-")) {
+    await mdetRenderCoupeMatch(String(matchId).slice("coupe-".length));
+    return;
+  }
 
   const { data: m, error } = await supabaseClient
     .from("calendrier")
