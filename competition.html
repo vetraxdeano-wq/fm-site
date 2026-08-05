@@ -61,6 +61,65 @@
     font-size: 12px; color: rgba(255,255,255,0.78); margin-top: 2px; white-space: nowrap;
   }
   .fm-header .right-block { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+  /* Titre de la topbar transforme en champ de recherche globale
+     (clubs + competitions + joueurs) avec suggestions en dessous, comme sur
+     dashboard.html / squad.html / club.html / fiche.html. */
+  .page-title-wrap { position: relative; min-width: 0; }
+  .page-title-input {
+    background: transparent; border: none; outline: none; color: #fff;
+    font-size: 18px; font-weight: 800; letter-spacing: 0.02em; padding: 2px 0;
+    width: 230px; max-width: 40vw; font-family: inherit;
+  }
+  .page-title-input::placeholder { color: rgba(255,255,255,0.92); font-weight: 800; opacity: 1; }
+  .fm-search-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 0; min-width: 300px; max-width: 380px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 200; max-height: 380px; overflow-y: auto;
+  }
+  .fm-search-dropdown.hidden { display: none !important; }
+  .search-group-label {
+    padding: 8px 12px 4px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-dim);
+  }
+  .search-result-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px;
+    color: var(--text); cursor: pointer;
+  }
+  .search-result-item:hover { background: rgba(251,191,36,0.1); color: var(--gold); }
+  .search-result-icon { flex-shrink: 0; font-size: 13px; }
+  .search-result-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .search-empty { padding: 14px 12px; font-size: 12px; color: var(--text-dim); text-align: center; }
+
+  /* Badge de date (jour/saison), identique aux autres pages. */
+  .fm-date-badge {
+    background: rgba(0,0,0,0.28); border-radius: 8px; padding: 7px 14px;
+    text-align: right; line-height: 1.35; color: #fff; flex-shrink: 0;
+  }
+  .fm-date-badge .day-num { font-size: 13px; font-weight: 800; white-space: nowrap; }
+  .fm-date-badge .season-line { font-size: 11px; color: rgba(255,255,255,0.7); }
+
+  /* Petite barre de recherche arrondie, toujours visible a cote de la date. */
+  .fm-quick-search { position: relative; flex-shrink: 0; }
+  .fm-quick-search-input {
+    width: 158px; max-width: 26vw; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px; color: #fff; font-size: 12.5px; font-family: inherit;
+    padding: 8px 14px 8px 30px; outline: none; transition: width 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  .fm-quick-search-input::placeholder { color: rgba(255,255,255,0.55); }
+  .fm-quick-search-input:focus { background: rgba(0,0,0,0.42); border-color: rgba(255,255,255,0.34); width: 208px; }
+  .fm-quick-search-icon {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 12px;
+    color: rgba(255,255,255,0.6); pointer-events: none;
+  }
+  .fm-quick-search .fm-search-dropdown { left: auto; right: 0; }
+  @media (max-width: 720px) {
+    .fm-quick-search-input { width: 34px; padding-left: 30px; color: transparent; cursor: pointer; }
+    .fm-quick-search-input::placeholder { color: transparent; }
+    .fm-quick-search-input:focus { width: 168px; color: #fff; padding-right: 12px; }
+    .fm-quick-search-input:focus::placeholder { color: rgba(255,255,255,0.55); }
+  }
+
   .fm-comp-tag {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
     background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.3);
@@ -236,13 +295,23 @@
   <div class="fm-header" id="fmHeader">
     <div class="title-block">
       <a href="#" id="backLink" class="back-link">← Retour au club</a>
-      <div>
-        <div class="page-title" id="compName">Chargement...</div>
+      <div class="page-title-wrap" id="fmSearchWrap">
+        <input type="text" class="page-title-input" id="fmSearchInput" placeholder="Chargement..." autocomplete="off">
+        <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
         <div class="manager-line" id="compSub"></div>
       </div>
     </div>
     <div class="right-block">
       <span class="fm-comp-tag" id="compTag"></span>
+      <div class="fm-date-badge" id="fmDateBadge" style="display:none;">
+        <div class="day-num" id="fmDateLabel">-</div>
+        <div class="season-line" id="fmSeasonLabel">Saison -</div>
+      </div>
+      <div class="fm-quick-search" id="fmQuickSearchWrap">
+        <span class="fm-quick-search-icon">🔎</span>
+        <input type="text" class="fm-quick-search-input" id="fmQuickSearchInput" placeholder="Rechercher..." autocomplete="off">
+        <div class="fm-search-dropdown hidden" id="fmQuickSearchDropdown"></div>
+      </div>
     </div>
   </div>
 
@@ -310,6 +379,36 @@ function goToClub(clubId) {
   window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
 }
 
+// ===================== Badge de date (jour/saison), identique aux autres
+// pages : cette page ne chargeait pas encore la partie elle-meme. =====================
+function computeRealDate(dateDebut, jourActuel) {
+  if (!dateDebut) return null;
+  const base = new Date(`${dateDebut}T00:00:00`);
+  if (isNaN(base.getTime())) return null;
+  const jours = Number(jourActuel);
+  base.setDate(base.getDate() + (Number.isFinite(jours) ? jours : 0));
+  return base;
+}
+function formatRealDate(date) {
+  if (!date) return null;
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
+    .format(date).toUpperCase();
+}
+async function loadDateBadge() {
+  if (!gameId) return;
+  const { data: game } = await supabaseClient
+    .from("games")
+    .select("date_debut, jour_actuel, saison")
+    .eq("id", gameId)
+    .single();
+  if (!game) return;
+  const realDate = computeRealDate(game.date_debut, game.jour_actuel);
+  const dateLabel = formatRealDate(realDate) || `Jour ${game.jour_actuel ?? "-"}`;
+  document.getElementById("fmDateLabel").textContent = dateLabel;
+  document.getElementById("fmSeasonLabel").textContent = `Saison ${game.saison ?? "-"}`;
+  document.getElementById("fmDateBadge").style.display = "";
+}
+
 // ===================== Sidebar (memes onglets que le dashboard) =====================
 // Cette page n'est pas la coquille du dashboard elle-meme : les onglets qui
 // ont un sous-ecran dedie sur le dashboard renvoient donc vers
@@ -347,6 +446,254 @@ function renderSidebar() {
   });
 }
 renderSidebar();
+
+// ===================== MOTEUR DE RECHERCHE APPROXIMATIVE =====================
+// Recherche insensible aux accents, aux abreviations et aux surnoms de clubs
+// courants ("man city" -> Manchester City, "munich" -> Bayern Munchen, "psg"
+// -> Paris Saint-Germain...). Utilise par runGlobalSearch ci-dessous.
+function fmNormSearch(s) {
+  return (s || "")
+    .toString()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Paires de termes equivalents (surnoms, traductions, abreviations). Chaque
+// paire est bidirectionnelle : chercher l'un des deux termes retrouve aussi
+// les noms contenant l'autre.
+const FM_SEARCH_ALIASES = [
+  ["psg", "paris saint germain"], ["om", "marseille"], ["ol", "lyon"],
+  ["asse", "saint etienne"], ["losc", "lille"], ["ogcn", "nice"],
+  ["man city", "manchester city"], ["mancity", "manchester city"],
+  ["man utd", "manchester united"], ["man u", "manchester united"], ["manu", "manchester united"],
+  ["real", "real madrid"], ["atleti", "atletico madrid"], ["atletico", "atletico madrid"],
+  ["barca", "barcelone"], ["barca", "barcelona"],
+  ["juve", "juventus"], ["inter", "internazionale"], ["milan", "ac milan"],
+  ["munich", "munchen"], ["munich", "muenchen"], ["bayern", "bayern munchen"],
+  ["psv", "psv eindhoven"], ["dortmund", "borussia dortmund"], ["bvb", "borussia dortmund"],
+  ["leverkusen", "bayer leverkusen"], ["spurs", "tottenham"],
+];
+
+function fmSearchVariants(q) {
+  const base = fmNormSearch(q);
+  const variants = new Set([base]);
+  FM_SEARCH_ALIASES.forEach(([a, b]) => {
+    if (base.includes(a)) variants.add(base.split(a).join(b));
+    if (base.includes(b)) variants.add(base.split(b).join(a));
+  });
+  return [...variants];
+}
+
+// Score de correspondance entre un nom (club/competition/joueur) et une
+// requete : prefixe de chaque mot dans n'importe quel ordre (gere "man city"
+// -> "Manchester City"), acronyme (gere "psg" -> "Paris Saint-Germain"), puis
+// repli en sous-chaine simple. 0 = pas de correspondance.
+function fmMatchScore(name, query) {
+  const normName = fmNormSearch(name);
+  if (!normName) return 0;
+  const nameWords = normName.split(" ").filter(Boolean);
+  const initials = nameWords.map(w => w[0]).join("");
+  let best = 0;
+  fmSearchVariants(query).forEach(variant => {
+    const qWords = variant.split(" ").filter(Boolean);
+    if (!qWords.length) return;
+    if (qWords.length === 1 && qWords[0].length >= 2 && qWords[0] === initials) {
+      best = Math.max(best, 90);
+    }
+    const allPrefix = qWords.every(qw => nameWords.some(nw => nw.startsWith(qw)));
+    if (allPrefix) {
+      const exact = qWords.every(qw => nameWords.includes(qw));
+      best = Math.max(best, exact ? 100 : 80);
+    }
+    if (normName.replace(/\s+/g, "").includes(variant.replace(/\s+/g, ""))) {
+      best = Math.max(best, 60);
+    }
+  });
+  return best;
+}
+
+// ===================== RECHERCHE GLOBALE =====================
+// Meme moteur que sur dashboard.html / squad.html / club.html / fiche.html :
+// le titre de la topbar et la petite barre arrondie a cote de la date
+// partagent runGlobalSearch, avec redirection au clic sur un resultat.
+let searchDebounceTimer = null;
+let headerSearchDocListenerAttached = false;
+
+function initHeaderSearch() {
+  wireSearchField("fmSearchInput", "fmSearchDropdown", "fmSearchWrap");
+  wireSearchField("fmQuickSearchInput", "fmQuickSearchDropdown", "fmQuickSearchWrap");
+}
+
+function wireSearchField(inputId, dropdownId, wrapId) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!input || !dropdown) return;
+
+  input.addEventListener("input", () => {
+    clearTimeout(searchDebounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) {
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      return;
+    }
+    searchDebounceTimer = setTimeout(() => runGlobalSearch(q, dropdown), 250);
+  });
+
+  input.addEventListener("focus", () => {
+    if (input.value.trim().length >= 2 && dropdown.innerHTML) dropdown.classList.remove("hidden");
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      dropdown.classList.add("hidden");
+      dropdown.innerHTML = "";
+      input.blur();
+    }
+  });
+
+  if (!headerSearchDocListenerAttached) {
+    document.addEventListener("click", (e) => {
+      ["fmSearchWrap", "fmQuickSearchWrap"].forEach(wid => {
+        const wrap = document.getElementById(wid);
+        const dd = wrap ? wrap.querySelector(".fm-search-dropdown") : null;
+        if (wrap && dd && !wrap.contains(e.target)) dd.classList.add("hidden");
+      });
+    });
+    headerSearchDocListenerAttached = true;
+  }
+}
+
+async function runGlobalSearch(q, dropdown) {
+  // Recherche approximative : insensible aux accents et aux abreviations
+  // courantes (voir fmMatchScore plus haut). Clubs et competitions sont peu
+  // nombreux par partie : on recupere la liste complete pour les classer par
+  // pertinence cote client. Les joueurs restent filtres cote serveur (mot
+  // par mot, table potentiellement volumineuse) puis reclasses de la meme
+  // maniere.
+  const words = q.trim().split(/\s+/).filter(Boolean);
+
+  let playerQuery = supabaseClient
+    .from("game_players")
+    .select("id, nom, poste_brut, game_club_id, reputation_mondiale")
+    .eq("game_id", gameId);
+  words.forEach(w => { playerQuery = playerQuery.ilike("nom", `%${w}%`); });
+
+  const [
+    { data: allClubs, error: clubsError },
+    { data: allCompetitions, error: competitionsError },
+    { data: players, error: playersError },
+  ] = await Promise.all([
+    supabaseClient.from("game_clubs").select("id, nom").eq("game_id", gameId),
+    supabaseClient.from("competitions").select("id, nom, nation, division").eq("game_id", gameId),
+    playerQuery.order("reputation_mondiale", { ascending: false, nullsFirst: false }).limit(20),
+  ]);
+  if (clubsError) console.error(clubsError);
+  if (competitionsError) console.error(competitionsError);
+  if (playersError) console.error(playersError);
+
+  const clubs = (allClubs || [])
+    .map(c => ({ ...c, _score: fmMatchScore(c.nom, q) }))
+    .filter(c => c._score > 0)
+    .sort((a, b) => b._score - a._score || a.nom.localeCompare(b.nom))
+    .slice(0, 6);
+
+  const competitions = (allCompetitions || [])
+    .map(c => ({ ...c, _score: fmMatchScore(c.nom, q) }))
+    .filter(c => c._score > 0)
+    .sort((a, b) => b._score - a._score || a.nom.localeCompare(b.nom))
+    .slice(0, 6);
+
+  const rankedPlayers = (players || [])
+    .map(p => ({ ...p, _score: fmMatchScore(p.nom, q) }))
+    .sort((a, b) => (b._score - a._score) || ((b.reputation_mondiale ?? 0) - (a.reputation_mondiale ?? 0)))
+    .slice(0, 8);
+
+  // Noms de club recuperes a part (plutot qu'une jointure imbriquee
+  // club:game_clubs(nom)) : cette jointure est fragile si la relation FK
+  // n'est pas explicite cote Supabase et faisait echouer silencieusement
+  // toute la recherche joueurs (aucun resultat, meme pour un nom existant).
+  let clubNameById = {};
+  if (rankedPlayers.length > 0) {
+    const clubIds = [...new Set(rankedPlayers.map(p => p.game_club_id).filter(Boolean))];
+    if (clubIds.length > 0) {
+      const { data: clubRows } = await supabaseClient
+        .from("game_clubs")
+        .select("id, nom")
+        .in("id", clubIds);
+      (clubRows || []).forEach(c => { clubNameById[c.id] = c.nom; });
+    }
+  }
+
+  const hasClubs = clubs.length > 0;
+  const hasCompetitions = competitions.length > 0;
+  const hasPlayers = rankedPlayers.length > 0;
+
+  if (!hasClubs && !hasCompetitions && !hasPlayers) {
+    dropdown.innerHTML = `<div class="search-empty">Aucun résultat pour "${escapeHtml(q)}"</div>`;
+    dropdown.classList.remove("hidden");
+    return;
+  }
+
+  let html = "";
+  if (hasClubs) {
+    html += `<div class="search-group-label">Clubs</div>`;
+    html += clubs.map(c => `
+      <div class="search-result-item" data-type="club" data-id="${c.id}">
+        <span class="search-result-icon">🛡️</span>
+        <span>${escapeHtml(c.nom)}</span>
+      </div>
+    `).join("");
+  }
+  if (hasCompetitions) {
+    html += `<div class="search-group-label">Compétitions</div>`;
+    html += competitions.map(comp => `
+      <div class="search-result-item" data-type="competition" data-id="${comp.id}">
+        <span class="search-result-icon">🏆</span>
+        <span>
+          <div>${escapeHtml(comp.nom)}</div>
+          <div class="search-result-sub">${escapeHtml(comp.nation || "-")}${comp.division ? " · " + escapeHtml(comp.division) : ""}</div>
+        </span>
+      </div>
+    `).join("");
+  }
+  if (hasPlayers) {
+    html += `<div class="search-group-label">Joueurs</div>`;
+    html += rankedPlayers.map(p => `
+      <div class="search-result-item" data-type="player" data-id="${p.id}" data-club="${p.game_club_id ?? ""}">
+        <span class="search-result-icon">🧍</span>
+        <span>
+          <div>${escapeHtml(p.nom)}</div>
+          <div class="search-result-sub">${escapeHtml(p.poste_brut || "-")}${clubNameById[p.game_club_id] ? " · " + escapeHtml(clubNameById[p.game_club_id]) : ""}</div>
+        </span>
+      </div>
+    `).join("");
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove("hidden");
+
+  dropdown.querySelectorAll(".search-result-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const type = item.getAttribute("data-type");
+      const id = item.getAttribute("data-id");
+      if (type === "club") {
+        window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(id)}`;
+      } else if (type === "competition") {
+        window.location.href = `competition.html?game=${encodeURIComponent(gameId)}&competition=${encodeURIComponent(id)}&club=${encodeURIComponent(myClubId || "")}`;
+      } else {
+        const clubId = item.getAttribute("data-club");
+        window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}&player=${encodeURIComponent(id)}`;
+      }
+    });
+  });
+}
+
+initHeaderSearch();
+loadDateBadge();
 
 // ===================== Coupe nationale : pas de classement (elimination
 // directe), on affiche a la place le tableau du tour en cours, le prochain
@@ -561,7 +908,7 @@ async function loadCoupeNationale(comp) {
 
 async function loadCompetition() {
   if (!gameId || !competitionId) {
-    document.getElementById("compName").textContent = "Compétition introuvable";
+    document.getElementById("fmSearchInput").placeholder = "Compétition introuvable";
     return;
   }
 
@@ -572,11 +919,11 @@ async function loadCompetition() {
     .single();
 
   if (compError || !comp) {
-    document.getElementById("compName").textContent = "Compétition introuvable";
+    document.getElementById("fmSearchInput").placeholder = "Compétition introuvable";
     return;
   }
 
-  document.getElementById("compName").textContent = comp.nom;
+  document.getElementById("fmSearchInput").placeholder = comp.nom;
   document.getElementById("compTag").textContent = comp.type === "championnat" ? "Championnat" : comp.type === "coupe_nationale" ? "Coupe nationale" : comp.type;
   document.title = `FM Web — ${comp.nom}`;
 
