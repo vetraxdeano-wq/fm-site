@@ -433,9 +433,10 @@
     background: #14171d; border: 1px solid var(--border); border-radius: 5px; padding: 2px 0;
   }
   .fm-comp-coupe-row .opp {
-    flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; cursor: pointer;
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px;
+    font-weight: 600; cursor: pointer;
   }
+  .fm-comp-coupe-row .opp .opp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fm-comp-coupe-row .opp:hover { color: var(--gold); text-decoration: underline; }
   .fm-comp-coupe-row .res {
     flex-shrink: 0; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -8750,9 +8751,10 @@ async function getClubCoupeInfo(clubId, clubNation) {
 
   const oppIds = [...new Set(realRows.map(r => r.game_club_id_1 === clubIdNum ? r.game_club_id_2 : r.game_club_id_1))];
   const oppMap = {};
+  const oppLogoMap = {};
   if (oppIds.length) {
-    const { data: oppClubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", oppIds);
-    (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; });
+    const { data: oppClubs } = await supabaseClient.from("game_clubs").select("id, nom, clubs(logo_url)").in("id", oppIds);
+    (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; oppLogoMap[c.id] = c.clubs?.logo_url || null; });
   }
 
   const matches = realRows.map(r => {
@@ -8770,6 +8772,7 @@ async function getClubCoupeInfo(clubId, clubNation) {
       isHome: isSide1,
       oppId,
       oppName: oppMap[oppId] || "?",
+      oppLogo: oppLogoMap[oppId] || null,
       played: r.statut === "termine",
       score_domicile: isSide1 ? r.score_1 : r.score_2,
       score_exterieur: isSide1 ? r.score_2 : r.score_1,
@@ -8830,7 +8833,7 @@ function renderCoupeCardHtml(coupeInfo, gameId, clubId) {
     return `
       <div class="fm-comp-coupe-row">
         <span class="rnd">${escapeHtml(m.roundShort)}</span>
-        <span class="opp" data-club-id="${m.oppId}">${escapeHtml(m.oppName)}</span>
+        <span class="opp" data-club-id="${m.oppId}">${mdetLogoHtml(m.oppLogo, m.oppName, 16)}<span class="opp-name">${escapeHtml(m.oppName)}</span></span>
         ${resHtml}
       </div>
     `;
