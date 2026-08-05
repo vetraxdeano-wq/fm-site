@@ -255,6 +255,13 @@
 
   /* ---- Infirmerie ---- */
   .infirmerie-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
+  /* Scrollbar discrete (pas de grosse barre blanche moche) quand la liste
+     complete de l'effectif est affichee et depasse la hauteur visible. */
+  .infirmerie-panel { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.16) transparent; }
+  .infirmerie-panel::-webkit-scrollbar { width: 6px; }
+  .infirmerie-panel::-webkit-scrollbar-track { background: transparent; }
+  .infirmerie-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 999px; }
+  .infirmerie-panel::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
   .infirmerie-filter-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
   .infirmerie-filter-btn {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
@@ -309,6 +316,12 @@
   .risk-table tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .risk-table tbody tr:last-child td { border-bottom: none; }
   .risk-table tbody tr:hover { background: rgba(255,255,255,0.02); cursor: pointer; }
+
+  .risk-show-more-row td {
+    text-align: center; color: var(--text-dim); font-size: 12.5px; font-weight: 700;
+    padding: 10px 12px; cursor: pointer; border-bottom: none;
+  }
+  .risk-show-more-row:hover td { color: var(--gold); }
 
   .risk-badge {
     display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700;
@@ -482,7 +495,7 @@
 
         <!-- Sous-onglet "Infirmerie" -->
         <div id="infirmerieMaintabPanel" class="hidden">
-          <div class="infirmerie-panel">
+          <div class="infirmerie-panel" id="infirmeriePanel">
             <div class="infirmerie-filter-bar" id="infirmerieFilterBar">
               <button type="button" class="infirmerie-filter-btn active" data-cat-filter="all">Tous</button>
               <button type="button" class="infirmerie-filter-btn" data-cat-filter="equipe_a">Équipe A</button>
@@ -1284,6 +1297,9 @@ function wireSquadMaintabs() {
     btn.addEventListener("click", () => {
       activeSquadMaintab = btn.getAttribute("data-maintab");
       document.querySelectorAll(".squad-maintab-btn").forEach(b => b.classList.toggle("active", b === btn));
+      // Chaque entree dans l'onglet Infirmerie repart en mode "replie"
+      // (juste assez de joueurs pour remplir l'ecran + bouton "+...").
+      infirmerieRiskExpanded = false;
       applySquadMaintabVisibility();
     });
   });
@@ -1365,6 +1381,13 @@ const SQUAD_CAT_ORDER = ["equipe_a", "reserve", "u18"];
 let activeInfirmerieFilter = "all";
 let infirmerieFilterWired = false;
 
+// Etat "replie / deplie" du tableau "Probabilites de blessure" : au
+// chargement de l'onglet, on n'affiche que ce qu'il faut de joueurs pour
+// remplir l'ecran (+ une ligne "+N autres..." pour tout afficher). Une fois
+// deplie, la liste complete est affichee et le panneau devient scrollable
+// (scrollbar discrete, voir CSS .infirmerie-panel).
+let infirmerieRiskExpanded = false;
+
 function wireInfirmerieFilter() {
   if (infirmerieFilterWired) return;
   infirmerieFilterWired = true;
@@ -1372,6 +1395,8 @@ function wireInfirmerieFilter() {
     btn.addEventListener("click", () => {
       activeInfirmerieFilter = btn.getAttribute("data-cat-filter");
       document.querySelectorAll(".infirmerie-filter-btn").forEach(b => b.classList.toggle("active", b === btn));
+      // Un changement de filtre repart aussi en mode "replie".
+      infirmerieRiskExpanded = false;
       renderInfirmerie();
     });
   });
@@ -1483,6 +1508,7 @@ function renderInfirmerie() {
         window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}&player=${encodeURIComponent(pid)}`;
       });
     });
+    applyInfirmerieRiskCollapse(riskBody, ranked.length);
   }
 
   // -- Badge de compteur sur l'onglet "Infirmerie" -- (toujours sur
@@ -1491,6 +1517,51 @@ function renderInfirmerie() {
   const badgeEl = document.getElementById("infirmerieBadge");
   badgeEl.textContent = totalInjured;
   badgeEl.classList.toggle("zero", totalInjured === 0);
+}
+
+// Replie le tableau "Probabilites de blessure" pour n'afficher, au premier
+// affichage, que le nombre de lignes qui tient dans la hauteur visible du
+// panneau (sans faire apparaitre de scroll), suivi d'une ligne "+N autres
+// joueurs..." cliquable. Une fois deplie (infirmerieRiskExpanded = true),
+// toutes les lignes sont affichees et le panneau (overflow-y: auto, scrollbar
+// discrete) devient scrollable pour parcourir tout l'effectif.
+function applyInfirmerieRiskCollapse(riskBody, totalCount) {
+  const panel = document.getElementById("infirmeriePanel");
+  const rows = Array.from(riskBody.querySelectorAll(".risk-row"));
+  if (!panel || rows.length === 0) return;
+
+  if (infirmerieRiskExpanded) return; // tout est deja affiche, panneau scrollable
+
+  // Mesure a partir du haut du panneau (on part toujours d'un scroll a 0
+  // lors du repli, ce qui est le cas au moment ou renderInfirmerie() est
+  // (re)declenche apres un changement d'onglet/filtre).
+  panel.scrollTop = 0;
+  const panelRect = panel.getBoundingClientRect();
+  let fitCount = 0;
+  for (const row of rows) {
+    const r = row.getBoundingClientRect();
+    if (r.bottom <= panelRect.bottom) fitCount++;
+    else break;
+  }
+
+  if (fitCount >= rows.length) return; // tout tient deja a l'ecran, rien a replier
+
+  // On garde une ligne de moins que ce qui tient pour laisser la place a la
+  // ligne "+N autres...", et on affiche toujours au moins 1 joueur.
+  const keepCount = Math.max(fitCount - 1, 1);
+  rows.forEach((row, idx) => {
+    if (idx >= keepCount) row.classList.add("hidden");
+  });
+
+  const hiddenCount = totalCount - keepCount;
+  const showMoreRow = document.createElement("tr");
+  showMoreRow.className = "risk-show-more-row";
+  showMoreRow.innerHTML = `<td colspan="5">+ ${hiddenCount} autre${hiddenCount > 1 ? "s" : ""} joueur${hiddenCount > 1 ? "s" : ""}…</td>`;
+  showMoreRow.addEventListener("click", () => {
+    infirmerieRiskExpanded = true;
+    renderInfirmerie();
+  });
+  riskBody.appendChild(showMoreRow);
 }
 
 function applySquadSubtabVisibility() {
