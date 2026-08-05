@@ -345,6 +345,8 @@
   .contract-row:last-child { border-bottom: none; }
   .contract-label { color: var(--text-dim); }
   .contract-value { font-weight: 600; }
+  .contract-value.club-link { cursor: pointer; }
+  .contract-value.club-link:hover { color: var(--gold); text-decoration: underline; }
 
   /* Contrat & valeur : logo du club plaqué à gauche, sur toute la hauteur du module */
   .card-contrat { flex-direction: row; align-items: stretch; padding: 0; overflow: hidden; }
@@ -428,6 +430,7 @@
       <div class="fiche-subtab-bar" id="ficheSubtabBar">
         <button type="button" class="fiche-subtab-btn active" data-subtab="apercu"><span class="fiche-subtab-icon">🧍</span>Aperçu</button>
         <button type="button" class="fiche-subtab-btn" data-subtab="stats"><span class="fiche-subtab-icon">📊</span>Stats</button>
+        <button type="button" class="fiche-subtab-btn" data-subtab="blessures"><span class="fiche-subtab-icon">🩹</span>Blessures</button>
       </div>
 
       <div class="wrap" id="content">
@@ -509,6 +512,13 @@
         <div class="card">
           <h3>Historique de carrière</h3>
           <div id="statsCareerHolder"><div class="stats-loading">Chargement de l'historique…</div></div>
+        </div>
+      </div>
+
+      <div id="blessuresPanel" class="hidden">
+        <div class="card">
+          <h3>Historique des blessures</h3>
+          <div id="blessuresHolder"><div class="stats-loading">Chargement de l'historique…</div></div>
         </div>
       </div>
 
@@ -665,6 +675,12 @@ function renderClubLogo(logoUrl) {
     wrap.innerHTML = "";
     wrap.classList.add("hidden");
   }
+}
+
+// Clic sur le logo ou le nom du club (carte "Contrat & valeur") -> fiche du club.
+function goToClub() {
+  if (!clubIdParam || !gameId) return;
+  window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubIdParam)}`;
 }
 
 // ---------- Drapeaux ----------
@@ -1468,6 +1484,7 @@ async function loadFiche() {
   // Ces colonnes sont d'ailleurs désormais bloquées côté base (REVOKE) pour anon/authenticated.
   const selectCols = [
     "id", "game_id", "game_club_id", "nom", "age", "forme", "moral", "blessure_jours",
+    "blessure_nom", "blessure_categorie",
     "nationalite", "poste_brut", "postes", "statut_special", "reputation_mondiale",
     "personnalite", "pied_gauche", "pied_droit", "date_naissance",
     "contrat_expire", "salaire_actuel", "valeur_marchande_actuelle",
@@ -1513,6 +1530,12 @@ async function loadFiche() {
   }
   currentClubLogoUrl = clubLogoUrl;
   renderClubLogo(clubLogoUrl);
+  const clubLogoWrapEl = document.getElementById("contratLogoWrap");
+  if (clubLogoWrapEl) {
+    clubLogoWrapEl.style.cursor = clubIdParam ? "pointer" : "";
+    clubLogoWrapEl.title = clubNom ? `Voir ${clubNom}` : "";
+    clubLogoWrapEl.onclick = clubIdParam ? goToClub : null;
+  }
 
   document.getElementById("fmSearchInput").placeholder = (gp.nom || "").toUpperCase();
   document.getElementById("playerMeta").textContent = [gp.poste_brut, clubNom].filter(Boolean).join(" · ");
@@ -1574,14 +1597,28 @@ async function loadFiche() {
 
   // Contrat
   document.getElementById("contractRows").innerHTML = `
-    <div class="contract-row"><span class="contract-label">Club</span><span class="contract-value">${escapeHtml(clubNom || "-")}</span></div>
+    <div class="contract-row"><span class="contract-label">Club</span><span class="contract-value${clubIdParam ? " club-link" : ""}"${clubIdParam ? ` onclick="goToClub()" title="Voir ${escapeHtml(clubNom || "")}"` : ""}>${escapeHtml(clubNom || "-")}</span></div>
     <div class="contract-row"><span class="contract-label">Salaire</span><span class="contract-value">${formatMoneyShort(gp.salaire_actuel)}${gp.salaire_actuel ? " / mois" : ""}</span></div>
     <div class="contract-row"><span class="contract-label">Fin de contrat</span><span class="contract-value ${isContractSoon(gp.contrat_expire) ? "contract-soon" : ""}">${formatDate(gp.contrat_expire)}</span></div>
     <div class="contract-row"><span class="contract-label">Valeur estimée</span><span class="contract-value">${valueRange(gp.valeur_marchande_actuelle, gp.id)}</span></div>
   `;
 
-  // Condition (forme / moral / blessure) — données jusqu'ici inutilisées dans l'app
+  // Condition (forme / moral / blessure)
   const blesse = (gp.blessure_jours || 0) > 0;
+  let blessureDetailHtml = "";
+  if (blesse) {
+    let retourLabel = "-";
+    if (gameCurrentDate) {
+      const dateRetour = new Date(gameCurrentDate);
+      dateRetour.setDate(dateRetour.getDate() + (gp.blessure_jours || 0));
+      retourLabel = formatRealDate(dateRetour) || "-";
+    }
+    blessureDetailHtml = `
+      <div class="contract-row"><span class="contract-label">Blessure</span><span class="contract-value">${escapeHtml(gp.blessure_nom || "-")}</span></div>
+      <div class="contract-row"><span class="contract-label">Gravité</span><span class="contract-value">${escapeHtml(GRAVITE_LABEL[gp.blessure_categorie] || gp.blessure_categorie || "-")}</span></div>
+      <div class="contract-row"><span class="contract-label">Retour prévu</span><span class="contract-value contract-soon">${escapeHtml(retourLabel)}</span></div>
+    `;
+  }
   document.getElementById("conditionRows").innerHTML = `
     ${bar("Condition physique", gp.forme, 100, (gp.forme ?? 100) < 60 ? "bad" : "")}
     ${bar("Moral", gp.moral, 100, (gp.moral ?? 100) < 40 ? "bad" : "")}
@@ -1589,6 +1626,7 @@ async function loadFiche() {
       <span class="contract-label">Disponibilité</span>
       <span class="fit-chip ${blesse ? "fit-bad" : "fit-ok"}">${blesse ? `Blessé (${gp.blessure_jours} j.)` : "Apte"}</span>
     </div>
+    ${blessureDetailHtml}
   `;
 
   selectedCellKey = null;
@@ -1602,11 +1640,17 @@ async function loadFiche() {
 // ===================== SOUS-ONGLETS DE LA FICHE : Aperçu / Stats =====================
 let ficheStatsLoaded = false;
 let ficheStatsRows = null;
+let ficheBlessuresLoaded = false;
 
 function showFicheSubtab(key) {
   document.querySelectorAll(".fiche-subtab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-subtab") === key));
   document.getElementById("content").classList.toggle("hidden", key !== "apercu");
   document.getElementById("statsPanel").classList.toggle("hidden", key !== "stats");
+  document.getElementById("blessuresPanel").classList.toggle("hidden", key !== "blessures");
+  if (key === "blessures" && !ficheBlessuresLoaded) {
+    ficheBlessuresLoaded = true;
+    loadPlayerBlessures();
+  }
   if (key === "stats" && !ficheStatsLoaded) {
     ficheStatsLoaded = true;
     loadPlayerStats();
@@ -1655,6 +1699,68 @@ async function loadPlayerStats() {
 
   renderMatchLogTable(rowsThisSeason);
   renderCareerTable(ficheStatsRows);
+}
+
+// ---------- Sous-onglet "Blessures" ----------
+// Historique reconstruit uniquement en LECTURE depuis calendrier.stats /
+// game_barrages_promotion.stats_aller|stats_retour (colonnes deja ecrites par
+// enregistrer_resultat_match / enregistrer_resultat_barrage cote gameflow) via
+// le RPC get_player_injury_history. Aucune ecriture, aucun changement au
+// pipeline de simulation existant.
+const GRAVITE_LABEL = {
+  tres_legere: "Très légère",
+  legere: "Légère",
+  moyenne: "Moyenne",
+  grave: "Grave",
+  tres_grave: "Très grave",
+};
+const GRAVITE_CLASS = {
+  tres_legere: "fit-ok",
+  legere: "fit-ok",
+  moyenne: "fit-bad",
+  grave: "fit-bad",
+  tres_grave: "fit-bad",
+};
+
+async function loadPlayerBlessures() {
+  if (!currentGamePlayer) return;
+  const holder = document.getElementById("blessuresHolder");
+
+  const { data, error } = await supabaseClient.rpc("get_player_injury_history", { p_game_player_id: currentGamePlayer.id });
+
+  if (error) {
+    console.error(error);
+    holder.innerHTML = `<div class="stats-empty">Impossible de charger l'historique des blessures.</div>`;
+    return;
+  }
+
+  renderBlessuresTable(data || []);
+}
+
+function renderBlessuresTable(rows) {
+  const holder = document.getElementById("blessuresHolder");
+  if (!rows.length) {
+    holder.innerHTML = `<div class="stats-empty">Aucune blessure enregistrée pour ce joueur pour le moment.</div>`;
+    return;
+  }
+  const body = rows.map(r => `
+    <tr>
+      <td>${formatDate(r.date_match)}</td>
+      <td>${escapeHtml(r.blessure_nom || "-")}</td>
+      <td><span class="fit-chip ${GRAVITE_CLASS[r.blessure_categorie] || "fit-bad"}">${escapeHtml(GRAVITE_LABEL[r.blessure_categorie] || r.blessure_categorie || "-")}</span></td>
+      <td>${r.duree_jours ?? "-"} j.</td>
+      <td>${r.contexte === "barrage" ? "Barrage" : "Championnat"} ${r.domicile ? "🏠" : "✈️"} vs ${escapeHtml(r.adversaire_nom || "-")}</td>
+    </tr>
+  `).join("");
+  holder.innerHTML = `
+    <div class="stats-table-wrap">
+      <table class="fm-stats-table">
+        <thead><tr>
+          <th>Date</th><th>Blessure</th><th>Gravité</th><th>Durée</th><th>Contexte</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
 }
 
 function aggregateRows(rows) {
