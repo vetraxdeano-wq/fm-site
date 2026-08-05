@@ -8202,20 +8202,29 @@ function fmMatchScore(name, query) {
   const normName = fmNormSearch(name);
   if (!normName) return 0;
   const nameWords = normName.split(" ").filter(Boolean);
+  const flatName = nameWords.join("");
   const initials = nameWords.map(w => w[0]).join("");
   let best = 0;
   fmSearchVariants(query).forEach(variant => {
     const qWords = variant.split(" ").filter(Boolean);
     if (!qWords.length) return;
+    // Acronyme (ex : "psg" -> Paris Saint-Germain).
     if (qWords.length === 1 && qWords[0].length >= 2 && qWords[0] === initials) {
       best = Math.max(best, 90);
     }
-    const allPrefix = qWords.every(qw => nameWords.some(nw => nw.startsWith(qw)));
-    if (allPrefix) {
+    // Chaque mot de la requete doit apparaitre comme sous-chaine dans au
+    // moins un mot du nom, peu importe l'ordre : equivalent (en mieux, avec
+    // accents/surnoms geres) au filtre ilike mot-par-mot d'origine.
+    const allMatch = qWords.every(qw => nameWords.some(nw => nw.includes(qw)));
+    if (allMatch) {
       const exact = qWords.every(qw => nameWords.includes(qw));
-      best = Math.max(best, exact ? 100 : 80);
+      const allPrefix = qWords.every(qw => nameWords.some(nw => nw.startsWith(qw)));
+      best = Math.max(best, exact ? 100 : (allPrefix ? 85 : 70));
     }
-    if (normName.replace(/\s+/g, "").includes(variant.replace(/\s+/g, ""))) {
+    // Repli : la requete entiere (mots colles) est une sous-chaine du nom
+    // complet (mots colles) -- utile si la coupure en mots ne correspond pas
+    // exactement (tirets, apostrophes...).
+    if (flatName.includes(variant.replace(/\s+/g, ""))) {
       best = Math.max(best, 60);
     }
   });
@@ -8298,7 +8307,7 @@ async function runGlobalSearch(q, dropdown) {
     { data: players, error: playersError },
   ] = await Promise.all([
     supabaseClient.from("game_clubs").select("id, nom").eq("game_id", gameId),
-    supabaseClient.from("competitions").select("id, nom, nation, division").eq("game_id", gameId),
+    supabaseClient.from("competitions").select("id, nom, nation, division"), // pas de game_id : table globale (referentiel de competitions), pas clonee par partie
     playerQuery.order("reputation_mondiale", { ascending: false, nullsFirst: false }).limit(20),
   ]);
   if (clubsError) console.error(clubsError);
