@@ -185,7 +185,8 @@
     flex-shrink: 0; width: 46px; font-size: 10px; text-align: center; color: var(--text-dim);
     background: #14171d; border: 1px solid var(--border); border-radius: 5px; padding: 3px 0;
   }
-  .fm-coupe-parcours-row .opp { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .fm-coupe-parcours-row .opp { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; font-weight: 600; cursor: pointer; }
+  .fm-coupe-parcours-row .opp .opp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fm-coupe-parcours-row .opp:hover { color: var(--gold); text-decoration: underline; }
   .fm-coupe-parcours-row .res {
     flex-shrink: 0; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
@@ -401,9 +402,10 @@ function bindFixtureClicks(container) {
   });
 }
 
-function parcoursRowHtml(r, clubIdNum, nameById, nbTours) {
+function parcoursRowHtml(r, clubIdNum, nameById, logoById, nbTours) {
   const isSide1 = r.game_club_id_1 === clubIdNum;
   const oppId = isSide1 ? r.game_club_id_2 : r.game_club_id_1;
+  const oppLogo = logoById[oppId];
   const played = isRowPlayed(r);
   let resHtml;
   if (!played) {
@@ -421,7 +423,10 @@ function parcoursRowHtml(r, clubIdNum, nameById, nbTours) {
   return `
     <div class="fm-coupe-parcours-row">
       <span class="rnd" title="${escapeHtml(coupeRoundLabelPage(r.tour, nbTours))}">${escapeHtml(coupeRoundShortPage(r.tour, nbTours))}</span>
-      <span class="opp" data-club-id="${oppId}">${escapeHtml(nameById[oppId] || "?")}</span>
+      <span class="opp" data-club-id="${oppId}">
+        ${oppLogo ? `<img class="fm-club-logo" src="${escapeHtml(oppLogo)}" alt="">` : ""}
+        <span class="opp-name">${escapeHtml(nameById[oppId] || "?")}</span>
+      </span>
       ${resHtml}
     </div>
   `;
@@ -433,16 +438,29 @@ function bindParcoursClicks(container) {
 }
 
 async function loadCoupeNationale(comp) {
-  const { data: config } = await supabaseClient
+  // On s'appuie sur la saison en cours de la partie (table games) plutot
+  // que sur la saison la plus "haute" de la table de config : celle-ci
+  // contient aussi des tirages d'autres saisons (passees ou de test) avec
+  // des dates sans rapport avec la partie en cours (ex. saison "gabarit"
+  // tres loin dans le futur), qui fausseraient tout l'affichage.
+  const { data: gameRow } = await supabaseClient
+    .from("games")
+    .select("saison")
+    .eq("id", gameId)
+    .maybeSingle();
+  const currentSaison = gameRow?.saison ?? null;
+
+  let configQuery = supabaseClient
     .from("game_coupe_nationale_config")
     .select("saison, nb_tours")
     .eq("game_id", gameId)
-    .eq("competition_ref", comp.id)
-    .order("saison", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("competition_ref", comp.id);
+  configQuery = currentSaison != null
+    ? configQuery.eq("saison", currentSaison)
+    : configQuery.order("saison", { ascending: false }).limit(1);
+  const { data: config } = await configQuery.maybeSingle();
   const nbTours = config?.nb_tours || null;
-  const saison = config?.saison ?? null;
+  const saison = config?.saison ?? currentSaison;
 
   let rowsQuery = supabaseClient
     .from("game_coupe_nationale_tours")
@@ -516,7 +534,7 @@ async function loadCoupeNationale(comp) {
     document.getElementById("compCard3Title").textContent = "Votre parcours";
     const myRows = realRows.filter(r => r.game_club_id_1 === myClubId || r.game_club_id_2 === myClubId).sort((a, b) => a.tour - b.tour);
     document.getElementById("compTopScorers").innerHTML = myRows.length
-      ? myRows.map(r => parcoursRowHtml(r, myClubId, nameById, nbTours)).join("")
+      ? myRows.map(r => parcoursRowHtml(r, myClubId, nameById, logoById, nbTours)).join("")
       : `<div class="fm-empty">Ce club ne participe pas à la compétition cette saison.</div>`;
     bindParcoursClicks(document.getElementById("compTopScorers"));
   } else {
