@@ -232,6 +232,90 @@
     color: var(--text-dim); opacity: 0.8;
   }
   .squad-subtab-btn.active .squad-subtab-coach { color: rgba(251,191,36,0.8); opacity: 1; }
+
+  /* ---- Onglets de 1er niveau sous "Effectif" : Effectif / Infirmerie ---- */
+  .squad-maintab-bar {
+    display: flex; gap: 4px; flex: 0 0 auto; background: #10131a;
+    border-bottom: 1px solid var(--border); padding: 0 18px;
+  }
+  .squad-maintab-btn {
+    display: flex; align-items: center; gap: 8px; background: transparent; border: none;
+    border-bottom: 3px solid transparent; color: var(--text-dim);
+    padding: 12px 16px 10px; font-size: 13.5px; font-weight: 800; font-family: inherit;
+    cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .squad-maintab-btn:hover { color: var(--text); }
+  .squad-maintab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .squad-maintab-icon { font-size: 15px; line-height: 1; }
+  .squad-maintab-badge {
+    background: rgba(239,68,68,0.16); border: 1px solid rgba(239,68,68,0.4); color: var(--danger);
+    font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; min-width: 10px; text-align: center;
+  }
+  .squad-maintab-badge.zero { background: rgba(255,255,255,0.06); border-color: var(--border); color: var(--text-dim); }
+
+  /* ---- Infirmerie ---- */
+  .infirmerie-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
+  .infirmerie-section { margin-bottom: 22px; }
+  .infirmerie-section:last-child { margin-bottom: 0; }
+  .infirmerie-section-title {
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 0 0 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .infirmerie-section-title .count-badge {
+    background: rgba(255,255,255,0.08); color: var(--text); font-size: 11px; font-weight: 700;
+    padding: 1px 8px; border-radius: 999px;
+  }
+  .infirmerie-empty {
+    color: var(--text-dim); font-size: 13px; padding: 16px; text-align: center;
+    background: var(--panel-2); border: 1px dashed var(--border); border-radius: 10px;
+  }
+
+  .injury-list { display: flex; flex-direction: column; gap: 8px; }
+  .injury-card {
+    display: flex; align-items: center; gap: 12px; background: var(--panel-2);
+    border: 1px solid rgba(239,68,68,0.25); border-left: 3px solid var(--danger);
+    border-radius: 10px; padding: 10px 14px; cursor: pointer;
+  }
+  .injury-card:hover { background: rgba(239,68,68,0.06); }
+  .injury-card .nat-chip { flex-shrink: 0; }
+  .injury-card .player-name { min-width: 150px; flex-shrink: 0; }
+  .injury-cat-tag {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--text-dim); background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    padding: 2px 6px; border-radius: 5px; flex-shrink: 0;
+  }
+  .injury-type { color: var(--text); font-size: 13px; flex: 1; }
+  .injury-return { color: var(--text-dim); font-size: 12px; text-align: right; white-space: nowrap; }
+  .injury-return b { color: var(--text); font-weight: 700; }
+
+  .risk-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .risk-table thead th {
+    text-align: left; color: var(--text-dim); font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .risk-table tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .risk-table tbody tr:last-child td { border-bottom: none; }
+  .risk-table tbody tr:hover { background: rgba(255,255,255,0.02); cursor: pointer; }
+
+  .risk-badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .risk-badge .risk-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .risk-tres-eleve { background: rgba(239,68,68,0.14); border: 1px solid rgba(239,68,68,0.4); color: var(--danger); }
+  .risk-tres-eleve .risk-dot { background: var(--danger); }
+  .risk-eleve { background: rgba(251,191,36,0.14); border: 1px solid rgba(251,191,36,0.4); color: var(--gold); }
+  .risk-eleve .risk-dot { background: var(--gold); }
+  .risk-correcte { background: rgba(148,163,184,0.14); border: 1px solid rgba(148,163,184,0.35); color: #cbd5e1; }
+  .risk-correcte .risk-dot { background: #94a3b8; }
+  .risk-faible { background: rgba(74,222,128,0.14); border: 1px solid rgba(74,222,128,0.4); color: var(--accent); }
+  .risk-faible .risk-dot { background: var(--accent); }
+
+  .infirmerie-note {
+    font-size: 11.5px; color: var(--text-dim); margin-top: 10px; line-height: 1.5;
+  }
+
   .fm-squad-card-header {
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
     padding: 14px 18px; border-bottom: 1px solid var(--border); flex: 0 0 auto;
@@ -312,61 +396,106 @@
     <div class="fm-sidebar" id="fmSidebar"></div>
     <div class="fm-content-wrap">
       <div class="fm-squad-card">
-        <div class="squad-subtab-bar" id="squadSubtabBar">
-          <button type="button" class="squad-subtab-btn active" data-subtab="equipe_a">
-            <span class="squad-subtab-icon">🏟️</span>
-            <span class="squad-subtab-text">
-              <span class="squad-subtab-label">Équipe A <span class="squad-subtab-count">0</span></span>
-              <span class="squad-subtab-coach" data-subtab-coach="equipe_a">—</span>
-            </span>
+        <!-- Onglets de 1er niveau : Effectif / Infirmerie -->
+        <div class="squad-maintab-bar" id="squadMaintabBar">
+          <button type="button" class="squad-maintab-btn active" data-maintab="effectif">
+            <span class="squad-maintab-icon">👥</span>
+            <span>Effectif</span>
           </button>
-          <button type="button" class="squad-subtab-btn" data-subtab="reserve">
-            <span class="squad-subtab-icon">🔁</span>
-            <span class="squad-subtab-text">
-              <span class="squad-subtab-label">Réserve <span class="squad-subtab-count">0</span></span>
-              <span class="squad-subtab-coach" data-subtab-coach="reserve">—</span>
-            </span>
-          </button>
-          <button type="button" class="squad-subtab-btn" data-subtab="u18">
-            <span class="squad-subtab-icon">🌱</span>
-            <span class="squad-subtab-text">
-              <span class="squad-subtab-label">U18 <span class="squad-subtab-count">0</span></span>
-              <span class="squad-subtab-coach" data-subtab-coach="u18">—</span>
-            </span>
+          <button type="button" class="squad-maintab-btn" data-maintab="infirmerie">
+            <span class="squad-maintab-icon">🩹</span>
+            <span>Infirmerie</span>
+            <span class="squad-maintab-badge zero" id="infirmerieBadge">0</span>
           </button>
         </div>
-        <div class="fm-squad-card-header">
-          <span class="title" id="fmSquadTitle">Effectif</span>
-          <span class="fm-legend">
-            <span><span class="dot cur"></span>Niveau actuel</span>
-            <span><span class="dot pot"></span>Potentiel</span>
-          </span>
+
+        <!-- Sous-onglet "Effectif" : Equipe A / Reserve / U18 -->
+        <div id="effectifMaintabPanel">
+          <div class="squad-subtab-bar" id="squadSubtabBar">
+            <button type="button" class="squad-subtab-btn active" data-subtab="equipe_a">
+              <span class="squad-subtab-icon">🏟️</span>
+              <span class="squad-subtab-text">
+                <span class="squad-subtab-label">Équipe A <span class="squad-subtab-count">0</span></span>
+                <span class="squad-subtab-coach" data-subtab-coach="equipe_a">—</span>
+              </span>
+            </button>
+            <button type="button" class="squad-subtab-btn" data-subtab="reserve">
+              <span class="squad-subtab-icon">🔁</span>
+              <span class="squad-subtab-text">
+                <span class="squad-subtab-label">Réserve <span class="squad-subtab-count">0</span></span>
+                <span class="squad-subtab-coach" data-subtab-coach="reserve">—</span>
+              </span>
+            </button>
+            <button type="button" class="squad-subtab-btn" data-subtab="u18">
+              <span class="squad-subtab-icon">🌱</span>
+              <span class="squad-subtab-text">
+                <span class="squad-subtab-label">U18 <span class="squad-subtab-count">0</span></span>
+                <span class="squad-subtab-coach" data-subtab-coach="u18">—</span>
+              </span>
+            </button>
+          </div>
+          <div class="fm-squad-card-header">
+            <span class="title" id="fmSquadTitle">Effectif</span>
+            <span class="fm-legend">
+              <span><span class="dot cur"></span>Niveau actuel</span>
+              <span><span class="dot pot"></span>Potentiel</span>
+            </span>
+          </div>
+          <div class="table-scroll">
+            <table class="squad-table">
+              <thead>
+                <tr>
+                  <th>Statut</th>
+                  <th>Nat.</th>
+                  <th>Âge</th>
+                  <th>Nom</th>
+                  <th>Postes</th>
+                  <th>Niveau</th>
+                  <th>Potentiel</th>
+                  <th>MJ</th>
+                  <th>Buts</th>
+                  <th>Passes D.</th>
+                  <th>Note moy.</th>
+                  <th>Salaire</th>
+                  <th>Fin de contrat</th>
+                  <th>Valeur estimée</th>
+                </tr>
+              </thead>
+              <tbody id="myClubBody"></tbody>
+            </table>
+          </div>
+          <div id="myClubEmpty" class="empty-state hidden">Aucun joueur trouvé pour ce club.</div>
+          <div id="myClubCategoryEmpty" class="empty-state hidden">Aucun joueur dans cette catégorie pour l'instant.</div>
         </div>
-        <div class="table-scroll">
-          <table class="squad-table">
-            <thead>
-              <tr>
-                <th>Statut</th>
-                <th>Nat.</th>
-                <th>Âge</th>
-                <th>Nom</th>
-                <th>Postes</th>
-                <th>Niveau</th>
-                <th>Potentiel</th>
-                <th>MJ</th>
-                <th>Buts</th>
-                <th>Passes D.</th>
-                <th>Note moy.</th>
-                <th>Salaire</th>
-                <th>Fin de contrat</th>
-                <th>Valeur estimée</th>
-              </tr>
-            </thead>
-            <tbody id="myClubBody"></tbody>
-          </table>
+
+        <!-- Sous-onglet "Infirmerie" -->
+        <div id="infirmerieMaintabPanel" class="hidden">
+          <div class="infirmerie-panel">
+            <div class="infirmerie-section">
+              <div class="infirmerie-section-title">
+                🩹 Blessures actuelles <span class="count-badge" id="infirmerieCurrentCount">0</span>
+              </div>
+              <div id="infirmerieCurrentList"></div>
+            </div>
+            <div class="infirmerie-section">
+              <div class="infirmerie-section-title">📈 Probabilités de blessure</div>
+              <table class="risk-table">
+                <thead>
+                  <tr>
+                    <th>Nat.</th>
+                    <th>Nom</th>
+                    <th>Équipe</th>
+                    <th>Âge</th>
+                    <th>Risque</th>
+                  </tr>
+                </thead>
+                <tbody id="infirmerieRiskBody"></tbody>
+              </table>
+              <div id="infirmerieRiskEmpty" class="infirmerie-empty hidden">Aucun joueur disponible pour l'estimation.</div>
+              <div class="infirmerie-note">Estimation basée sur la condition physique, l'âge et la fatigue actuelle des joueurs, recalculée à chaque mise à jour de l'effectif.</div>
+            </div>
+          </div>
         </div>
-        <div id="myClubEmpty" class="empty-state hidden">Aucun joueur trouvé pour ce club.</div>
-        <div id="myClubCategoryEmpty" class="empty-state hidden">Aucun joueur dans cette catégorie pour l'instant.</div>
       </div>
     </div>
   </div>
@@ -525,6 +654,7 @@ function formatDate(d) {
   const date = new Date(d);
   return date.toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
 }
+
 
 let gameCurrentDate = null; // date en jeu, calculee a partir de date_debut + jour_actuel
 let currentGame = null;
@@ -1034,6 +1164,13 @@ function renderMyClubBody() {
 let activeSquadSubtab = "equipe_a";
 let squadSubtabsWired = false;
 
+// ---- Onglet de 1er niveau sous "Effectif" : "Effectif" / "Infirmerie" ----
+// "Effectif" regroupe les sous-onglets Equipe A / Reserve / U18 existants ;
+// "Infirmerie" est un onglet frere, independant de ces categories (elle
+// affiche les joueurs blesses de tout le club, toutes categories confondues).
+let activeSquadMaintab = "effectif";
+let squadMaintabsWired = false;
+
 // ---- Coach de chaque sous-onglet (Equipe A / Reserve / U18) ---------------
 // Les entraineurs sont stockes dans `game_staff`, rattaches a une equipe via
 // la colonne `equipe_assignee` ("equipe_a" / "reserve" / "u18"). Ce champ
@@ -1121,6 +1258,165 @@ function updateSquadSubtabCounts() {
   });
 }
 
+// ---- Onglet "Infirmerie" -----------------------------------------------
+function wireSquadMaintabs() {
+  if (squadMaintabsWired) return;
+  squadMaintabsWired = true;
+  document.querySelectorAll(".squad-maintab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeSquadMaintab = btn.getAttribute("data-maintab");
+      document.querySelectorAll(".squad-maintab-btn").forEach(b => b.classList.toggle("active", b === btn));
+      applySquadMaintabVisibility();
+    });
+  });
+}
+
+function resetSquadMaintabToEffectif() {
+  activeSquadMaintab = "effectif";
+  document.querySelectorAll(".squad-maintab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-maintab") === "effectif"));
+}
+
+function applySquadMaintabVisibility() {
+  const effectifPanel = document.getElementById("effectifMaintabPanel");
+  const infirmeriePanel = document.getElementById("infirmerieMaintabPanel");
+  const isInfirmerie = activeSquadMaintab === "infirmerie";
+  effectifPanel.classList.toggle("hidden", isInfirmerie);
+  infirmeriePanel.classList.toggle("hidden", !isInfirmerie);
+  if (isInfirmerie) renderInfirmerie();
+}
+
+// Un joueur est considere "actuellement blesse" via `blessure_jours > 0`
+// (colonne reelle de game_players, decrementee jour apres jour par le
+// moteur de simulation ; 0 = pas/plus blesse). C'est la source de verite,
+// independamment de statut_special qui n'est pas forcement synchronise.
+function isPlayerCurrentlyInjured(p) {
+  return (p.blessure_jours ?? 0) > 0;
+}
+
+// Libelles FR pour la gravite de blessure stockee dans blessure_categorie
+// (tres_legere/legere/moyenne/grave/tres_grave).
+const BLESSURE_CATEGORIE_LABEL = {
+  tres_legere: "Très légère",
+  legere: "Légère",
+  moyenne: "Moyenne",
+  grave: "Grave",
+  tres_grave: "Très grave",
+};
+
+// ---- Estimation du risque de blessure -----------------------------------
+// Combine : condition physique actuelle (`forme`, 0-100 ; plus basse = plus
+// de risque — c'est aussi la seule donnee de fraicheur physique disponible
+// en base, donc la "fatigue actuelle" en est directement deduite : fatigue
+// = 100 - forme), age (plus eleve = plus de risque a partir d'un certain
+// seuil), et la tendance blessure du joueur — une statistique cachee du
+// referentiel joueurs (`players.tendance_blessure`, echelle 1-20), jamais
+// affichee telle quelle, uniquement injectee dans le score final.
+function computeInjuryRiskScore(p) {
+  const forme = p.forme ?? 100;                 // 0-100, plus haut = en meilleure forme
+  const fatigue = 100 - forme;                   // deduite de la forme (pas de colonne dediee)
+  const tendance = p.players?.tendance_blessure ?? 8; // 1-20, stat cachee, jamais affichee
+  const age = p.age ?? 25;
+
+  let ageScore = 0;
+  if (age >= 34) ageScore = 24;
+  else if (age >= 31) ageScore = 16;
+  else if (age >= 28) ageScore = 8;
+
+  const formeScore = (100 - forme) * 0.38;
+  const fatigueScore = fatigue * 0.20;
+  const tendanceScore = (tendance / 20) * 100 * 0.24; // ramene 1-20 sur 0-100 avant ponderation
+
+  const total = formeScore + fatigueScore + ageScore + tendanceScore;
+  return Math.max(0, Math.min(100, Math.round(total)));
+}
+
+function injuryRiskLevel(score) {
+  if (score >= 62) return { label: "Très élevé", cls: "risk-tres-eleve" };
+  if (score >= 42) return { label: "Élevé", cls: "risk-eleve" };
+  if (score >= 20) return { label: "Correcte", cls: "risk-correcte" };
+  return { label: "Faible", cls: "risk-faible" };
+}
+
+const SQUAD_CAT_LABEL = { equipe_a: "Équipe A", reserve: "Réserve", u18: "U18" };
+
+function renderInfirmerie() {
+  const injured = myClubPlayers.filter(isPlayerCurrentlyInjured);
+  const healthy = myClubPlayers.filter(p => !isPlayerCurrentlyInjured(p));
+
+  // -- Blessures actuelles --
+  const currentListEl = document.getElementById("infirmerieCurrentList");
+  document.getElementById("infirmerieCurrentCount").textContent = injured.length;
+
+  if (injured.length === 0) {
+    currentListEl.innerHTML = `<div class="infirmerie-empty">Aucun joueur blessé actuellement. 🎉</div>`;
+  } else {
+    // Les blessures les plus longues (jours restants) remontent en premier.
+    const sortedInjured = [...injured].sort((a, b) => (b.blessure_jours ?? 0) - (a.blessure_jours ?? 0));
+    currentListEl.innerHTML = `<div class="injury-list">${sortedInjured.map(p => {
+      const cat = p.categorie || "equipe_a";
+      const gravite = BLESSURE_CATEGORIE_LABEL[p.blessure_categorie] || null;
+      const typeLabel = p.blessure_nom || "Blessure";
+      const returnLabel = p.blessure_jours
+        ? `<b>${p.blessure_jours}</b> j. restants`
+        : "Durée inconnue";
+      return `
+        <div class="injury-card" data-player-id="${p.id}">
+          <span class="nat-chip" title="${escapeHtml(p.nationalite || '')}">${flagImg(p.nationalite)}</span>
+          <span class="player-name">${escapeHtml(p.nom)}</span>
+          <span class="injury-cat-tag">${SQUAD_CAT_LABEL[cat] || cat}</span>
+          <span class="injury-type">${escapeHtml(typeLabel)}${gravite ? ` · ${escapeHtml(gravite)}` : ""}</span>
+          <span class="injury-return">${returnLabel}</span>
+        </div>
+      `;
+    }).join("")}</div>`;
+  }
+
+  currentListEl.querySelectorAll(".injury-card").forEach(row => {
+    row.addEventListener("click", () => {
+      const pid = row.getAttribute("data-player-id");
+      window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}&player=${encodeURIComponent(pid)}`;
+    });
+  });
+
+  // -- Probabilites de blessure (joueurs non blesses actuellement) --
+  const riskBody = document.getElementById("infirmerieRiskBody");
+  const riskEmptyEl = document.getElementById("infirmerieRiskEmpty");
+  const ranked = healthy
+    .map(p => ({ p, score: computeInjuryRiskScore(p) }))
+    .sort((a, b) => b.score - a.score);
+
+  if (ranked.length === 0) {
+    riskBody.innerHTML = "";
+    riskEmptyEl.classList.remove("hidden");
+  } else {
+    riskEmptyEl.classList.add("hidden");
+    riskBody.innerHTML = ranked.map(({ p, score }) => {
+      const level = injuryRiskLevel(score);
+      const cat = p.categorie || "equipe_a";
+      return `
+        <tr class="risk-row" data-player-id="${p.id}">
+          <td><span class="nat-chip" title="${escapeHtml(p.nationalite || '')}">${flagImg(p.nationalite)}</span></td>
+          <td class="player-name">${escapeHtml(p.nom)}</td>
+          <td class="postes-cell">${SQUAD_CAT_LABEL[cat] || cat}</td>
+          <td>${p.age ?? "-"}</td>
+          <td><span class="risk-badge ${level.cls}"><span class="risk-dot"></span>${level.label}</span></td>
+        </tr>
+      `;
+    }).join("");
+    riskBody.querySelectorAll(".risk-row").forEach(row => {
+      row.addEventListener("click", () => {
+        const pid = row.getAttribute("data-player-id");
+        window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(gameClubId)}&player=${encodeURIComponent(pid)}`;
+      });
+    });
+  }
+
+  // -- Badge de compteur sur l'onglet "Infirmerie" --
+  const badgeEl = document.getElementById("infirmerieBadge");
+  badgeEl.textContent = injured.length;
+  badgeEl.classList.toggle("zero", injured.length === 0);
+}
+
 function applySquadSubtabVisibility() {
   const scrollWrap = document.querySelector(".fm-squad-card .table-scroll");
   const noPlayersEmptyEl = document.getElementById("myClubEmpty");
@@ -1161,6 +1457,13 @@ function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   resetSquadSubtabToEquipeA();
   updateSquadSubtabCounts();
   renderSquadTeamCoaches();
+
+  wireSquadMaintabs();
+  resetSquadMaintabToEffectif();
+  applySquadMaintabVisibility();
+  // Le badge "Infirmerie" doit refleter le nombre de blesses des le
+  // chargement, meme si on reste sur le sous-onglet "Effectif".
+  renderInfirmerie();
 
   const isSortable = col => isOwnClub || (col.key !== "niveau_actuel" && col.key !== "potentiel");
   initSortableHeaders(document.querySelector("#myClubView .squad-table thead"), MYCLUB_COLUMNS, activeMyClubSortState, renderMyClubBody, isSortable);
@@ -1232,17 +1535,45 @@ async function loadSquad() {
     myClub = { id: gameClubId, nom: club.nom };
   }
 
-  const { data: players, error } = await supabaseClient
+  const BASE_PLAYER_COLUMNS = `
+    id, nom, age, nationalite, poste_brut, statut_special, salaire_actuel,
+    contrat_expire, valeur_marchande_actuelle, reputation_mondiale,
+    niveau_actuel, potentiel, buts_saison, passes_decisives_saison,
+    matchs_joues_saison, note_moyenne_saison, categorie
+  `;
+  // Colonnes utilisees par l'infirmerie :
+  // - forme, blessure_jours, blessure_nom, blessure_categorie : reelles
+  //   colonnes de game_players (condition physique / blessure en cours).
+  // - players(tendance_blessure) : jointure vers le referentiel joueurs
+  //   (public.players, via game_players.player_ref) pour recuperer la stat
+  //   cachee "tendance blessure" (1-20), jamais affichee telle quelle.
+  const INJURY_PLAYER_COLUMNS = `
+    forme, blessure_jours, blessure_recup_restante, blessure_nom, blessure_categorie,
+    players(tendance_blessure)
+  `;
+
+  let players;
+  let error;
+  ({ data: players, error } = await supabaseClient
     .from("game_players")
-    .select(`
-      id, nom, age, nationalite, poste_brut, statut_special, salaire_actuel,
-      contrat_expire, valeur_marchande_actuelle, reputation_mondiale,
-      niveau_actuel, potentiel, buts_saison, passes_decisives_saison,
-      matchs_joues_saison, note_moyenne_saison, categorie
-    `)
+    .select(`${BASE_PLAYER_COLUMNS}, ${INJURY_PLAYER_COLUMNS}`)
     .eq("game_id", gameId)
     .eq("game_club_id", gameClubId)
-    .order("reputation_mondiale", { ascending: false, nullsFirst: false });
+    .order("reputation_mondiale", { ascending: false, nullsFirst: false }));
+
+  if (error) {
+    // Repli : par securite si la jointure players() venait a echouer (ex.
+    // futur changement de schema). L'infirmerie utilisera alors des valeurs
+    // neutres par defaut (voir computeInjuryRiskScore) pour la tendance
+    // blessure, mais garde forme/blessure_jours qui restent dans le repli.
+    console.warn("Jointure infirmerie indisponible, repli sans tendance_blessure :", error.message);
+    ({ data: players, error } = await supabaseClient
+      .from("game_players")
+      .select(`${BASE_PLAYER_COLUMNS}, forme, blessure_jours, blessure_recup_restante, blessure_nom, blessure_categorie`)
+      .eq("game_id", gameId)
+      .eq("game_club_id", gameClubId)
+      .order("reputation_mondiale", { ascending: false, nullsFirst: false }));
+  }
 
   if (error) {
     toast("Erreur chargement effectif : " + error.message, true);
