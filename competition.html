@@ -156,6 +156,45 @@
   .fm-comp-match-teams span.club:hover { color: var(--gold); text-decoration: underline; }
   .fm-comp-match-teams .vs { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
 
+  /* ---- Coupe nationale : lignes de tableau (tour en cours / historique)
+     et lignes de "parcours" du club (memes codes que sur le dashboard). ---- */
+  .fm-coupe-fixture-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12.5px;
+  }
+  .fm-coupe-fixture-row:last-child { border-bottom: none; }
+  .fm-coupe-fixture-row .teams { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .fm-coupe-fixture-row .teams .club {
+    flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  }
+  .fm-coupe-fixture-row .teams .club.home { text-align: right; }
+  .fm-coupe-fixture-row .teams .club:hover { color: var(--gold); text-decoration: underline; }
+  .fm-coupe-fixture-row .teams .club.winner { color: var(--accent); }
+  .fm-coupe-fixture-row .score {
+    flex-shrink: 0; font-weight: 700; font-size: 12px; min-width: 46px; text-align: center;
+    color: var(--text-dim);
+  }
+  .fm-coupe-round-header {
+    font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--gold); padding: 10px 0 4px; border-bottom: 1px solid var(--border); margin-bottom: 2px;
+  }
+  .fm-coupe-round-header:first-child { padding-top: 0; }
+  .fm-coupe-parcours-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12.5px; }
+  .fm-coupe-parcours-row:last-child { border-bottom: none; }
+  .fm-coupe-parcours-row .rnd {
+    flex-shrink: 0; width: 46px; font-size: 10px; text-align: center; color: var(--text-dim);
+    background: #14171d; border: 1px solid var(--border); border-radius: 5px; padding: 3px 0;
+  }
+  .fm-coupe-parcours-row .opp { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .fm-coupe-parcours-row .opp:hover { color: var(--gold); text-decoration: underline; }
+  .fm-coupe-parcours-row .res {
+    flex-shrink: 0; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--border); background: #14171d; color: var(--text);
+  }
+  .fm-coupe-parcours-row .res.win { color: var(--accent); border-color: #2f6b45; background: rgba(74,222,128,0.1); }
+  .fm-coupe-parcours-row .res.lose { color: #f87171; border-color: #7a2f2f; background: rgba(248,113,113,0.1); }
+  .fm-coupe-parcours-row .res.next { color: var(--gold); border-color: #7a5c0f; background: rgba(251,191,36,0.1); }
+
   /* ---- Meilleurs buteurs / passeurs ---- */
   .player-row {
     display: flex; align-items: center; gap: 10px; padding: 8px 0;
@@ -213,14 +252,14 @@
       <div class="fm-content">
         <div class="fm-col">
           <div class="card">
-            <div class="fm-card-title"><span>Classement</span></div>
+            <div class="fm-card-title"><span id="compCard1Title">Classement</span></div>
             <div class="fm-scroll-area scroll-hide" id="compStandings">
               <div class="fm-empty">Chargement...</div>
             </div>
             <div class="fm-standings-legend" id="compStandingsLegend"></div>
           </div>
           <div class="card">
-            <div class="fm-card-title"><span>Prochains matchs</span> <span class="comp-name" id="compNextJournee"></span></div>
+            <div class="fm-card-title"><span id="compCard2Title">Prochains matchs</span> <span class="comp-name" id="compNextJournee"></span></div>
             <div class="fm-scroll-area scroll-hide" id="compNextMatches">
               <div class="fm-empty">Chargement...</div>
             </div>
@@ -229,13 +268,13 @@
 
         <div class="fm-col">
           <div class="card">
-            <div class="fm-card-title"><span>Meilleurs buteurs</span></div>
+            <div class="fm-card-title"><span id="compCard3Title">Meilleurs buteurs</span></div>
             <div class="fm-scroll-area scroll-hide" id="compTopScorers">
               <div class="fm-empty">Chargement...</div>
             </div>
           </div>
           <div class="card">
-            <div class="fm-card-title"><span>Meilleurs passeurs</span></div>
+            <div class="fm-card-title"><span id="compCard4Title">Meilleurs passeurs</span></div>
             <div class="fm-scroll-area scroll-hide" id="compTopAssists">
               <div class="fm-empty">Chargement...</div>
             </div>
@@ -308,6 +347,200 @@ function renderSidebar() {
 }
 renderSidebar();
 
+// ===================== Coupe nationale : pas de classement (elimination
+// directe), on affiche a la place le tableau du tour en cours, le prochain
+// match du club suivi, son parcours et l'historique des tours precedents. =====================
+function isRowPlayed(r) { return r.statut === "termine"; }
+
+function coupeRoundLabelPage(tour, nbTours) {
+  if (!nbTours) return `Tour ${tour}`;
+  const NAMES = { 0: "Finale", 1: "Demi-finale", 2: "Quart de finale", 3: "8e de finale", 4: "16e de finale", 5: "32e de finale", 6: "64e de finale", 7: "128e de finale" };
+  return NAMES[nbTours - tour] || `Tour ${tour}`;
+}
+function coupeRoundShortPage(tour, nbTours) {
+  if (!nbTours) return `T${tour}`;
+  const SHORT = { 0: "Finale", 1: "1/2", 2: "1/4", 3: "1/8", 4: "1/16", 5: "1/32", 6: "1/64", 7: "1/128" };
+  return SHORT[nbTours - tour] || `T${tour}`;
+}
+
+function fixtureRowHtml(r, nameById, logoById, opts = {}) {
+  const homeName = nameById[r.game_club_id_1] || "?";
+  const awayName = nameById[r.game_club_id_2] || "?";
+  const homeLogo = logoById[r.game_club_id_1];
+  const awayLogo = logoById[r.game_club_id_2];
+  const played = isRowPlayed(r);
+  let scoreHtml;
+  if (played) {
+    let scoreText = `${r.score_1 ?? "-"}-${r.score_2 ?? "-"}`;
+    if (r.tab_penalty_1 != null) scoreText += ` (tab ${r.tab_penalty_1}-${r.tab_penalty_2})`;
+    scoreHtml = scoreText;
+  } else {
+    const d = r.date_match ? new Date(r.date_match) : null;
+    scoreHtml = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "à venir";
+  }
+  const homeWin = played && r.game_club_vainqueur_id === r.game_club_id_1;
+  const awayWin = played && r.game_club_vainqueur_id === r.game_club_id_2;
+  return `
+    <div class="fm-coupe-fixture-row">
+      ${opts.label ? `<div class="fm-comp-match-date">${escapeHtml(opts.label)}</div>` : ""}
+      <div class="teams">
+        <span class="club home ${homeWin ? "winner" : ""}" data-club-id="${r.game_club_id_1}">
+          ${homeLogo ? `<img class="fm-club-logo" src="${escapeHtml(homeLogo)}" alt="">` : ""}${escapeHtml(homeName)}
+        </span>
+        <span class="score">${scoreHtml}</span>
+        <span class="club away ${awayWin ? "winner" : ""}" data-club-id="${r.game_club_id_2}">
+          ${escapeHtml(awayName)}${awayLogo ? `<img class="fm-club-logo" src="${escapeHtml(awayLogo)}" alt="">` : ""}
+        </span>
+      </div>
+    </div>
+  `;
+}
+function bindFixtureClicks(container) {
+  container.querySelectorAll(".club[data-club-id]").forEach(el => {
+    el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+  });
+}
+
+function parcoursRowHtml(r, clubIdNum, nameById, nbTours) {
+  const isSide1 = r.game_club_id_1 === clubIdNum;
+  const oppId = isSide1 ? r.game_club_id_2 : r.game_club_id_1;
+  const played = isRowPlayed(r);
+  let resHtml;
+  if (!played) {
+    resHtml = `<span class="res next">à venir</span>`;
+  } else {
+    const won = r.game_club_vainqueur_id === clubIdNum;
+    const myScore = isSide1 ? r.score_1 : r.score_2;
+    const oppScore = isSide1 ? r.score_2 : r.score_1;
+    let scoreText = `${myScore}-${oppScore}`;
+    const myPen = isSide1 ? r.tab_penalty_1 : r.tab_penalty_2;
+    const oppPen = isSide1 ? r.tab_penalty_2 : r.tab_penalty_1;
+    if (myPen != null) scoreText += ` (tab ${myPen}-${oppPen})`;
+    resHtml = `<span class="res ${won ? "win" : "lose"}">${scoreText}</span>`;
+  }
+  return `
+    <div class="fm-coupe-parcours-row">
+      <span class="rnd" title="${escapeHtml(coupeRoundLabelPage(r.tour, nbTours))}">${escapeHtml(coupeRoundShortPage(r.tour, nbTours))}</span>
+      <span class="opp" data-club-id="${oppId}">${escapeHtml(nameById[oppId] || "?")}</span>
+      ${resHtml}
+    </div>
+  `;
+}
+function bindParcoursClicks(container) {
+  container.querySelectorAll(".opp[data-club-id]").forEach(el => {
+    el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+  });
+}
+
+async function loadCoupeNationale(comp) {
+  const { data: config } = await supabaseClient
+    .from("game_coupe_nationale_config")
+    .select("saison, nb_tours")
+    .eq("game_id", gameId)
+    .eq("competition_ref", comp.id)
+    .order("saison", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nbTours = config?.nb_tours || null;
+  const saison = config?.saison ?? null;
+
+  let rowsQuery = supabaseClient
+    .from("game_coupe_nationale_tours")
+    .select("id, tour, game_club_id_1, game_club_id_2, date_match, score_1, score_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut")
+    .eq("game_id", gameId)
+    .eq("competition_ref", comp.id)
+    .order("tour", { ascending: true });
+  if (saison != null) rowsQuery = rowsQuery.eq("saison", saison);
+  const { data: rows } = await rowsQuery;
+  const allRows = rows || [];
+
+  document.getElementById("compStandingsLegend").innerHTML = "";
+  document.getElementById("compNextJournee").textContent = "";
+
+  if (allRows.length === 0) {
+    document.getElementById("compCard1Title").textContent = "Tableau";
+    document.getElementById("compStandings").innerHTML = `<div class="fm-empty">Le tirage n'a pas encore eu lieu.</div>`;
+    document.getElementById("compCard2Title").textContent = "Prochain match";
+    document.getElementById("compNextMatches").innerHTML = `<div class="fm-empty">Aucun match programmé.</div>`;
+    document.getElementById("compCard3Title").textContent = "Votre parcours";
+    document.getElementById("compTopScorers").innerHTML = `<div class="fm-empty">Pas encore entré en lice dans la compétition.</div>`;
+    document.getElementById("compCard4Title").textContent = "Tours précédents";
+    document.getElementById("compTopAssists").innerHTML = `<div class="fm-empty">Aucun résultat pour l'instant.</div>`;
+    return;
+  }
+
+  // Ecarte les "byes" (qualification d'office, game_club_id_1 = game_club_id_2)
+  // de l'affichage : ce n'est pas un vrai match.
+  const realRows = allRows.filter(r => r.game_club_id_1 !== r.game_club_id_2);
+  const clubIds = [...new Set(realRows.flatMap(r => [r.game_club_id_1, r.game_club_id_2]))];
+  const { data: clubsData } = await supabaseClient
+    .from("game_clubs")
+    .select("id, nom, clubs(logo_url)")
+    .in("id", clubIds.length ? clubIds : [0]);
+  const nameById = {};
+  const logoById = {};
+  (clubsData || []).forEach(c => { nameById[c.id] = c.nom; logoById[c.id] = c.clubs?.logo_url || null; });
+
+  document.getElementById("compSub").textContent = `${comp.nation}${nbTours ? ` · ${nbTours} tours` : ""}`;
+
+  const currentTour = Math.max(...allRows.map(r => r.tour));
+  const currentTourRows = realRows.filter(r => r.tour === currentTour);
+
+  // ---- Tableau du tour en cours (remplace le classement, sans objet en
+  // coupe puisque c'est de l'élimination directe) ----
+  document.getElementById("compCard1Title").textContent = `Tableau — ${coupeRoundLabelPage(currentTour, nbTours)}`;
+  document.getElementById("compStandings").innerHTML = currentTourRows.length
+    ? currentTourRows.map(r => fixtureRowHtml(r, nameById, logoById)).join("")
+    : `<div class="fm-empty">Aucune affiche pour ce tour.</div>`;
+  bindFixtureClicks(document.getElementById("compStandings"));
+
+  // ---- Prochain match : celui du club suivi si on en a un, sinon les
+  // affiches restantes du tour en cours ----
+  document.getElementById("compCard2Title").textContent = "Prochain match";
+  if (myClubId) {
+    const myUpcoming = realRows.find(r => !isRowPlayed(r) && (r.game_club_id_1 === myClubId || r.game_club_id_2 === myClubId));
+    document.getElementById("compNextMatches").innerHTML = myUpcoming
+      ? fixtureRowHtml(myUpcoming, nameById, logoById, { label: coupeRoundLabelPage(myUpcoming.tour, nbTours) })
+      : `<div class="fm-empty">Aucun match à venir pour ce club.</div>`;
+  } else {
+    const anyUpcoming = currentTourRows.filter(r => !isRowPlayed(r));
+    document.getElementById("compNextMatches").innerHTML = anyUpcoming.length
+      ? anyUpcoming.map(r => fixtureRowHtml(r, nameById, logoById)).join("")
+      : `<div class="fm-empty">Aucun match à venir programmé.</div>`;
+  }
+  bindFixtureClicks(document.getElementById("compNextMatches"));
+
+  // ---- Parcours du club suivi (round par round), ou a defaut les
+  // derniers resultats de la competition ----
+  if (myClubId) {
+    document.getElementById("compCard3Title").textContent = "Votre parcours";
+    const myRows = realRows.filter(r => r.game_club_id_1 === myClubId || r.game_club_id_2 === myClubId).sort((a, b) => a.tour - b.tour);
+    document.getElementById("compTopScorers").innerHTML = myRows.length
+      ? myRows.map(r => parcoursRowHtml(r, myClubId, nameById, nbTours)).join("")
+      : `<div class="fm-empty">Ce club ne participe pas à la compétition cette saison.</div>`;
+    bindParcoursClicks(document.getElementById("compTopScorers"));
+  } else {
+    document.getElementById("compCard3Title").textContent = "Derniers résultats";
+    const played = realRows.filter(isRowPlayed).sort((a, b) => b.tour - a.tour);
+    document.getElementById("compTopScorers").innerHTML = played.length
+      ? played.slice(0, 30).map(r => fixtureRowHtml(r, nameById, logoById)).join("")
+      : `<div class="fm-empty">Aucun résultat pour l'instant.</div>`;
+    bindFixtureClicks(document.getElementById("compTopScorers"));
+  }
+
+  // ---- Historique des tours precedents (bracket-lite : un en-tete par
+  // tour, du plus recent au plus ancien) ----
+  document.getElementById("compCard4Title").textContent = "Tours précédents";
+  const previousTours = [...new Set(realRows.filter(r => r.tour !== currentTour).map(r => r.tour))].sort((a, b) => b - a);
+  document.getElementById("compTopAssists").innerHTML = previousTours.length
+    ? previousTours.map(t => `
+        <div class="fm-coupe-round-header">${escapeHtml(coupeRoundLabelPage(t, nbTours))}</div>
+        ${realRows.filter(r => r.tour === t).map(r => fixtureRowHtml(r, nameById, logoById)).join("")}
+      `).join("")
+    : `<div class="fm-empty">Pas encore de tour précédent.</div>`;
+  bindFixtureClicks(document.getElementById("compTopAssists"));
+}
+
 async function loadCompetition() {
   if (!gameId || !competitionId) {
     document.getElementById("compName").textContent = "Compétition introuvable";
@@ -326,9 +559,16 @@ async function loadCompetition() {
   }
 
   document.getElementById("compName").textContent = comp.nom;
-  document.getElementById("compSub").textContent = `${comp.nation} · ${comp.division}`;
-  document.getElementById("compTag").textContent = comp.type === "championnat" ? "Championnat" : comp.type;
+  document.getElementById("compTag").textContent = comp.type === "championnat" ? "Championnat" : comp.type === "coupe_nationale" ? "Coupe nationale" : comp.type;
   document.title = `FM Web — ${comp.nom}`;
+
+  if (comp.type === "coupe_nationale") {
+    document.getElementById("compSub").textContent = comp.nation;
+    await loadCoupeNationale(comp);
+    return;
+  }
+
+  document.getElementById("compSub").textContent = `${comp.nation} · ${comp.division}`;
 
   // Clubs de la division (nom + classement/points via la vue, stats detaillees via game_clubs)
   const { data: overview, error: overviewError } = await supabaseClient
