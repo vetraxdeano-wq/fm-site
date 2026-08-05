@@ -872,7 +872,7 @@ function tirerBlessurePrecise() {
  *  - l'intensité du match (enjeu/danger généré des deux côtés) ;
  *  - la dureté des tacles adverses (agressivité + tacles moyens de l'équipe en face).
  */
-function risqueBlessure(jr, { intensiteMatch = 1, facteurTacleAdverse = 1 } = {}) {
+function risqueBlessure(jr, { intensiteMatch = 1, facteurTacleAdverse = 1, estGardien = false } = {}) {
   // Calibré pour atterrir ~1,5% par joueur/match en moyenne une fois TOUS les
   // facteurs appliqués (un profil neutre à intensité de match "moyenne" n'a
   // jamais des facteurs pile à 1 : ce point de départ compense cet écart type).
@@ -890,7 +890,11 @@ function risqueBlessure(jr, { intensiteMatch = 1, facteurTacleAdverse = 1 } = {}
   const facteurIntensite = 0.8 + clamp(intensiteMatch, 0.3, 1.3) * 0.4; // ~0.92 à 1.32
   const facteurTacles = clamp(facteurTacleAdverse, 0.8, 1.4);
 
-  return probaBase * facteurTendance * facteurFatigue * facteurAge * facteurIntensite * facteurTacles;
+  // Un gardien est très peu exposé aux contacts/tacles qui causent la grande
+  // majorité des blessures (comparé à un joueur de champ) : risque quasi nul.
+  const facteurGardien = estGardien ? 0.05 : 1;
+
+  return probaBase * facteurTendance * facteurFatigue * facteurAge * facteurIntensite * facteurTacles * facteurGardien;
 }
 
 /**
@@ -923,7 +927,7 @@ function genererBlessuresTitulaires(compositions, joueurs, gameClubId, intensite
   for (const slot of compositions) {
     const jr = joueursParId.get(slot.player_id);
     if (!jr) continue;
-    if (!proba(risqueBlessure(jr, { intensiteMatch, facteurTacleAdverse }))) continue;
+    if (!proba(risqueBlessure(jr, { intensiteMatch, facteurTacleAdverse, estGardien: slot.role === 'GB' }))) continue;
 
     const detail = tirerBlessurePrecise();
     blessures.push({
@@ -941,13 +945,6 @@ function genererBlessuresTitulaires(compositions, joueurs, gameClubId, intensite
 
 /**
  * Blessures des entrants, évaluées APRÈS génération des remplacements (risque
- * au prorata du temps de jeu restant après leur entrée). Cas volontairement
- * non modélisé : une blessure à sortie immédiate sur un entrant ne déclenche
- * pas de second remplacement en cascade (probabilité déjà quasi nulle : il
- * faut cumuler "être entrant" ET "se blesser" ET "sortie immédiate").
- */
-/**
- * Blessures des entrants, évaluées APRÈS génération des remplacements (risque
  * au prorata du temps de jeu restant après leur entrée). Une blessure à
  * sortie immédiate ici est ensuite traitée par
  * `completerRemplacementsAvecBlessuresEntrants` : l'entrant blessé doit à son
@@ -962,7 +959,7 @@ function genererBlessuresEntrants(remplacements, joueurs, gameClubId, intensiteM
     const jr = joueursParId.get(rempl.entrant_id);
     if (!jr) continue;
     const prorata = clamp((90 - rempl.minute) / 90, 0.05, 0.5);
-    if (!proba(risqueBlessure(jr, { intensiteMatch, facteurTacleAdverse }) * prorata * 1.5)) continue;
+    if (!proba(risqueBlessure(jr, { intensiteMatch, facteurTacleAdverse, estGardien: rempl.role === 'GB' }) * prorata * 1.5)) continue;
 
     const detail = tirerBlessurePrecise();
     blessures.push({
