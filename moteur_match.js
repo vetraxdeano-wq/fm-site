@@ -524,63 +524,113 @@ function selectionnerBanc(compositions, joueurs, max = 5) {
 }
 
 /**
- * Génère jusqu'à 5 changements pour une équipe : minute d'entrée croissante au
- * fil du match, remplaçant systématiquement le titulaire de champ le moins
- * bien noté à l'instant T (jamais le gardien). Un coach mieux noté tactiquement
- * et plus adaptable change un peu plus tôt et cible mieux le maillon faible ;
- * un coach moins bon change plus tard, de façon moins optimale, et utilise
- * parfois moins de ses 5 fenêtres.
+ * Génère jusqu'à 5 changements pour une équipe.
+ *
+ * Deux sources de changement, fusionnées et plafonnées à 5 au total (règle du jeu) :
+ *  1. `sortiesForcees` (prioritaires) : joueurs blessés dont la blessure exige une
+ *     sortie immédiate (cf. ÉTAPE 8). Remplacés dès que possible par le meilleur
+ *     profil dispo au poste le plus proche (cas du gardien : cherché dans TOUT le
+ *     banc, y compris les gardiens, normalement exclus des rotations classiques).
+ *     Si le banc est épuisé ou les 5 fenêtres déjà utilisées, l'équipe termine
+ *     avec un joueur diminué (pas de changement possible).
+ *  2. Changements tactiques normaux : minute d'entrée croissante au fil du match,
+ *     remplaçant systématiquement le titulaire de champ le moins bien noté à
+ *     l'instant T (jamais le gardien). Un coach mieux noté tactiquement et plus
+ *     adaptable change un peu plus tôt et cible mieux le maillon faible ; un coach
+ *     moins bon change plus tard, de façon moins optimale, et utilise parfois
+ *     moins de ses fenêtres restantes.
  */
-function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabiliteCoach = 0.6) {
-  // Le gardien remplaçant ne rentre pas sur un changement de champ dans ce modèle simplifié
-  // (les titulaires sortants sont toujours des joueurs de champ, cf. filtre plus bas).
-  const bancEligible = banc.filter((b) => b.role !== 'GB');
-  if (!bancEligible.length) return [];
-
-  const qualitePlan = clamp((niveauCoach + adaptabiliteCoach) / 2, 0.3, 1);
-  const nbSubs = clamp(Math.round(2 + qualitePlan * 2 + bruitGaussien(0.8)), 1, Math.min(5, bancEligible.length));
-
+function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabiliteCoach = 0.6, sortiesForcees = []) {
   const dejaSorti = new Set();
+  const dejaEntre = new Set();
   const remplacements = [];
 
-  for (let i = 0; i < nbSubs; i++) {
-    const entrant = bancEligible[i];
-    if (!entrant) break;
+  // 1) Sorties forcées (blessure à sortie immédiate) — priorité absolue sur le banc.
+  for (const sortie of sortiesForcees) {
+    if (remplacements.length >= 5) break;
+    const slot = compositions.find((c) => c.slot_id === sortie.slot_id);
+    if (!slot || dejaSorti.has(slot.player_id)) continue;
 
-    const candidatsSortants = compositions.filter((c) => c.role !== 'GB' && !dejaSorti.has(c.player_id));
-    if (!candidatsSortants.length) break;
+    const estGardien = slot.role === 'GB';
+    const candidats = estGardien
+      ? banc.filter((b) => b.role === 'GB' && !dejaEntre.has(b.joueur.id))
+      : banc.filter((b) => b.role !== 'GB' && !dejaEntre.has(b.joueur.id));
+    if (!candidats.length) continue; // pas de doublure dispo : l'équipe termine diminuée à ce poste
 
-    // Remplacement cohérent : parmi les titulaires encore sur le terrain, on fait
-    // sortir celui dont le poste est le plus proche de celui de l'entrant (un
-    // attaquant remplace un attaquant/ailier, pas un défenseur ou un milieu
-    // défensif) — la distance de poste prime. À distance égale, c'est le moins
-    // bien noté (fatigue/prestation la plus faible) qui cède sa place.
-    const axeEntrant = axePoste(entrant.role);
-    let sortant = candidatsSortants[0];
+    const axeSortant = axePoste(slot.role);
+    let entrant = candidats[0];
     let meilleurScore = Infinity;
-    for (const c of candidatsSortants) {
-      const distancePoste = Math.abs(axePoste(c.role) - axeEntrant);
-      const score = distancePoste * 1000 + (c.note ?? 50);
+    for (const c of candidats) {
+      const distance = estGardien ? 0 : Math.abs(axePoste(c.role) - axeSortant);
+      const score = distance * 1000 - c.note;
       if (score < meilleurScore) {
         meilleurScore = score;
-        sortant = c;
+        entrant = c;
       }
     }
-    dejaSorti.add(sortant.player_id);
 
-    // Minute d'entrée : progresse au fil des changements ; un coach mieux préparé anticipe un peu plus tôt.
-    const minuteBase = 58 + i * 7 - qualitePlan * 8;
-    const minute = clamp(Math.round(minuteBase + bruitGaussien(6)), 46, 90);
-
+    dejaSorti.add(slot.player_id);
+    dejaEntre.add(entrant.joueur.id);
     remplacements.push({
-      minute,
-      slot_id: sortant.slot_id,
-      role: sortant.role,
-      sortant_id: sortant.player_id,
-      sortant_nom: sortant.player_nom,
+      minute: sortie.minute,
+      slot_id: slot.slot_id,
+      role: slot.role,
+      sortant_id: slot.player_id,
+      sortant_nom: slot.player_nom,
       entrant_id: entrant.joueur.id,
       entrant_nom: entrant.joueur.nom,
+      raison: 'blessure',
     });
+  }
+
+  // 2) Changements tactiques normaux, sur le budget de fenêtres restant.
+  const budgetRestant = 5 - remplacements.length;
+  const bancEligible = banc.filter((b) => b.role !== 'GB' && !dejaEntre.has(b.joueur.id));
+  if (budgetRestant > 0 && bancEligible.length) {
+    const qualitePlan = clamp((niveauCoach + adaptabiliteCoach) / 2, 0.3, 1);
+    const nbSubs = clamp(Math.round(2 + qualitePlan * 2 + bruitGaussien(0.8)), 1, Math.min(budgetRestant, bancEligible.length));
+
+    for (let i = 0; i < nbSubs; i++) {
+      const entrant = bancEligible[i];
+      if (!entrant) break;
+
+      const candidatsSortants = compositions.filter((c) => c.role !== 'GB' && !dejaSorti.has(c.player_id));
+      if (!candidatsSortants.length) break;
+
+      // Remplacement cohérent : parmi les titulaires encore sur le terrain, on fait
+      // sortir celui dont le poste est le plus proche de celui de l'entrant (un
+      // attaquant remplace un attaquant/ailier, pas un défenseur ou un milieu
+      // défensif) — la distance de poste prime. À distance égale, c'est le moins
+      // bien noté (fatigue/prestation la plus faible) qui cède sa place.
+      const axeEntrant = axePoste(entrant.role);
+      let sortant = candidatsSortants[0];
+      let meilleurScore = Infinity;
+      for (const c of candidatsSortants) {
+        const distancePoste = Math.abs(axePoste(c.role) - axeEntrant);
+        const score = distancePoste * 1000 + (c.note ?? 50);
+        if (score < meilleurScore) {
+          meilleurScore = score;
+          sortant = c;
+        }
+      }
+      dejaSorti.add(sortant.player_id);
+      dejaEntre.add(entrant.joueur.id);
+
+      // Minute d'entrée : progresse au fil des changements ; un coach mieux préparé anticipe un peu plus tôt.
+      const minuteBase = 58 + i * 7 - qualitePlan * 8;
+      const minute = clamp(Math.round(minuteBase + bruitGaussien(6)), 46, 90);
+
+      remplacements.push({
+        minute,
+        slot_id: sortant.slot_id,
+        role: sortant.role,
+        sortant_id: sortant.player_id,
+        sortant_nom: sortant.player_nom,
+        entrant_id: entrant.joueur.id,
+        entrant_nom: entrant.joueur.nom,
+        raison: 'tactique',
+      });
+    }
   }
 
   return remplacements.sort((a, b) => a.minute - b.minute);
@@ -703,61 +753,286 @@ function genererCartonsEquipe(fautes, compositions, joueurs, gameClubId, remplac
 // ÉTAPE 8 — BLESSURES
 // ============================================================
 
-const GRAVITE_BLESSURE = [
-  { item: 'legere', poids: 6 },
-  { item: 'moyenne', poids: 3 },
-  { item: 'grave', poids: 1 },
-];
+/**
+ * Catalogue des blessures du jeu, par catégorie de gravité. `partDesBlessures`
+ * = poids de tirage de la catégorie elle-même (~45/30/18/6/1, cf. doc fournie).
+ * Dans chaque catégorie, `poids` = poids de tirage de la blessure précise.
+ * `jMin`/`jMax` = durée d'indisponibilité en jours (semaines/mois convertis à
+ * 7j/30j). `sortieImmediate` = la blessure exige-t-elle une sortie immédiate
+ * (remplacement) ou le joueur peut-il terminer la rencontre ?
+ */
+const CATALOGUE_BLESSURES = {
+  tres_legere: {
+    partDesBlessures: 45,
+    items: [
+      { nom: 'Contusion légère', poids: 12, jMin: 1, jMax: 3, sortieImmediate: false },
+      { nom: 'Coup au tibia', poids: 8, jMin: 1, jMax: 3, sortieImmediate: false },
+      { nom: 'Coup à la cuisse', poids: 8, jMin: 1, jMax: 4, sortieImmediate: false },
+      { nom: 'Coup à la cheville', poids: 7, jMin: 1, jMax: 4, sortieImmediate: false },
+      { nom: 'Coup au genou', poids: 6, jMin: 2, jMax: 5, sortieImmediate: false },
+      { nom: 'Hématome', poids: 6, jMin: 2, jMax: 6, sortieImmediate: false },
+      { nom: 'Courbatures importantes', poids: 5, jMin: 1, jMax: 3, sortieImmediate: false },
+      { nom: 'Fatigue musculaire', poids: 5, jMin: 2, jMax: 5, sortieImmediate: false },
+      { nom: 'Raideur musculaire', poids: 5, jMin: 1, jMax: 4, sortieImmediate: false },
+      { nom: 'Légère gêne au mollet', poids: 4, jMin: 2, jMax: 5, sortieImmediate: false },
+      { nom: 'Légère gêne aux adducteurs', poids: 4, jMin: 2, jMax: 5, sortieImmediate: false },
+      { nom: 'Douleur au dos', poids: 4, jMin: 2, jMax: 6, sortieImmediate: false },
+      { nom: 'Douleur cervicale', poids: 3, jMin: 2, jMax: 5, sortieImmediate: false },
+      { nom: 'Douleur à la hanche', poids: 3, jMin: 2, jMax: 6, sortieImmediate: false },
+      { nom: 'Ampoule importante', poids: 2, jMin: 1, jMax: 3, sortieImmediate: false },
+    ],
+  },
+  legere: {
+    partDesBlessures: 30,
+    items: [
+      { nom: 'Élongation du mollet', poids: 8, jMin: 5, jMax: 12, sortieImmediate: true },
+      { nom: 'Élongation des ischio-jambiers', poids: 8, jMin: 7, jMax: 14, sortieImmediate: true },
+      { nom: 'Élongation des quadriceps', poids: 7, jMin: 7, jMax: 14, sortieImmediate: true },
+      { nom: 'Élongation des adducteurs', poids: 7, jMin: 7, jMax: 14, sortieImmediate: true },
+      { nom: 'Entorse légère de la cheville', poids: 7, jMin: 7, jMax: 21, sortieImmediate: true },
+      { nom: 'Entorse légère du genou', poids: 6, jMin: 14, jMax: 21, sortieImmediate: true },
+      { nom: 'Tendinite rotulienne', poids: 5, jMin: 7, jMax: 21, sortieImmediate: false },
+      { nom: "Tendinite d'Achille", poids: 4, jMin: 14, jMax: 28, sortieImmediate: false },
+      { nom: 'Tendinite des adducteurs', poids: 4, jMin: 14, jMax: 28, sortieImmediate: false },
+      { nom: 'Inflammation du genou', poids: 4, jMin: 7, jMax: 21, sortieImmediate: false },
+      { nom: 'Contracture du mollet', poids: 4, jMin: 5, jMax: 10, sortieImmediate: false },
+      { nom: 'Contracture des ischios', poids: 4, jMin: 5, jMax: 10, sortieImmediate: false },
+      { nom: 'Contracture des quadriceps', poids: 4, jMin: 5, jMax: 10, sortieImmediate: false },
+      { nom: 'Douleur lombaire', poids: 3, jMin: 7, jMax: 14, sortieImmediate: false },
+      { nom: 'Pubalgie légère', poids: 3, jMin: 14, jMax: 28, sortieImmediate: false },
+    ],
+  },
+  moyenne: {
+    partDesBlessures: 18,
+    items: [
+      { nom: 'Claquage des ischio-jambiers', poids: 8, jMin: 21, jMax: 42, sortieImmediate: true },
+      { nom: 'Claquage des quadriceps', poids: 7, jMin: 21, jMax: 42, sortieImmediate: true },
+      { nom: 'Claquage du mollet', poids: 7, jMin: 14, jMax: 35, sortieImmediate: true },
+      { nom: 'Déchirure des adducteurs', poids: 6, jMin: 28, jMax: 56, sortieImmediate: true },
+      { nom: 'Entorse moyenne de la cheville', poids: 6, jMin: 21, jMax: 42, sortieImmediate: true },
+      { nom: 'Entorse moyenne du genou', poids: 5, jMin: 28, jMax: 56, sortieImmediate: true },
+      { nom: 'Déchirure musculaire', poids: 5, jMin: 30, jMax: 60, sortieImmediate: true },
+      { nom: 'Pubalgie', poids: 4, jMin: 30, jMax: 60, sortieImmediate: false },
+      { nom: "Luxation d'un doigt", poids: 4, jMin: 14, jMax: 35, sortieImmediate: false },
+      { nom: "Fracture d'un doigt", poids: 3, jMin: 21, jMax: 35, sortieImmediate: false },
+      { nom: 'Fracture du nez', poids: 3, jMin: 14, jMax: 28, sortieImmediate: true },
+      { nom: 'Commotion cérébrale', poids: 3, jMin: 7, jMax: 28, sortieImmediate: true },
+      { nom: 'Déchirure du mollet', poids: 3, jMin: 30, jMax: 60, sortieImmediate: true },
+    ],
+  },
+  grave: {
+    partDesBlessures: 6,
+    items: [
+      { nom: 'Fracture de la main', poids: 7, jMin: 28, jMax: 56, sortieImmediate: true },
+      { nom: 'Fracture du poignet', poids: 6, jMin: 30, jMax: 60, sortieImmediate: true },
+      { nom: 'Fracture du pied', poids: 6, jMin: 60, jMax: 120, sortieImmediate: true },
+      { nom: 'Fracture du péroné', poids: 5, jMin: 60, jMax: 120, sortieImmediate: true },
+      { nom: 'Fracture du tibia', poids: 4, jMin: 90, jMax: 180, sortieImmediate: true },
+      { nom: 'Fracture du métatarse', poids: 4, jMin: 60, jMax: 90, sortieImmediate: true },
+      { nom: 'Rupture ligamentaire de la cheville', poids: 4, jMin: 60, jMax: 120, sortieImmediate: true },
+      { nom: "Luxation de l'épaule", poids: 3, jMin: 60, jMax: 90, sortieImmediate: true },
+      { nom: 'Déchirure complète des ischios', poids: 3, jMin: 60, jMax: 120, sortieImmediate: true },
+      { nom: 'Rupture partielle du ménisque', poids: 3, jMin: 60, jMax: 120, sortieImmediate: true },
+      { nom: 'Déchirure importante des quadriceps', poids: 2, jMin: 60, jMax: 120, sortieImmediate: true },
+    ],
+  },
+  tres_grave: {
+    partDesBlessures: 1,
+    items: [
+      { nom: 'Rupture du ligament croisé antérieur (LCA)', poids: 10, jMin: 180, jMax: 270, sortieImmediate: true },
+      { nom: 'Rupture du ligament croisé postérieur', poids: 5, jMin: 150, jMax: 240, sortieImmediate: true },
+      { nom: 'Rupture du ligament latéral interne', poids: 5, jMin: 90, jMax: 180, sortieImmediate: true },
+      { nom: 'Rupture complète du ménisque', poids: 5, jMin: 90, jMax: 180, sortieImmediate: true },
+      { nom: 'Double rupture LCA + ménisque', poids: 2, jMin: 240, jMax: 360, sortieImmediate: true },
+      { nom: 'Triple lésion ligamentaire', poids: 1, jMin: 270, jMax: 420, sortieImmediate: true },
+      { nom: 'Fracture tibia-péroné', poids: 1, jMin: 240, jMax: 360, sortieImmediate: true },
+      { nom: "Rupture du tendon d'Achille", poids: 2, jMin: 180, jMax: 270, sortieImmediate: true },
+    ],
+  },
+};
 
-function risqueBlessure(jr, intensiteMatch) {
-  const tendance = clamp((jr.tendance_blessure ?? 10) / 20, 0.05, 1); // plus haut = plus fragile
-  const endurance = clamp((jr.endurance ?? 12) / 20, 0.3, 1);
-  const probaBase = 0.006; // ~0.6% par joueur par match en moyenne
-  return probaBase * (0.5 + tendance) * (1.3 - endurance * 0.4) * (0.8 + intensiteMatch * 0.4);
+function tirerBlessurePrecise() {
+  const entreesCategories = Object.entries(CATALOGUE_BLESSURES).map(([cle, cat]) => ({ item: cle, poids: cat.partDesBlessures }));
+  const categorie = tirageAlPondere(entreesCategories);
+  const items = CATALOGUE_BLESSURES[categorie].items;
+  const choisie = tirageAlPondere(items.map((it) => ({ item: it, poids: it.poids })));
+  const jours = Math.round(choisie.jMin + Math.random() * (choisie.jMax - choisie.jMin));
+  return { categorie, blessure: choisie.nom, jours, sortie_immediate: choisie.sortieImmediate };
 }
 
-function genererBlessuresEquipe(compositions, joueurs, gameClubId, intensiteMatch, remplacements = []) {
+/**
+ * Probabilité qu'un joueur donné se blesse sur ce match (~1,5% de base par
+ * joueur), modulée par :
+ *  - sa tendance individuelle aux blessures (attribut) ;
+ *  - sa fatigue ET l'enchaînement de matchs récents — les deux sont captés par
+ *    sa forme d'avant-match : elle baisse à chaque match joué et ne récupère
+ *    que +3/jour, donc un calendrier chargé fait déjà mécaniquement chuter la
+ *    forme avant même ce match ;
+ *  - son âge (risque croissant après 28 ans) ;
+ *  - l'intensité du match (enjeu/danger généré des deux côtés) ;
+ *  - la dureté des tacles adverses (agressivité + tacles moyens de l'équipe en face).
+ */
+function risqueBlessure(jr, { intensiteMatch = 1, facteurTacleAdverse = 1 } = {}) {
+  // Calibré pour atterrir ~1,5% par joueur/match en moyenne une fois TOUS les
+  // facteurs appliqués (un profil neutre à intensité de match "moyenne" n'a
+  // jamais des facteurs pile à 1 : ce point de départ compense cet écart type).
+  const probaBase = 0.0112;
+
+  const tendance = clamp((jr.tendance_blessure ?? 10) / 20, 0.05, 1); // plus haut = plus fragile
+  const facteurTendance = 0.5 + tendance; // ~0.55 à 1.5
+
+  const forme = clamp(jr.forme ?? 100, 0, 100);
+  const facteurFatigue = 1 + ((100 - forme) / 100) * 0.6; // forme 100 -> x1 ; forme 0 -> x1.6
+
+  const age = jr.age ?? 25;
+  const facteurAge = 1 + clamp(age - 28, 0, 15) * 0.025; // jusqu'à ~x1.375 à 43 ans
+
+  const facteurIntensite = 0.8 + clamp(intensiteMatch, 0.3, 1.3) * 0.4; // ~0.92 à 1.32
+  const facteurTacles = clamp(facteurTacleAdverse, 0.8, 1.4);
+
+  return probaBase * facteurTendance * facteurFatigue * facteurAge * facteurIntensite * facteurTacles;
+}
+
+/**
+ * Dureté de tacle moyenne d'une équipe adverse (agressivité + tacles de ses
+ * joueurs de champ titulaires), pour moduler le risque de blessure infligé à
+ * l'équipe d'en face.
+ */
+function facteurDureteAdverse(compositionsAdverses, joueursAdverses) {
+  const joueursParId = new Map(joueursAdverses.map((j) => [j.id, j]));
+  const valeurs = compositionsAdverses
+    .filter((s) => s.role !== 'GB')
+    .map((s) => {
+      const jr = joueursParId.get(s.player_id);
+      return ((jr?.agressivite ?? 10) + (jr?.tacles ?? 10)) / 2;
+    });
+  if (!valeurs.length) return 1;
+  const moyenne = valeurs.reduce((a, b) => a + b, 0) / valeurs.length;
+  return clamp(0.8 + (moyenne / 20) * 0.5, 0.8, 1.4);
+}
+
+/**
+ * Blessures des titulaires, évaluées AVANT la génération des remplacements :
+ * une blessure à sortie immédiate détectée ici devient une sortie forcée
+ * transmise à `genererRemplacements` (le joueur ne termine pas la rencontre).
+ */
+function genererBlessuresTitulaires(compositions, joueurs, gameClubId, intensiteMatch, facteurTacleAdverse) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const blessures = [];
-  const sortieParSlot = new Map(remplacements.map((r) => [r.slot_id, r]));
 
-  // Titulaires : blessure possible tant qu'ils sont sur le terrain (avant leur éventuel remplacement)
   for (const slot of compositions) {
     const jr = joueursParId.get(slot.player_id);
     if (!jr) continue;
-    if (!proba(risqueBlessure(jr, intensiteMatch))) continue;
+    if (!proba(risqueBlessure(jr, { intensiteMatch, facteurTacleAdverse }))) continue;
 
-    const rempl = sortieParSlot.get(slot.slot_id);
-    const minute = rempl ? clamp(minuteAleatoire(), 1, Math.max(1, rempl.minute - 1)) : minuteAleatoire();
-    // Si la fenêtre avant remplacement est trop courte pour ce tirage, on l'ignore plutôt que de forcer une minute incohérente.
-    if (rempl && minute >= rempl.minute) continue;
-
+    const detail = tirerBlessurePrecise();
     blessures.push({
-      minute,
+      minute: minuteAleatoire(),
+      slot_id: slot.slot_id,
       game_club_id: gameClubId,
       player_id: slot.player_id,
       player_nom: slot.player_nom,
-      gravite: tirageAlPondere(GRAVITE_BLESSURE),
+      ...detail,
     });
   }
 
-  // Entrants : risque prorata du temps de jeu restant après leur entrée (jambes plus fraîches, mais moins de minutes)
+  return blessures;
+}
+
+/**
+ * Blessures des entrants, évaluées APRÈS génération des remplacements (risque
+ * au prorata du temps de jeu restant après leur entrée). Cas volontairement
+ * non modélisé : une blessure à sortie immédiate sur un entrant ne déclenche
+ * pas de second remplacement en cascade (probabilité déjà quasi nulle : il
+ * faut cumuler "être entrant" ET "se blesser" ET "sortie immédiate").
+ */
+/**
+ * Blessures des entrants, évaluées APRÈS génération des remplacements (risque
+ * au prorata du temps de jeu restant après leur entrée). Une blessure à
+ * sortie immédiate ici est ensuite traitée par
+ * `completerRemplacementsAvecBlessuresEntrants` : l'entrant blessé doit à son
+ * tour sortir et être remplacé (ou l'équipe termine à 10 si plus de fenêtre
+ * de changement ou plus de doublure dispo au poste).
+ */
+function genererBlessuresEntrants(remplacements, joueurs, gameClubId, intensiteMatch, facteurTacleAdverse) {
+  const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
+  const blessures = [];
+
   for (const rempl of remplacements) {
     const jr = joueursParId.get(rempl.entrant_id);
     if (!jr) continue;
     const prorata = clamp((90 - rempl.minute) / 90, 0.05, 0.5);
-    if (!proba(risqueBlessure(jr, intensiteMatch) * prorata * 1.5)) continue;
+    if (!proba(risqueBlessure(jr, { intensiteMatch, facteurTacleAdverse }) * prorata * 1.5)) continue;
 
+    const detail = tirerBlessurePrecise();
     blessures.push({
       minute: clamp(Math.round(rempl.minute + Math.random() * (90 - rempl.minute)), rempl.minute, 90),
+      slot_id: rempl.slot_id,
+      role: rempl.role,
       game_club_id: gameClubId,
       player_id: rempl.entrant_id,
       player_nom: rempl.entrant_nom,
-      gravite: tirageAlPondere(GRAVITE_BLESSURE),
+      ...detail,
     });
   }
 
-  return blessures.sort((a, b) => a.minute - b.minute);
+  return blessures;
+}
+
+/**
+ * Traite les blessures d'entrants à sortie immédiate : l'entrant blessé doit
+ * lui-même sortir et être remplacé, sur le budget de changements restant
+ * (5 max au total, forcés + tactiques + ce second niveau confondus). Si le
+ * banc n'a plus de doublure dispo au poste, ou si les 5 fenêtres sont déjà
+ * consommées, l'équipe termine la rencontre à 10 à ce poste (aucun
+ * changement n'est ajouté). Ne modélise pas de 3e niveau de cascade (un
+ * remplaçant-de-remplaçant qui se blesserait à son tour) : la probabilité
+ * cumulée est déjà quasi nulle à ce stade.
+ */
+function completerRemplacementsAvecBlessuresEntrants(remplacements, banc, blessuresEntrants, gameClubId) {
+  const dejaEntre = new Set(remplacements.map((r) => r.entrant_id));
+  const dejaSorti = new Set(remplacements.map((r) => r.sortant_id));
+  const resultat = [...remplacements];
+
+  for (const blessure of blessuresEntrants) {
+    if (!blessure.sortie_immediate) continue;
+    if (resultat.length >= 5) continue; // plus de fenêtre de changement : joue diminué
+    if (dejaSorti.has(blessure.player_id)) continue; // déjà sorti entre-temps (garde-fou)
+
+    const estGardien = blessure.role === 'GB';
+    const candidats = estGardien
+      ? banc.filter((b) => b.role === 'GB' && !dejaEntre.has(b.joueur.id))
+      : banc.filter((b) => b.role !== 'GB' && !dejaEntre.has(b.joueur.id));
+    if (!candidats.length) continue; // pas de doublure dispo : équipe termine à 10 à ce poste
+
+    const axeSortant = axePoste(blessure.role);
+    let entrant = candidats[0];
+    let meilleurScore = Infinity;
+    for (const c of candidats) {
+      const distance = estGardien ? 0 : Math.abs(axePoste(c.role) - axeSortant);
+      const score = distance * 1000 - c.note;
+      if (score < meilleurScore) {
+        meilleurScore = score;
+        entrant = c;
+      }
+    }
+
+    dejaSorti.add(blessure.player_id);
+    dejaEntre.add(entrant.joueur.id);
+    resultat.push({
+      minute: blessure.minute,
+      slot_id: blessure.slot_id,
+      role: blessure.role,
+      sortant_id: blessure.player_id,
+      sortant_nom: blessure.player_nom,
+      entrant_id: entrant.joueur.id,
+      entrant_nom: entrant.joueur.nom,
+      raison: 'blessure',
+      game_club_id: gameClubId,
+    });
+  }
+
+  return resultat.sort((a, b) => a.minute - b.minute);
 }
 
 // ============================================================
@@ -1084,35 +1359,54 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   const scoreDom = Math.min(resultatDom.buts, stats.domicile.tirs_cadres);
   const scoreExt = Math.min(resultatExt.buts, stats.exterieur.tirs_cadres);
 
-  // Étape 4bis — banc et remplacements (5 max), basés sur le reste de l'effectif équipe_a
+  // Étape 4bis — banc, blessures des titulaires puis remplacements (5 max)
+  // Ordre important : les blessures à sortie immédiate doivent être connues
+  // AVANT de générer les remplacements, pour forcer la sortie du joueur
+  // concerné plutôt que de le laisser jouer jusqu'à un changement tactique
+  // hypothétique.
   const compoDomAvecNote = forceDom.titulairesNotes.map((t) => ({ ...t.slot, note: t.note }));
   const compoExtAvecNote = forceExt.titulairesNotes.map((t) => ({ ...t.slot, note: t.note }));
   const bancDom = selectionnerBanc(compoDom, domicile.joueurs);
   const bancExt = selectionnerBanc(compoExt, exterieur.joueurs);
-  const remplacementsDom = genererRemplacements(compoDomAvecNote, bancDom, forceDom.niveauCoach, forceDom.adaptabiliteCoach).map((r) => ({ ...r, game_club_id: domicile.gameClubId }));
-  const remplacementsExt = genererRemplacements(compoExtAvecNote, bancExt, forceExt.niveauCoach, forceExt.adaptabiliteCoach).map((r) => ({ ...r, game_club_id: exterieur.gameClubId }));
+
+  const intensiteMatch = clamp((domination.danger.domicile + domination.danger.exterieur) / 140, 0.3, 1.3);
+  const tacleSubiParDom = facteurDureteAdverse(compoExt, exterieur.joueurs); // dureté de l'adversaire (exterieur) subie par domicile
+  const tacleSubiParExt = facteurDureteAdverse(compoDom, domicile.joueurs);
+
+  const blessuresTitulairesDom = genererBlessuresTitulaires(compoDom, domicile.joueurs, domicile.gameClubId, intensiteMatch, tacleSubiParDom);
+  const blessuresTitulairesExt = genererBlessuresTitulaires(compoExt, exterieur.joueurs, exterieur.gameClubId, intensiteMatch, tacleSubiParExt);
+  const sortiesForceesDom = blessuresTitulairesDom.filter((b) => b.sortie_immediate).map((b) => ({ slot_id: b.slot_id, minute: b.minute }));
+  const sortiesForceesExt = blessuresTitulairesExt.filter((b) => b.sortie_immediate).map((b) => ({ slot_id: b.slot_id, minute: b.minute }));
+
+  const remplacementsDom = genererRemplacements(compoDomAvecNote, bancDom, forceDom.niveauCoach, forceDom.adaptabiliteCoach, sortiesForceesDom).map((r) => ({ ...r, game_club_id: domicile.gameClubId }));
+  const remplacementsExt = genererRemplacements(compoExtAvecNote, bancExt, forceExt.niveauCoach, forceExt.adaptabiliteCoach, sortiesForceesExt).map((r) => ({ ...r, game_club_id: exterieur.gameClubId }));
+
+  const blessuresEntrantsDom = genererBlessuresEntrants(remplacementsDom, domicile.joueurs, domicile.gameClubId, intensiteMatch, tacleSubiParDom);
+  const blessuresEntrantsExt = genererBlessuresEntrants(remplacementsExt, exterieur.joueurs, exterieur.gameClubId, intensiteMatch, tacleSubiParExt);
+
+  // Un entrant blessé sévèrement doit à son tour sortir : complète les
+  // remplacements avec ce 2e niveau (sur le budget de 5 restant) AVANT de
+  // générer buts/cartons, pour que compositionEffective() reste cohérente.
+  const remplacementsFinauxDom = completerRemplacementsAvecBlessuresEntrants(remplacementsDom, bancDom, blessuresEntrantsDom, domicile.gameClubId);
+  const remplacementsFinauxExt = completerRemplacementsAvecBlessuresEntrants(remplacementsExt, bancExt, blessuresEntrantsExt, exterieur.gameClubId);
+
+  const toutesLesBlessures = [...blessuresTitulairesDom, ...blessuresTitulairesExt, ...blessuresEntrantsDom, ...blessuresEntrantsExt].sort((a, b) => a.minute - b.minute);
 
   // Étapes 5 & 6 (les remplaçants entrés en jeu peuvent être buteur/passeur)
-  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsDom);
-  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsExt);
+  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom);
+  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt);
   const tousLesButs = [...buteursDom, ...buteursExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 7
-  const cartonsDom = genererCartonsEquipe(stats.domicile.fautes, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsDom);
-  const cartonsExt = genererCartonsEquipe(stats.exterieur.fautes, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsExt);
+  const cartonsDom = genererCartonsEquipe(stats.domicile.fautes, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom);
+  const cartonsExt = genererCartonsEquipe(stats.exterieur.fautes, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt);
   const tousLesCartons = [...cartonsDom, ...cartonsExt].sort((a, b) => a.minute - b.minute);
-
-  // Étape 8
-  const intensiteMatch = clamp((domination.danger.domicile + domination.danger.exterieur) / 140, 0.3, 1.3);
-  const blessuresDom = genererBlessuresEquipe(compoDom, domicile.joueurs, domicile.gameClubId, intensiteMatch, remplacementsDom);
-  const blessuresExt = genererBlessuresEquipe(compoExt, exterieur.joueurs, exterieur.gameClubId, intensiteMatch, remplacementsExt);
-  const toutesLesBlessures = [...blessuresDom, ...blessuresExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 9 (notes incluant les entrants, variance selon la régularité de chaque joueur)
   const notesDom = calculerNotesJoueurs({
     compositions: compoDom,
     joueurs: domicile.joueurs,
-    remplacements: remplacementsDom,
+    remplacements: remplacementsFinauxDom,
     gameClubId: domicile.gameClubId,
     buteurs: tousLesButs,
     passeurs: tousLesButs, // les passeurs sont inclus dans les mêmes objets "but"
@@ -1124,7 +1418,7 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   const notesExt = calculerNotesJoueurs({
     compositions: compoExt,
     joueurs: exterieur.joueurs,
-    remplacements: remplacementsExt,
+    remplacements: remplacementsFinauxExt,
     gameClubId: exterieur.gameClubId,
     buteurs: tousLesButs,
     passeurs: tousLesButs,
@@ -1148,8 +1442,8 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   // Étape 11 — impact du match sur la condition physique et le moral de TOUT
   // l'effectif équipe_a (pas que les 11 + le banc utilisé), à appliquer par
   // l'appelant sur `game_players.forme` / `game_players.moral`.
-  const impactDom = calculerImpactPostMatch({ compositions: compoDom, joueurs: domicile.joueurs, remplacements: remplacementsDom });
-  const impactExt = calculerImpactPostMatch({ compositions: compoExt, joueurs: exterieur.joueurs, remplacements: remplacementsExt });
+  const impactDom = calculerImpactPostMatch({ compositions: compoDom, joueurs: domicile.joueurs, remplacements: remplacementsFinauxDom });
+  const impactExt = calculerImpactPostMatch({ compositions: compoExt, joueurs: exterieur.joueurs, remplacements: remplacementsFinauxExt });
 
   return {
     score_domicile: scoreDom,
@@ -1173,7 +1467,7 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
       passeurs: tousLesButs.filter((b) => b.passeur_id).map((b) => ({ minute: b.minute, game_club_id: b.game_club_id, player_id: b.passeur_id, player_nom: b.passeur_nom, but_de: b.buteur_id })),
       cartons: tousLesCartons,
       blessures: toutesLesBlessures,
-      remplacements: [...remplacementsDom, ...remplacementsExt].sort((a, b) => a.minute - b.minute),
+      remplacements: [...remplacementsFinauxDom, ...remplacementsFinauxExt].sort((a, b) => a.minute - b.minute),
       notes_joueurs: { domicile: notesDom, exterieur: notesExt },
       formation: { domicile: domicile.tactique?.formation ?? null, exterieur: exterieur.tactique?.formation ?? null },
       homme_du_match: hommeDuMatch,
@@ -1200,7 +1494,12 @@ const MOTEUR_MATCH_EXPORTS = {
   calculerButsEquipe,
   genererButeursEtPasseurs,
   genererCartonsEquipe,
-  genererBlessuresEquipe,
+  genererBlessuresTitulaires,
+  genererBlessuresEntrants,
+  completerRemplacementsAvecBlessuresEntrants,
+  risqueBlessure,
+  tirerBlessurePrecise,
+  facteurDureteAdverse,
   calculerNotesJoueurs,
   genererResume,
   noteJoueurMatch,
