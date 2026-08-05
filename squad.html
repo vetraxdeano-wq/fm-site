@@ -255,6 +255,14 @@
 
   /* ---- Infirmerie ---- */
   .infirmerie-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
+  .infirmerie-filter-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .infirmerie-filter-btn {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 12px; font-weight: 700; padding: 6px 13px; border-radius: 999px;
+    cursor: pointer; font-family: inherit;
+  }
+  .infirmerie-filter-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); }
+  .infirmerie-filter-btn.active { background: rgba(251,191,36,0.14); border-color: rgba(251,191,36,0.45); color: var(--gold); }
   .infirmerie-section { margin-bottom: 22px; }
   .infirmerie-section:last-child { margin-bottom: 0; }
   .infirmerie-section-title {
@@ -292,8 +300,12 @@
   .risk-table thead th {
     text-align: left; color: var(--text-dim); font-weight: 500; font-size: 11px;
     text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
   }
+  .risk-table thead th:hover { color: var(--text); }
+  .risk-table thead th.sorted { color: var(--gold); }
+  .risk-table thead th.no-sort { cursor: default; }
+  .risk-table thead th.no-sort:hover { color: var(--text-dim); }
   .risk-table tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .risk-table tbody tr:last-child td { border-bottom: none; }
   .risk-table tbody tr:hover { background: rgba(255,255,255,0.02); cursor: pointer; }
@@ -471,6 +483,12 @@
         <!-- Sous-onglet "Infirmerie" -->
         <div id="infirmerieMaintabPanel" class="hidden">
           <div class="infirmerie-panel">
+            <div class="infirmerie-filter-bar" id="infirmerieFilterBar">
+              <button type="button" class="infirmerie-filter-btn active" data-cat-filter="all">Tous</button>
+              <button type="button" class="infirmerie-filter-btn" data-cat-filter="equipe_a">Équipe A</button>
+              <button type="button" class="infirmerie-filter-btn" data-cat-filter="reserve">Réserve</button>
+              <button type="button" class="infirmerie-filter-btn" data-cat-filter="u18">U18</button>
+            </div>
             <div class="infirmerie-section">
               <div class="infirmerie-section-title">
                 🩹 Blessures actuelles <span class="count-badge" id="infirmerieCurrentCount">0</span>
@@ -492,7 +510,7 @@
                 <tbody id="infirmerieRiskBody"></tbody>
               </table>
               <div id="infirmerieRiskEmpty" class="infirmerie-empty hidden">Aucun joueur disponible pour l'estimation.</div>
-              <div class="infirmerie-note">Estimation basée sur la condition physique, l'âge et la fatigue actuelle des joueurs, recalculée à chaque mise à jour de l'effectif.</div>
+              <div class="infirmerie-note">Estimation basée sur la condition physique, l'âge et la fatigue actuelle des joueurs, recalculée à chaque mise à jour de l'effectif. Les joueurs de l'Équipe A sont toujours affichés en premier.</div>
             </div>
           </div>
         </div>
@@ -1338,20 +1356,75 @@ function injuryRiskLevel(score) {
 }
 
 const SQUAD_CAT_LABEL = { equipe_a: "Équipe A", reserve: "Réserve", u18: "U18" };
+// Ordre fixe utilise pour toujours faire remonter l'Equipe A en premier
+// (puis Reserve puis U18), quelle que soit la colonne sur laquelle on trie.
+const SQUAD_CAT_ORDER = ["equipe_a", "reserve", "u18"];
+
+// ---- Filtre par categorie (Tous / Equipe A / Reserve / U18), commun aux
+// deux sections de l'infirmerie ----
+let activeInfirmerieFilter = "all";
+let infirmerieFilterWired = false;
+
+function wireInfirmerieFilter() {
+  if (infirmerieFilterWired) return;
+  infirmerieFilterWired = true;
+  document.querySelectorAll(".infirmerie-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeInfirmerieFilter = btn.getAttribute("data-cat-filter");
+      document.querySelectorAll(".infirmerie-filter-btn").forEach(b => b.classList.toggle("active", b === btn));
+      renderInfirmerie();
+    });
+  });
+}
+
+function playersForInfirmerie() {
+  if (activeInfirmerieFilter === "all") return myClubPlayers;
+  return myClubPlayers.filter(p => (p.categorie || "equipe_a") === activeInfirmerieFilter);
+}
+
+// Trie un ensemble de joueurs en respectant TOUJOURS le regroupement par
+// categorie (Equipe A puis Reserve puis U18) : le tri choisi par l'utilisateur
+// (colonne cliquee) ne s'applique qu'a l'interieur de chaque groupe.
+function groupByCategoryThenSort(players, columns, sortState) {
+  return SQUAD_CAT_ORDER.flatMap(cat => {
+    const inCat = players.filter(p => (p.categorie || "equipe_a") === cat);
+    return columns && sortState ? sortPlayers(inCat, columns, sortState) : inCat;
+  });
+}
+
+// ---- Tri des colonnes du tableau "Probabilites de blessure" ----
+const RISK_COLUMNS = [
+  { key: "nationalite", accessor: p => p.nationalite || "" },
+  { key: "nom", accessor: p => p.nom || "" },
+  { key: "categorie", accessor: p => SQUAD_CAT_ORDER.indexOf(p.categorie || "equipe_a") },
+  { key: "age", accessor: p => p.age ?? -1 },
+  { key: "risque", accessor: p => computeInjuryRiskScore(p), defaultDir: -1 },
+];
+const infirmerieRiskSortState = { key: "risque", dir: -1 };
+let infirmerieRiskHeadersWired = false;
+
+function wireInfirmerieRiskHeaders() {
+  if (infirmerieRiskHeadersWired) return;
+  infirmerieRiskHeadersWired = true;
+  const thead = document.querySelector("#infirmerieRiskBody").closest("table").querySelector("thead");
+  initSortableHeaders(thead, RISK_COLUMNS, infirmerieRiskSortState, renderInfirmerie);
+}
 
 function renderInfirmerie() {
-  const injured = myClubPlayers.filter(isPlayerCurrentlyInjured);
-  const healthy = myClubPlayers.filter(p => !isPlayerCurrentlyInjured(p));
+  const scoped = playersForInfirmerie();
+  const injured = scoped.filter(isPlayerCurrentlyInjured);
+  const healthy = scoped.filter(p => !isPlayerCurrentlyInjured(p));
 
-  // -- Blessures actuelles --
+  // -- Blessures actuelles -- (toujours Equipe A d'abord, puis par jours
+  // de blessure restants decroissants a l'interieur de chaque groupe)
   const currentListEl = document.getElementById("infirmerieCurrentList");
   document.getElementById("infirmerieCurrentCount").textContent = injured.length;
 
   if (injured.length === 0) {
     currentListEl.innerHTML = `<div class="infirmerie-empty">Aucun joueur blessé actuellement. 🎉</div>`;
   } else {
-    // Les blessures les plus longues (jours restants) remontent en premier.
-    const sortedInjured = [...injured].sort((a, b) => (b.blessure_jours ?? 0) - (a.blessure_jours ?? 0));
+    const INJURY_SORT_COLUMNS = [{ key: "jours", accessor: p => p.blessure_jours ?? 0, defaultDir: -1 }];
+    const sortedInjured = groupByCategoryThenSort(injured, INJURY_SORT_COLUMNS, { key: "jours", dir: -1 });
     currentListEl.innerHTML = `<div class="injury-list">${sortedInjured.map(p => {
       const cat = p.categorie || "equipe_a";
       const gravite = BLESSURE_CATEGORIE_LABEL[p.blessure_categorie] || null;
@@ -1379,18 +1452,19 @@ function renderInfirmerie() {
   });
 
   // -- Probabilites de blessure (joueurs non blesses actuellement) --
+  // Toujours Equipe A en premier ; a l'interieur de chaque groupe, tri
+  // selon la colonne cliquee par l'utilisateur (Nat./Nom/Equipe/Age/Risque).
   const riskBody = document.getElementById("infirmerieRiskBody");
   const riskEmptyEl = document.getElementById("infirmerieRiskEmpty");
-  const ranked = healthy
-    .map(p => ({ p, score: computeInjuryRiskScore(p) }))
-    .sort((a, b) => b.score - a.score);
+  const ranked = groupByCategoryThenSort(healthy, RISK_COLUMNS, infirmerieRiskSortState);
 
   if (ranked.length === 0) {
     riskBody.innerHTML = "";
     riskEmptyEl.classList.remove("hidden");
   } else {
     riskEmptyEl.classList.add("hidden");
-    riskBody.innerHTML = ranked.map(({ p, score }) => {
+    riskBody.innerHTML = ranked.map(p => {
+      const score = computeInjuryRiskScore(p);
       const level = injuryRiskLevel(score);
       const cat = p.categorie || "equipe_a";
       return `
@@ -1411,10 +1485,12 @@ function renderInfirmerie() {
     });
   }
 
-  // -- Badge de compteur sur l'onglet "Infirmerie" --
+  // -- Badge de compteur sur l'onglet "Infirmerie" -- (toujours sur
+  // l'ensemble du club, independamment du filtre categorie actif)
+  const totalInjured = myClubPlayers.filter(isPlayerCurrentlyInjured).length;
   const badgeEl = document.getElementById("infirmerieBadge");
-  badgeEl.textContent = injured.length;
-  badgeEl.classList.toggle("zero", injured.length === 0);
+  badgeEl.textContent = totalInjured;
+  badgeEl.classList.toggle("zero", totalInjured === 0);
 }
 
 function applySquadSubtabVisibility() {
@@ -1461,6 +1537,8 @@ function renderMyClubView(club, players, pseudo, isOwnClub, myClub) {
   wireSquadMaintabs();
   resetSquadMaintabToEffectif();
   applySquadMaintabVisibility();
+  wireInfirmerieFilter();
+  wireInfirmerieRiskHeaders();
   // Le badge "Infirmerie" doit refleter le nombre de blesses des le
   // chargement, meme si on reste sur le sous-onglet "Effectif".
   renderInfirmerie();
