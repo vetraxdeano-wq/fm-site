@@ -1517,6 +1517,77 @@
   /* ---- Module "prochains matchs" reutilise sur la page d'accueil ---- */
   .fm-comp-calendar-list--compact .fm-comp-match-row { padding: 10px 0; }
   .fm-comp-calendar-list--compact .fm-comp-match-row.next { padding-left: 10px; }
+
+  /* ---- Module "Prochaine rencontre" de la page d'accueil : match a venir
+     mis en avant (blasons, domicile/exterieur, competition, classement des
+     deux equipes) + liste compacte des matchs suivants juste a cote. ---- */
+  .fm-next-fixture-card { flex: 1 1 0; min-height: 0; }
+  .fm-nf-wrap { display: flex; gap: 16px; height: 100%; min-height: 0; overflow: hidden; }
+  .fm-nf-feature {
+    flex: 1 1 60%; min-width: 0; display: flex; flex-direction: column;
+    background: rgba(251,191,36,0.05); border: 1px solid #7a5c0f; border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .fm-nf-feature-top { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+  .fm-nf-comp-badge {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
+    color: var(--gold); background: rgba(251,191,36,0.12); border: 1px solid #7a5c0f;
+    border-radius: 999px; padding: 3px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  }
+  .fm-nf-side-badge {
+    flex-shrink: 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
+    border-radius: 999px; padding: 3px 10px; border: 1px solid var(--border); color: var(--text-dim); background: #14171d;
+  }
+  .fm-nf-side-badge.home { color: var(--accent); border-color: #2f6b45; background: rgba(74,222,128,0.1); }
+  .fm-nf-side-badge.away { color: #60a5fa; border-color: #1e40af; background: rgba(59,130,246,0.1); }
+  .fm-nf-teams {
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; min-height: 0;
+  }
+  .fm-nf-team {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
+    gap: 8px; text-align: center; cursor: pointer; border-radius: 10px; padding: 6px; transition: background 0.15s;
+  }
+  .fm-nf-team:hover { background: rgba(255,255,255,0.04); }
+  .fm-nf-team:hover .fm-nf-team-name { color: var(--gold); }
+  .fm-nf-team .mdet-club-logo, .fm-nf-team .mdet-club-logo-fallback { width: 56px !important; height: 56px !important; }
+  .fm-nf-team-name {
+    font-size: 13.5px; font-weight: 700; max-width: 100%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .fm-nf-team-rank {
+    font-size: 11px; color: var(--text-dim); background: #14171d; border: 1px solid var(--border);
+    border-radius: 999px; padding: 2px 9px;
+  }
+  .fm-nf-vs {
+    flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 6px;
+  }
+  .fm-nf-vs-txt { font-size: 13px; font-weight: 800; color: var(--text-dim); letter-spacing: 0.04em; }
+  .fm-nf-date {
+    font-size: 11.5px; font-weight: 600; color: var(--text); text-align: center; line-height: 1.4;
+    text-transform: capitalize; white-space: nowrap;
+  }
+  .fm-nf-date .fm-nf-weekday { display: block; font-size: 10px; font-weight: 500; color: var(--text-dim); }
+  .fm-nf-footer {
+    flex: 0 0 auto; margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(122,92,15,0.4);
+    font-size: 11px; color: var(--text-dim); text-align: center;
+  }
+  .fm-nf-list { flex: 1 1 40%; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .fm-nf-list-title {
+    flex: 0 0 auto; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+    font-weight: 700; color: var(--text-dim); margin-bottom: 8px;
+  }
+  .fm-nf-list .fm-comp-calendar-list { border: 1px solid var(--border); border-radius: 10px; }
+  .fm-nf-list .fm-comp-match-row { padding: 8px 12px; gap: 8px; font-size: 11.5px; }
+  .fm-nf-list .fm-comp-match-date { width: 42px; }
+  .fm-nf-list .fm-comp-match-date .day { font-size: 12px; }
+  .fm-nf-list .fm-comp-match-comp { display: none; }
+  .fm-nf-list .fm-comp-match-journee { width: 26px; font-size: 9.5px; }
+  @media (max-width: 900px) {
+    .fm-nf-wrap { flex-direction: column; }
+    .fm-nf-list { flex: 0 0 auto; }
+  }
+
   @media (max-width: 900px) {
     .fm-comp-calendar-pane { height: 56vh; }
     .fm-comp-right-pane { flex-direction: column; flex-wrap: nowrap; }
@@ -1607,21 +1678,17 @@
     <div class="fm-content-wrap">
       <div class="fm-content" id="fmHomeView">
         <div class="fm-col">
-          <div class="card card-fit">
-            <div class="fm-card-title"><span>Prochains matchs</span></div>
+          <div class="card fm-next-fixture-card">
+            <div class="fm-card-title"><span>Prochaine rencontre</span></div>
             <div id="fmNextMatch" class="fm-empty">Chargement...</div>
           </div>
           <div class="card card-fit">
             <div class="fm-card-title"><span>Derniers matchs</span></div>
             <div id="fmLastMatches" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card">
-            <div class="fm-card-title"><span>Boîte de réception</span></div>
-            <div id="fmInbox" class="fm-empty">Chargement...</div>
-          </div>
-          <div class="card">
-            <div class="fm-card-title"><span>Dynamique de groupe</span></div>
-            <div id="fmGroupDynamics" class="fm-empty">Chargement...</div>
+          <div class="card card-fit">
+            <div class="fm-card-title"><span>Finances</span></div>
+            <div id="fmFinances" class="fm-empty">Chargement...</div>
           </div>
         </div>
 
@@ -1635,8 +1702,8 @@
             <div id="fmTeamStats" class="fm-empty">Chargement...</div>
           </div>
           <div class="card card-fit">
-            <div class="fm-card-title"><span>Finances</span></div>
-            <div id="fmFinances" class="fm-empty">Chargement...</div>
+            <div class="fm-card-title"><span>Dynamique de groupe</span></div>
+            <div id="fmGroupDynamics" class="fm-empty">Chargement...</div>
           </div>
         </div>
       </div>
@@ -1956,7 +2023,6 @@
               <span><i class="weak"></i>Poste d'adaptation</span>
               <span><i class="empty"></i>Aucun joueur disponible</span>
             </div>
-            <button type="button" class="secondary tac-recalc-btn" id="tacRecalcBtn">🔄 Recalculer la tactique</button>
           </div>
           <div class="tac-card tac-bench-card">
             <h3>Effectif restant</h3>
@@ -3046,6 +3112,7 @@ let leagueStaffStatsLoadedFor = null;
 let leagueStaffStats = null;
 let myClubNation = null;
 let myClubDivision = null;
+let myClubNom = null;
 
 // Recupere le staff des clubs de la MEME ligue (meme nation + division) que
 // le club consulte, et calcule par departement : l'effectif moyen par club
@@ -3838,11 +3905,6 @@ async function showFmTactiqueView(clubId) {
   if (input) input.placeholder = "TACTIQUE";
   tacCurrentClubId = clubId;
 
-  const btn = document.getElementById("tacRecalcBtn");
-  if (!btn.dataset.wired) {
-    btn.dataset.wired = "1";
-    btn.addEventListener("click", () => computeAndRenderTactic(clubId, { force: true }));
-  }
   const subtabBar = document.getElementById("tacSubtabBar");
   if (!subtabBar.dataset.wired) {
     subtabBar.dataset.wired = "1";
@@ -8398,49 +8460,6 @@ function truncateInboxPreview(text, maxChars = 130) {
   return escapeHtml(cut.trimEnd()) + " [...]";
 }
 
-// Apercu affiche dans le module "Boite de reception" de la page d'accueil :
-// les messages les plus recents, cliquables vers le sous-onglet complet.
-function renderInbox() {
-  const el = document.getElementById("fmInbox");
-  if (fmInboxMessages.length === 0) {
-    el.innerHTML = `
-      <div class="fm-inbox-empty">
-        <span class="big-icon">📭</span>
-        Aucun message pour l'instant.<br>
-        Les offres de transfert, rapports du staff et notifications de club arriveront ici.
-      </div>
-    `;
-    return;
-  }
-
-  el.innerHTML = `
-    <div class="fm-inbox-list">
-      ${fmInboxMessages.slice(0, 3).map(m => `
-        <div class="fm-inbox-item ${m.unread ? "unread" : ""}" data-msg="${m.id}">
-          <span class="fm-inbox-icon">${m.icon}</span>
-          <span class="fm-inbox-text">
-            <span class="fm-inbox-title-row">
-              <span class="subject">${escapeHtml(m.subject)}</span>
-              <span class="fm-inbox-time">${escapeHtml(m.date)}</span>
-            </span>
-            <span class="preview">${truncateInboxPreview(m.preview)}</span>
-          </span>
-        </div>
-      `).join("")}
-    </div>
-  `;
-
-  el.querySelectorAll(".fm-inbox-item").forEach(item => {
-    item.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const navRow = document.querySelector('.fm-nav-item[data-key="messagerie"]');
-      if (navRow) navRow.click();
-      else showFmInboxView();
-      selectFmInboxMessage(item.getAttribute("data-msg"));
-    });
-  });
-}
-
 // ---- Boite de reception (sous-onglet complet : liste + detail) -----------
 function renderFmInboxList() {
   const el = document.getElementById("fmInboxListEl");
@@ -8503,11 +8522,10 @@ async function selectFmInboxMessage(msgId) {
 
   if (!msg || !msg.unread) return;
 
-  // Mise a jour optimiste de l'UI (liste, apercu accueil, badge), puis
-  // persistance en base ; on revient en arriere si l'update echoue.
+  // Mise a jour optimiste de l'UI (liste, badge), puis persistance en base ;
+  // on revient en arriere si l'update echoue.
   msg.unread = false;
   renderFmInboxList();
-  renderInbox();
   updateInboxBadge();
 
   const { error } = await supabaseClient
@@ -8518,7 +8536,6 @@ async function selectFmInboxMessage(msgId) {
   if (error) {
     msg.unread = true;
     renderFmInboxList();
-    renderInbox();
     updateInboxBadge();
     toast("Impossible de marquer le message comme lu", true);
   }
@@ -9461,6 +9478,17 @@ document.getElementById("mdetOverlay").addEventListener("click", (e) => {
   if (e.target.id === "mdetOverlay") closeMatchDetails();
 });
 
+// Libelle de classement lisible ("1er", "2e"...) ou tiret si le rang est
+// inconnu (ex: club sans classement calcule pour l'instant).
+function fmRankLabel(rank) {
+  if (!rank) return "—";
+  return rank === 1 ? "1er" : `${rank}e`;
+}
+
+// Module "Prochaine rencontre" de la page d'accueil : met en avant le tout
+// prochain match (blasons des deux clubs, domicile/exterieur, competition,
+// classement des deux equipes) et garde les matchs suivants disponibles,
+// en plus petit, juste a cote.
 async function renderNextMatch() {
   const el = document.getElementById("fmNextMatch");
   el.innerHTML = `Chargement...`;
@@ -9473,18 +9501,70 @@ async function renderNextMatch() {
     getClubMatches(myGameClubId),
     getDivisionStandingsMap(myClubNation, myClubDivision),
   ]);
-  const upcoming = matches.filter(m => !m.played).slice(0, 3);
+  const upcoming = matches.filter(m => !m.played);
 
   if (upcoming.length === 0) {
     el.innerHTML = `Aucun match programmé pour l'instant.`;
     return;
   }
 
-  const logos = await mdetFetchClubLogos(upcoming.map(m => m.oppId));
+  const featured = upcoming[0];
+  const rest = upcoming.slice(1, 6);
+  const compLabel = `${myClubNation} · ${myClubDivision}`;
 
-  el.innerHTML = `<div class="fm-comp-calendar-list fm-comp-calendar-list--compact">${
-    upcoming.map((m, i) => renderMatchRow(m, standingsMap, { isNext: i === 0, logos })).join("")
-  }</div>`;
+  const logos = await mdetFetchClubLogos([myGameClubId, ...upcoming.slice(0, 6).map(m => m.oppId)]);
+
+  const domId = featured.isHome ? myGameClubId : featured.oppId;
+  const domName = featured.isHome ? myClubNom : featured.oppName;
+  const extId = featured.isHome ? featured.oppId : myGameClubId;
+  const extName = featured.isHome ? featured.oppName : myClubNom;
+
+  const d = featured.date_match ? new Date(featured.date_match) : null;
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
+  const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "long" }) : "";
+
+  el.innerHTML = `
+    <div class="fm-nf-wrap">
+      <div class="fm-nf-feature" id="fmNfFeature">
+        <div class="fm-nf-feature-top">
+          <span class="fm-nf-comp-badge">${escapeHtml(compLabel)}</span>
+          <span class="fm-nf-side-badge ${featured.isHome ? "home" : "away"}">${featured.isHome ? "À domicile" : "À l'extérieur"}</span>
+        </div>
+        <div class="fm-nf-teams">
+          <div class="fm-nf-team" data-club-id="${domId}">
+            ${mdetLogoHtml(logos[domId], domName, 56)}
+            <div class="fm-nf-team-name">${escapeHtml(domName)}</div>
+            <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[domId])}</div>
+          </div>
+          <div class="fm-nf-vs">
+            <span class="fm-nf-vs-txt">VS</span>
+            <div class="fm-nf-date">${dateLabel ? `${escapeHtml(dateLabel)}` : "Date à venir"}${weekday ? `<span class="fm-nf-weekday">${escapeHtml(weekday)}</span>` : ""}</div>
+          </div>
+          <div class="fm-nf-team" data-club-id="${extId}">
+            ${mdetLogoHtml(logos[extId], extName, 56)}
+            <div class="fm-nf-team-name">${escapeHtml(extName)}</div>
+            <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[extId])}</div>
+          </div>
+        </div>
+        <div class="fm-nf-footer">${featured.journee ? `Journée ${featured.journee}` : "Journée à venir"} · ${escapeHtml(compLabel)}</div>
+      </div>
+      ${rest.length ? `
+      <div class="fm-nf-list">
+        <div class="fm-nf-list-title">Prochains matchs</div>
+        <div class="fm-comp-calendar-list fm-comp-calendar-list--compact fm-comp-calendar-list--mini">${
+          rest.map(m => renderMatchRow(m, standingsMap, { logos })).join("")
+        }</div>
+      </div>` : ""}
+    </div>
+  `;
+
+  el.querySelectorAll(".fm-nf-team[data-club-id]").forEach(teamEl => {
+    teamEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const clubId = teamEl.getAttribute("data-club-id");
+      if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+    });
+  });
   bindMatchRowClicks(el);
 }
 
@@ -9765,11 +9845,6 @@ function bindHomeCardNav(gameClubId) {
     if (row) row.click();
     else showFmCompetitionsView(gameClubId);
   };
-  const goToInbox = () => {
-    const row = document.querySelector('.fm-nav-item[data-key="messagerie"]');
-    if (row) row.click();
-    else showFmInboxView();
-  };
   const goToDynamique = () => {
     const row = document.querySelector('.fm-nav-item[data-key="tactique"]');
     if (row) row.click();
@@ -9779,7 +9854,6 @@ function bindHomeCardNav(gameClubId) {
   makeCardClickable("fmNextMatch", goToCompetitions);
   makeCardClickable("fmLastMatches", goToCompetitions);
   makeCardClickable("fmStandings", goToCompetitions);
-  makeCardClickable("fmInbox", goToInbox);
   makeCardClickable("fmGroupDynamics", goToDynamique);
 }
 
@@ -9802,6 +9876,7 @@ async function showMyClub(gameClubId, canChange) {
   }
   myClubNation = club.nation;
   myClubDivision = club.division;
+  myClubNom = club.nom;
 
   const { data: participants } = await supabaseClient
     .from("game_participants")
@@ -9819,7 +9894,6 @@ async function showMyClub(gameClubId, canChange) {
   renderTeamStats();
   renderStandings(club);
   await loadInboxMessages();
-  renderInbox();
   updateInboxBadge();
 
   // Arrivee depuis un lien d'une autre page (club.html, squad.html,
