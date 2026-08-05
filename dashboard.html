@@ -8719,13 +8719,20 @@ async function getClubCoupeInfo(clubId, clubNation) {
   if (!comp) return null;
 
   const clubIdNum = Number(clubId);
-  const { data: rows } = await supabaseClient
+  // On restreint explicitement a la saison en cours de la partie : la table
+  // contient aussi des tirages d'autres saisons (passees ou de test) pour
+  // ce meme club/competition, avec des dates qui n'ont rien a voir (ex.
+  // saison "gabarit" tres loin dans le futur) — sans ce filtre elles
+  // se glissent dans le calendrier et faussent le tri chronologique.
+  let rowsQuery = supabaseClient
     .from("game_coupe_nationale_tours")
     .select("id, saison, tour, game_club_id_1, game_club_id_2, date_match, score_1, score_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut")
     .eq("game_id", gameId)
     .eq("competition_ref", comp.id)
     .or(`game_club_id_1.eq.${clubIdNum},game_club_id_2.eq.${clubIdNum}`)
     .order("tour", { ascending: true });
+  if (currentGame?.saison != null) rowsQuery = rowsQuery.eq("saison", currentGame.saison);
+  const { data: rows } = await rowsQuery;
 
   const allRows = rows || [];
   const realRows = allRows.filter(r => r.game_club_id_1 !== r.game_club_id_2);
