@@ -1562,7 +1562,7 @@
   }
   .fm-nf-team:hover { background: rgba(255,255,255,0.04); }
   .fm-nf-team:hover .fm-nf-team-name { color: var(--gold); }
-  .fm-nf-team .mdet-club-logo, .fm-nf-team .mdet-club-logo-fallback { width: 84px !important; height: 84px !important; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
+  .fm-nf-team .mdet-club-logo, .fm-nf-team .mdet-club-logo-fallback { width: 116px !important; height: 116px !important; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5)); }
   .fm-nf-team-name {
     font-size: 13.5px; font-weight: 700; max-width: 100%; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
@@ -9598,7 +9598,7 @@ async function renderNextMatch() {
         </div>
         <div class="fm-nf-teams">
           <div class="fm-nf-team" data-club-id="${domId}">
-            ${mdetLogoHtml(logos[domId], domName, 84)}
+            ${mdetLogoHtml(logos[domId], domName, 116)}
             <div class="fm-nf-team-name">${escapeHtml(domName)}</div>
             <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[domId])}</div>
           </div>
@@ -9607,7 +9607,7 @@ async function renderNextMatch() {
             <div class="fm-nf-date">${dateLabel ? `${escapeHtml(dateLabel)}` : "Date à venir"}${weekday ? `<span class="fm-nf-weekday">${escapeHtml(weekday)}</span>` : ""}</div>
           </div>
           <div class="fm-nf-team" data-club-id="${extId}">
-            ${mdetLogoHtml(logos[extId], extName, 84)}
+            ${mdetLogoHtml(logos[extId], extName, 116)}
             <div class="fm-nf-team-name">${escapeHtml(extName)}</div>
             <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[extId])}</div>
           </div>
