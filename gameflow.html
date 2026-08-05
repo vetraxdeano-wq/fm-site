@@ -294,6 +294,50 @@ async function loadTodayMatches(realDate) {
   const clubNom = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
 
   el.innerHTML = matches.map(m => matchRowHtml(m, clubNom)).join("");
+
+  await loadTodayCoupeMatches(realDate);
+}
+
+// Affiche, sous les matchs de championnat du jour, les matchs de coupe
+// nationale programmes a cette date (game_coupe_nationale_tours). Un bloc
+// dedie car ces matchs n'appartiennent a aucune division/nation geree par
+// `calendrier` (competition_ref pointe vers FRA_COUPE, ENG_COUPE, etc.).
+async function loadTodayCoupeMatches(realDate) {
+  const el = document.getElementById("todayMatches");
+  const iso = toISODate(realDate);
+  if (!iso) return;
+
+  const { data: matches, error } = await supabaseClient
+    .from("game_coupe_nationale_tours")
+    .select("id, competition_ref, tour, statut, score_1, score_2, game_club_id_1, game_club_id_2")
+    .eq("game_id", gameId)
+    .eq("date_match", iso);
+
+  if (error || !matches || matches.length === 0) return;
+
+  const clubIds = [...new Set(matches.flatMap(m => [m.game_club_id_1, m.game_club_id_2]))];
+  const { data: clubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", clubIds);
+  const clubNom = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
+
+  const html = matches.map(m => matchRowHtmlCoupe(m, clubNom)).join("");
+  if (el.querySelector(".empty-hint")) el.innerHTML = "";
+  el.insertAdjacentHTML("beforeend", html);
+}
+
+function matchRowHtmlCoupe(m, clubNom) {
+  const scoreHtml = m.statut === "termine"
+    ? `<span class="match-score">${m.score_1} - ${m.score_2}</span>`
+    : `<span class="match-score pending">à jouer</span>`;
+  return `
+    <div class="match-row">
+      <span class="match-comp">${escapeHtml(m.competition_ref || "")} · T${m.tour}</span>
+      <div class="match-teams">
+        <span class="home">${escapeHtml(clubNom[m.game_club_id_1] || "?")}</span>
+        ${scoreHtml}
+        <span class="away">${escapeHtml(clubNom[m.game_club_id_2] || "?")}</span>
+      </div>
+    </div>
+  `;
 }
 
 function matchRowHtml(m, clubNom) {
@@ -458,6 +502,82 @@ async function simulerBarragesDuJour(dateIso, onProgress) {
   return aTraiter.length;
 }
 
+// Tirs au but (match de coupe nul) : legerement pondere par la force moyenne
+// de l'effectif (note_actuel/ca), tres alea sinon. 5 tirs chacun puis mort
+// subite. Le moteur (simulerMatch) ne gere pas les tirs au but (propre au
+// championnat, jamais de match sec) : geres ici, cote client, comme le reste
+// de l'orchestration de la coupe.
+function simulerTirsAuBut(joueursDom, joueursExt) {
+  const force = (joueurs) => {
+    const notes = (joueurs || []).map(j => j.niveau_actuel ?? j.ca ?? 100);
+    if (!notes.length) return 60;
+    return notes.reduce((a, b) => a + b, 0) / notes.length;
+  };
+  const fDom = force(joueursDom);
+  const fExt = force(joueursExt);
+  const pDom = Math.min(0.9, Math.max(0.6, 0.78 + (fDom - fExt) / 400));
+  const pExt = Math.min(0.9, Math.max(0.6, 0.78 + (fExt - fDom) / 400));
+
+  let scoreDom = 0, scoreExt = 0;
+  for (let i = 0; i < 5; i++) {
+    if (Math.random() < pDom) scoreDom++;
+    if (Math.random() < pExt) scoreExt++;
+  }
+  while (scoreDom === scoreExt) {
+    if (Math.random() < pDom) scoreDom++;
+    if (Math.random() < pExt) scoreExt++;
+  }
+  return { scoreDom, scoreExt };
+}
+
+// Simule et enregistre les matchs de coupe nationale programmes a une date
+// donnee (statut = 'a_jouer' ; les byes sont deja 'termine' a la generation
+// du tour, donc jamais retournes ici). Match sec : tirs au but si egalite.
+async function simulerCoupeDuJour(dateIso, onProgress) {
+  const { data: matches, error } = await supabaseClient
+    .from("game_coupe_nationale_tours")
+    .select("id, game_club_id_1, game_club_id_2")
+    .eq("game_id", gameId)
+    .eq("date_match", dateIso)
+    .eq("statut", "a_jouer");
+  if (error) throw error;
+  if (!matches || matches.length === 0) return 0;
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (onProgress) onProgress("coupe", i + 1, matches.length);
+
+    const [dom, ext] = await Promise.all([
+      chargerDonneesClub(m.game_club_id_1),
+      chargerDonneesClub(m.game_club_id_2),
+    ]);
+    const resultat = simulerMatch({
+      domicile: { gameClubId: m.game_club_id_1, nom: dom.nom, joueurs: dom.joueurs, tactique: dom.tactique, coach: dom.coach, club: dom.club, groupe: dom.groupe },
+      exterieur: { gameClubId: m.game_club_id_2, nom: ext.nom, joueurs: ext.joueurs, tactique: ext.tactique, coach: ext.coach, club: ext.club, groupe: ext.groupe },
+      contexte: { enjeu: 0.65, meteo: "normale" },
+    });
+
+    let tabDom = null, tabExt = null;
+    if (resultat.score_domicile === resultat.score_exterieur) {
+      const tab = simulerTirsAuBut(dom.joueurs, ext.joueurs);
+      tabDom = tab.scoreDom;
+      tabExt = tab.scoreExt;
+    }
+
+    const { error: rpcErr } = await supabaseClient.rpc("enregistrer_resultat_match_coupe", {
+      p_match_id: m.id,
+      p_score_domicile: resultat.score_domicile,
+      p_score_exterieur: resultat.score_exterieur,
+      p_tab_penalty_domicile: tabDom,
+      p_tab_penalty_exterieur: tabExt,
+      p_stats: resultat.stats,
+    });
+    if (rpcErr) throw rpcErr;
+  }
+
+  return matches.length;
+}
+
 async function onContinue() {
   const btn = document.getElementById("continueBtn");
   const hint = document.getElementById("continueHint");
@@ -472,11 +592,13 @@ async function onContinue() {
     if (prochaineDateIso) {
       btn.textContent = "Simulation...";
       const onProgress = (type, fait, total) => {
-        hint.textContent = `Simulation ${type === "barrage" ? "des barrages" : "des matchs"} : ${fait}/${total}...`;
+        const label = type === "barrage" ? "des barrages" : type === "coupe" ? "des matchs de coupe" : "des matchs";
+        hint.textContent = `Simulation ${label} : ${fait}/${total}...`;
       };
       const nbMatchs = await simulerMatchsDuJour(prochaineDateIso, onProgress);
       const nbBarrages = await simulerBarragesDuJour(prochaineDateIso, onProgress);
-      if (nbMatchs > 0 || nbBarrages > 0) hint.textContent = "Finalisation...";
+      const nbCoupe = await simulerCoupeDuJour(prochaineDateIso, onProgress);
+      if (nbMatchs > 0 || nbBarrages > 0 || nbCoupe > 0) hint.textContent = "Finalisation...";
     }
 
     // 2) avancer_jour : fait avancer le jour, resout les matchs restants
