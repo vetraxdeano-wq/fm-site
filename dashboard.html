@@ -1525,8 +1525,19 @@
   .fm-nf-wrap { display: flex; gap: 16px; height: 100%; min-height: 0; overflow: hidden; }
   .fm-nf-feature {
     flex: 1 1 60%; min-width: 0; display: flex; flex-direction: column;
-    background: rgba(251,191,36,0.05); border: 1px solid #7a5c0f; border-radius: 12px;
+    position: relative; overflow: hidden;
+    border: 1px solid #7a5c0f; border-radius: 12px;
     padding: 16px 18px;
+    /* Fond "stade de foot" en pur CSS : lueurs de projecteurs aux coins,
+       rond central + ligne médiane du terrain, pelouse tondue en bandes,
+       le tout assombri par un vignettage pour garder le contenu lisible. */
+    background:
+      radial-gradient(circle at 8% -6%, rgba(255,255,255,0.16), transparent 42%),
+      radial-gradient(circle at 92% -6%, rgba(255,255,255,0.16), transparent 42%),
+      radial-gradient(circle at 50% 50%, transparent 52px, rgba(255,255,255,0.10) 54px, rgba(255,255,255,0.10) 56px, transparent 58px),
+      linear-gradient(90deg, transparent calc(50% - 1px), rgba(255,255,255,0.09) calc(50% - 1px), rgba(255,255,255,0.09) calc(50% + 1px), transparent calc(50% + 1px)),
+      repeating-linear-gradient(90deg, rgba(74,222,128,0.12) 0px, rgba(74,222,128,0.12) 36px, rgba(21,101,52,0.14) 36px, rgba(21,101,52,0.14) 72px),
+      linear-gradient(180deg, rgba(8,12,9,0.6), rgba(8,12,9,0.78));
   }
   .fm-nf-feature-top { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
   .fm-nf-comp-badge {
@@ -1534,6 +1545,7 @@
     color: var(--gold); background: rgba(251,191,36,0.12); border: 1px solid #7a5c0f;
     border-radius: 999px; padding: 3px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
   }
+  .fm-nf-comp-badge.coupe { color: #60a5fa; background: rgba(59,130,246,0.12); border-color: #1e40af; }
   .fm-nf-side-badge {
     flex-shrink: 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
     border-radius: 999px; padding: 3px 10px; border: 1px solid var(--border); color: var(--text-dim); background: #14171d;
@@ -1550,10 +1562,10 @@
   }
   .fm-nf-team:hover { background: rgba(255,255,255,0.04); }
   .fm-nf-team:hover .fm-nf-team-name { color: var(--gold); }
-  .fm-nf-team .mdet-club-logo, .fm-nf-team .mdet-club-logo-fallback { width: 56px !important; height: 56px !important; }
+  .fm-nf-team .mdet-club-logo, .fm-nf-team .mdet-club-logo-fallback { width: 84px !important; height: 84px !important; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
   .fm-nf-team-name {
     font-size: 13.5px; font-weight: 700; max-width: 100%; overflow: hidden;
-    text-overflow: ellipsis; white-space: nowrap;
+    text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   }
   .fm-nf-team-rank {
     font-size: 11px; color: var(--text-dim); background: #14171d; border: 1px solid var(--border);
@@ -1581,8 +1593,10 @@
   .fm-nf-list .fm-comp-match-row { padding: 8px 12px; gap: 8px; font-size: 11.5px; }
   .fm-nf-list .fm-comp-match-date { width: 42px; }
   .fm-nf-list .fm-comp-match-date .day { font-size: 12px; }
-  .fm-nf-list .fm-comp-match-comp { display: none; }
-  .fm-nf-list .fm-comp-match-journee { width: 26px; font-size: 9.5px; }
+  .fm-nf-list .fm-comp-match-comp {
+    width: 34px; font-size: 8.5px; padding: 2px 0;
+  }
+  .fm-nf-list .fm-comp-match-journee { width: 24px; font-size: 9px; }
   @media (max-width: 900px) {
     .fm-nf-wrap { flex-direction: column; }
     .fm-nf-list { flex: 0 0 auto; }
@@ -9527,9 +9541,10 @@ function fmRankLabel(rank) {
 }
 
 // Module "Prochaine rencontre" de la page d'accueil : met en avant le tout
-// prochain match (blasons des deux clubs, domicile/exterieur, competition,
-// classement des deux equipes) et garde les matchs suivants disponibles,
-// en plus petit, juste a cote.
+// prochain match, toutes competitions confondues (championnat + coupe
+// nationale), classees chronologiquement (blasons des deux clubs,
+// domicile/exterieur, competition, classement des deux equipes) et garde
+// les matchs suivants disponibles, en plus petit, juste a cote.
 async function renderNextMatch() {
   const el = document.getElementById("fmNextMatch");
   el.innerHTML = `Chargement...`;
@@ -9538,11 +9553,16 @@ async function renderNextMatch() {
     return;
   }
 
-  const [matches, standingsMap] = await Promise.all([
+  const [champMatches, standingsMap, coupeInfo] = await Promise.all([
     getClubMatches(myGameClubId),
     getDivisionStandingsMap(myClubNation, myClubDivision),
+    getClubCoupeInfo(myGameClubId, myClubNation),
   ]);
-  const upcoming = matches.filter(m => !m.played);
+
+  const combined = [...champMatches, ...(coupeInfo?.matches || [])];
+  const upcoming = combined
+    .filter(m => !m.played)
+    .sort((a, b) => new Date(a.date_match) - new Date(b.date_match));
 
   if (upcoming.length === 0) {
     el.innerHTML = `Aucun match programmé pour l'instant.`;
@@ -9554,7 +9574,9 @@ async function renderNextMatch() {
   // remplit tout l'espace vertical dispo dans le module et scrolle en
   // interne au-dela, plutot que de laisser un vide si peu de matchs.
   const rest = upcoming.slice(1);
-  const compLabel = `${myClubNation} · ${myClubDivision}`;
+  const isCoupe = featured.compType === "coupe";
+  const compLabel = isCoupe ? featured.compLabel : `${myClubNation} · ${myClubDivision}`;
+  const roundLabel = isCoupe ? featured.roundLabel : (featured.journee ? `Journée ${featured.journee}` : "Journée à venir");
 
   const logos = await mdetFetchClubLogos([myGameClubId, ...upcoming.map(m => m.oppId)]);
 
@@ -9571,12 +9593,12 @@ async function renderNextMatch() {
     <div class="fm-nf-wrap">
       <div class="fm-nf-feature" id="fmNfFeature">
         <div class="fm-nf-feature-top">
-          <span class="fm-nf-comp-badge">${escapeHtml(compLabel)}</span>
+          <span class="fm-nf-comp-badge ${isCoupe ? "coupe" : ""}">${escapeHtml(compLabel)}</span>
           <span class="fm-nf-side-badge ${featured.isHome ? "home" : "away"}">${featured.isHome ? "À domicile" : "À l'extérieur"}</span>
         </div>
         <div class="fm-nf-teams">
           <div class="fm-nf-team" data-club-id="${domId}">
-            ${mdetLogoHtml(logos[domId], domName, 56)}
+            ${mdetLogoHtml(logos[domId], domName, 84)}
             <div class="fm-nf-team-name">${escapeHtml(domName)}</div>
             <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[domId])}</div>
           </div>
@@ -9585,12 +9607,12 @@ async function renderNextMatch() {
             <div class="fm-nf-date">${dateLabel ? `${escapeHtml(dateLabel)}` : "Date à venir"}${weekday ? `<span class="fm-nf-weekday">${escapeHtml(weekday)}</span>` : ""}</div>
           </div>
           <div class="fm-nf-team" data-club-id="${extId}">
-            ${mdetLogoHtml(logos[extId], extName, 56)}
+            ${mdetLogoHtml(logos[extId], extName, 84)}
             <div class="fm-nf-team-name">${escapeHtml(extName)}</div>
             <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[extId])}</div>
           </div>
         </div>
-        <div class="fm-nf-footer">${featured.journee ? `Journée ${featured.journee}` : "Journée à venir"} · ${escapeHtml(compLabel)}</div>
+        <div class="fm-nf-footer">${escapeHtml(roundLabel)} · ${escapeHtml(compLabel)}</div>
       </div>
       ${rest.length ? `
       <div class="fm-nf-list">
