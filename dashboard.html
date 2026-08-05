@@ -8555,16 +8555,57 @@ function showFmInboxView() {
   renderFmInboxDetail();
 }
 
-function renderTeamStats() {
-  // Aucune donnee de saison (matchs joues, buts...) n'est encore reliee au
-  // dashboard : on affiche l'etat honnete d'une pre-saison qui n'a pas commence.
+// Stats de saison de l'equipe (module Accueil) : matchs joues, buts et
+// cartons, calcules a partir des vraies donnees du championnat. Le bilan
+// V/N/D/buts vient de game_clubs (deja tenu a jour a chaque match), les
+// cartons sont recomptes depuis calendrier.stats (jsonb ecrit par le
+// moteur de match) faute d'un compteur agrege cote base.
+async function renderTeamStats() {
   const el = document.getElementById("fmTeamStats");
+  el.innerHTML = `Chargement...`;
+  if (!myGameClubId) {
+    el.innerHTML = `<div class="fm-empty">Aucun club chargé.</div>`;
+    return;
+  }
+
+  const [{ data: clubRow, error: clubErr }, { data: playedMatches, error: matchesErr }] = await Promise.all([
+    supabaseClient
+      .from("game_clubs")
+      .select("victoires, nuls, defaites, buts_pour, buts_contre")
+      .eq("id", myGameClubId)
+      .single(),
+    supabaseClient
+      .from("calendrier")
+      .select("club_domicile_id, club_exterieur_id, stats")
+      .eq("game_id", gameId)
+      .or(`club_domicile_id.eq.${myGameClubId},club_exterieur_id.eq.${myGameClubId}`)
+      .not("score_domicile", "is", null)
+      .not("score_exterieur", "is", null),
+  ]);
+
+  if (clubErr) console.error(clubErr);
+  if (matchesErr) console.error(matchesErr);
+
+  const matchsJoues = (clubRow?.victoires ?? 0) + (clubRow?.nuls ?? 0) + (clubRow?.defaites ?? 0);
+  const butsInscrits = clubRow?.buts_pour ?? 0;
+  const butsEncaisses = clubRow?.buts_contre ?? 0;
+
+  let jaunes = 0, rouges = 0;
+  (playedMatches || []).forEach(m => {
+    (m.stats?.cartons || []).forEach(c => {
+      if (Number(c.game_club_id) !== Number(myGameClubId)) return;
+      if (c.type === "jaune") jaunes += 1;
+      else if (c.type === "deuxieme_jaune") { jaunes += 1; rouges += 1; }
+      else if (c.type === "rouge_direct") rouges += 1;
+    });
+  });
+
   el.innerHTML = `
-    <div class="fm-stat-row"><span class="label">Matchs disputés</span><span class="value">0</span></div>
-    <div class="fm-stat-row"><span class="label">Buts inscrits</span><span class="value">0</span></div>
-    <div class="fm-stat-row"><span class="label">Buts encaissés</span><span class="value">0</span></div>
-    <div class="fm-stat-row"><span class="label">Cartons jaunes</span><span class="value">0</span></div>
-    <div class="fm-stat-row"><span class="label">Cartons rouges</span><span class="value">0</span></div>
+    <div class="fm-stat-row"><span class="label">Matchs disputés</span><span class="value">${matchsJoues}</span></div>
+    <div class="fm-stat-row"><span class="label">Buts inscrits</span><span class="value">${butsInscrits}</span></div>
+    <div class="fm-stat-row"><span class="label">Buts encaissés</span><span class="value">${butsEncaisses}</span></div>
+    <div class="fm-stat-row"><span class="label">Cartons jaunes</span><span class="value">${jaunes}</span></div>
+    <div class="fm-stat-row"><span class="label">Cartons rouges</span><span class="value">${rouges}</span></div>
   `;
 }
 
@@ -9509,10 +9550,13 @@ async function renderNextMatch() {
   }
 
   const featured = upcoming[0];
-  const rest = upcoming.slice(1, 6);
+  // Toutes les rencontres suivantes (pas de plafond arbitraire) : la liste
+  // remplit tout l'espace vertical dispo dans le module et scrolle en
+  // interne au-dela, plutot que de laisser un vide si peu de matchs.
+  const rest = upcoming.slice(1);
   const compLabel = `${myClubNation} · ${myClubDivision}`;
 
-  const logos = await mdetFetchClubLogos([myGameClubId, ...upcoming.slice(0, 6).map(m => m.oppId)]);
+  const logos = await mdetFetchClubLogos([myGameClubId, ...upcoming.map(m => m.oppId)]);
 
   const domId = featured.isHome ? myGameClubId : featured.oppId;
   const domName = featured.isHome ? myClubNom : featured.oppName;
