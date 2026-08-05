@@ -379,6 +379,43 @@
   .fm-comp-mini-table tr.me.zone-euro-1 td, .fm-comp-mini-table tr.me.zone-euro-2 td,
   .fm-comp-mini-table tr.me.zone-euro-3 td, .fm-comp-mini-table tr.me.zone-releg td { background: rgba(251,191,36,0.12); }
 
+  /* ---- Distinction championnat / coupe nationale sur les lignes de
+     calendrier, et carte "coupe" dans le pane de droite (meme gabarit que
+     la carte championnat, cf. .fm-comp-card ci-dessus). ---- */
+  .fm-comp-match-comp {
+    flex-shrink: 0; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em;
+    font-weight: 700; border-radius: 5px; padding: 3px 0; width: 46px; text-align: center;
+  }
+  .fm-comp-match-comp.champ { color: var(--gold); background: rgba(251,191,36,0.1); border: 1px solid #7a5c0f; }
+  .fm-comp-match-comp.coupe { color: #60a5fa; background: rgba(59,130,246,0.12); border: 1px solid #1e40af; }
+  .fm-comp-card-tag.coupe { background: rgba(59,130,246,0.12); color: #60a5fa; border-color: #1e40af; }
+  .fm-comp-coupe-parcours {
+    flex: 1; min-height: 0; overflow-y: auto; margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent;
+  }
+  .fm-comp-coupe-parcours::-webkit-scrollbar { width: 6px; }
+  .fm-comp-coupe-parcours::-webkit-scrollbar-track { background: transparent; }
+  .fm-comp-coupe-parcours::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 999px; }
+  .fm-comp-coupe-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; padding: 3px 0; }
+  .fm-comp-coupe-row .rnd {
+    flex-shrink: 0; width: 40px; font-size: 9.5px; text-align: center; color: var(--text-dim);
+    background: #14171d; border: 1px solid var(--border); border-radius: 5px; padding: 2px 0;
+  }
+  .fm-comp-coupe-row .opp {
+    flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; cursor: pointer;
+  }
+  .fm-comp-coupe-row .opp:hover { color: var(--gold); text-decoration: underline; }
+  .fm-comp-coupe-row .res {
+    flex-shrink: 0; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--border); background: #14171d; color: var(--text);
+  }
+  .fm-comp-coupe-row .res.win { color: var(--accent); border-color: #2f6b45; background: rgba(74,222,128,0.1); }
+  .fm-comp-coupe-row .res.lose { color: #f87171; border-color: #7a2f2f; background: rgba(248,113,113,0.1); }
+  .fm-comp-coupe-row .res.next { color: var(--gold); border-color: #7a5c0f; background: rgba(251,191,36,0.1); }
+  .fm-comp-empty-inline { color: var(--text-dim); font-size: 12px; text-align: center; padding: 16px 0; }
+
   .fm-standings-legend {
     display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 2px 0; font-size: 10.5px; color: var(--text-dim);
   }
@@ -2296,6 +2333,169 @@ async function getStandingsZones(comp, totalClubs) {
   return { zoneClassForRank, legendHtml };
 }
 
+// ===================== Coupe nationale (compétitions + calendrier) =====================
+// Convertit un numero de tour en nom de round lisible, a partir du nb_tours
+// total de la competition cette saison (nb_tours - tour = distance a la
+// finale : 0 = finale, 1 = demies, etc). Si nb_tours est inconnu on retombe
+// sur un libelle generique "Tour X".
+function coupeRoundLabel(tour, nbTours) {
+  if (!nbTours) return `Tour ${tour}`;
+  const NAMES = { 0: "Finale", 1: "Demi-finale", 2: "Quart de finale", 3: "8e de finale", 4: "16e de finale", 5: "32e de finale", 6: "64e de finale", 7: "128e de finale" };
+  return NAMES[nbTours - tour] || `Tour ${tour}`;
+}
+function coupeRoundShort(tour, nbTours) {
+  if (!nbTours) return `T${tour}`;
+  const SHORT = { 0: "Finale", 1: "1/2", 2: "1/4", 3: "1/8", 4: "1/16", 5: "1/32", 6: "1/64", 7: "1/128" };
+  return SHORT[nbTours - tour] || `T${tour}`;
+}
+
+// Recupere le parcours du club dans la coupe nationale de sa nation pour la
+// partie en cours : competition, nb de tours de l'edition, et la liste de
+// ses matchs (les "byes", ou game_club_id_1 = game_club_id_2, sont ecartes
+// car il ne s'agit pas d'un vrai match). Retourne null si la nation du club
+// n'a pas de coupe nationale geree.
+async function getClubCoupeInfo(clubId, clubNation) {
+  const { data: comp } = await supabaseClient
+    .from("competitions")
+    .select("id, nom")
+    .eq("nation", clubNation)
+    .eq("type", "coupe_nationale")
+    .maybeSingle();
+  if (!comp) return null;
+
+  const clubIdNum = Number(clubId);
+  const { data: rows } = await supabaseClient
+    .from("game_coupe_nationale_tours")
+    .select("id, saison, tour, game_club_id_1, game_club_id_2, date_match, score_1, score_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut")
+    .eq("game_id", gameId)
+    .eq("competition_ref", comp.id)
+    .or(`game_club_id_1.eq.${clubIdNum},game_club_id_2.eq.${clubIdNum}`)
+    .order("tour", { ascending: true });
+
+  const allRows = rows || [];
+  const realRows = allRows.filter(r => r.game_club_id_1 !== r.game_club_id_2);
+
+  let nbTours = null;
+  if (allRows.length) {
+    const saison = allRows[allRows.length - 1].saison;
+    const { data: config } = await supabaseClient
+      .from("game_coupe_nationale_config")
+      .select("nb_tours")
+      .eq("game_id", gameId).eq("competition_ref", comp.id).eq("saison", saison)
+      .maybeSingle();
+    nbTours = config?.nb_tours || null;
+  }
+
+  const oppIds = [...new Set(realRows.map(r => r.game_club_id_1 === clubIdNum ? r.game_club_id_2 : r.game_club_id_1))];
+  const oppMap = {};
+  if (oppIds.length) {
+    const { data: oppClubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", oppIds);
+    (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; });
+  }
+
+  const matches = realRows.map(r => {
+    const isSide1 = r.game_club_id_1 === clubIdNum;
+    const oppId = isSide1 ? r.game_club_id_2 : r.game_club_id_1;
+    return {
+      id: `coupe-${r.id}`,
+      date_match: r.date_match,
+      journee: null,
+      compType: "coupe",
+      compLabel: comp.nom,
+      tour: r.tour,
+      roundShort: coupeRoundShort(r.tour, nbTours),
+      roundLabel: coupeRoundLabel(r.tour, nbTours),
+      isHome: isSide1,
+      oppId,
+      oppName: oppMap[oppId] || "?",
+      played: r.statut === "termine",
+      score_domicile: isSide1 ? r.score_1 : r.score_2,
+      score_exterieur: isSide1 ? r.score_2 : r.score_1,
+      myPen: isSide1 ? r.tab_penalty_1 : r.tab_penalty_2,
+      oppPen: isSide1 ? r.tab_penalty_2 : r.tab_penalty_1,
+      isWinner: r.game_club_vainqueur_id === clubIdNum,
+    };
+  });
+
+  const entryTour = realRows.length ? realRows[0].tour : null;
+
+  return { comp, nbTours, matches, entryTour };
+}
+
+// Construit la carte "coupe" du pane de droite (meme gabarit que la carte
+// championnat), avec le parcours du club tour par tour et son prochain
+// match le cas echeant. Retourne une chaine vide si la nation n'a pas de
+// coupe nationale geree par le moteur.
+function renderCoupeCardHtml(coupeInfo, gameId, clubId) {
+  if (!coupeInfo) return "";
+  const { comp, nbTours, matches, entryTour } = coupeInfo;
+  const lastMatch = matches[matches.length - 1] || null;
+
+  let statusValue, currentRoundValue, footerText;
+  if (!lastMatch) {
+    statusValue = "Pas entré en lice";
+    currentRoundValue = "—";
+    footerText = "Parcours et prochain match de la coupe";
+  } else if (!lastMatch.played) {
+    statusValue = "À venir";
+    currentRoundValue = lastMatch.roundShort;
+    footerText = "Parcours et prochain match de la coupe";
+  } else if (lastMatch.isWinner) {
+    if (lastMatch.tour === nbTours) {
+      statusValue = "🏆 Vainqueur";
+      currentRoundValue = lastMatch.roundShort;
+    } else {
+      statusValue = "Qualifié(e)";
+      currentRoundValue = lastMatch.roundShort;
+    }
+    footerText = "Parcours et prochain match de la coupe";
+  } else {
+    statusValue = "Éliminé(e)";
+    currentRoundValue = lastMatch.roundShort;
+    footerText = "Parcours et prochain match de la coupe";
+  }
+
+  const parcoursHtml = matches.length ? matches.map(m => {
+    let resHtml;
+    if (!m.played) {
+      resHtml = `<span class="res next">à venir</span>`;
+    } else {
+      const cls = m.isWinner ? "win" : "lose";
+      let scoreText = `${m.score_domicile}-${m.score_exterieur}`;
+      if (m.myPen != null) scoreText += ` (tab ${m.myPen}-${m.oppPen})`;
+      resHtml = `<span class="res ${cls}">${scoreText}</span>`;
+    }
+    return `
+      <div class="fm-comp-coupe-row">
+        <span class="rnd">${escapeHtml(m.roundShort)}</span>
+        <span class="opp" data-club-id="${m.oppId}">${escapeHtml(m.oppName)}</span>
+        ${resHtml}
+      </div>
+    `;
+  }).join("") : `<div class="fm-comp-empty-inline">${entryTour ? "" : "Pas encore entré en lice dans la compétition."}</div>`;
+
+  return `
+    <div class="fm-comp-card fm-comp-card-coupe" id="fmCompCard-${comp.id}">
+      <div class="fm-comp-card-head">
+        <div>
+          <div class="fm-comp-card-title">${escapeHtml(comp.nom)}</div>
+          <div class="fm-comp-card-sub">${entryTour ? `Entrée en lice : ${escapeHtml(coupeRoundLabel(entryTour, nbTours))}` : (nbTours ? `${nbTours} tours` : "")}</div>
+        </div>
+        <span class="fm-comp-card-tag coupe">Coupe</span>
+      </div>
+      <div class="fm-comp-card-stats" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="fm-comp-stat"><div class="label">Statut</div><div class="value">${statusValue}</div></div>
+        <div class="fm-comp-stat"><div class="label">Tour</div><div class="value">${currentRoundValue}</div></div>
+      </div>
+      <div class="fm-comp-coupe-parcours">${parcoursHtml}</div>
+      <div class="fm-comp-card-footer">
+        <span>${footerText}</span>
+        <span>→</span>
+      </div>
+    </div>
+  `;
+}
+
 async function getClubMatches(clubId) {
   // clubId vient des query params (donc une string), alors que
   // club_domicile_id / club_exterieur_id renvoyes par Supabase sont des
@@ -2333,11 +2533,13 @@ async function getClubMatches(clubId) {
       oppId,
       oppName: oppMap[oppId] || "?",
       played: m.score_domicile != null && m.score_exterieur != null,
+      compType: "championnat",
     };
   });
 }
 
 function renderMatchRow(m, standingsMap, opts = {}) {
+  const isCoupe = m.compType === "coupe";
   const d = m.date_match ? new Date(m.date_match) : null;
   const dayLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "-";
   const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "") : "";
@@ -2348,8 +2550,17 @@ function renderMatchRow(m, standingsMap, opts = {}) {
     rowClass += " played";
     const myScore = m.isHome ? m.score_domicile : m.score_exterieur;
     const oppScore = m.isHome ? m.score_exterieur : m.score_domicile;
-    const outcome = myScore > oppScore ? "victoire" : myScore < oppScore ? "defaite" : "nul";
-    resultHtml = `<div class="fm-comp-match-score ${outcome}">${myScore}-${oppScore}</div><button class="mdet-btn" data-match-id="${m.id}" type="button">Détails</button>`;
+    const outcome = isCoupe
+      ? (m.isWinner ? "victoire" : "defaite")
+      : (myScore > oppScore ? "victoire" : myScore < oppScore ? "defaite" : "nul");
+    let scoreText = `${myScore}-${oppScore}`;
+    if (isCoupe && m.myPen != null) scoreText += ` (tab ${m.myPen}-${m.oppPen})`;
+    // Le detail de match (moteur, note joueurs...) n'existe que pour les
+    // matchs de championnat (table calendrier) : pas de bouton pour la coupe.
+    const detailsBtn = isCoupe ? "" : `<button class="mdet-btn" data-match-id="${m.id}" type="button">Détails</button>`;
+    resultHtml = `<div class="fm-comp-match-score ${outcome}">${scoreText}</div>${detailsBtn}`;
+  } else if (isCoupe) {
+    resultHtml = `<div class="fm-comp-match-rank">à venir</div>`;
   } else {
     const oppRank = standingsMap[m.oppId] ? `${standingsMap[m.oppId]}e` : "—";
     resultHtml = `<div class="fm-comp-match-rank">${oppRank}</div>`;
@@ -2359,10 +2570,16 @@ function renderMatchRow(m, standingsMap, opts = {}) {
   const oppLogoUrl = opts.logos ? opts.logos[m.oppId] : null;
   const oppLogoHtml = mdetLogoHtml(oppLogoUrl, m.oppName, 18);
 
+  const compBadge = isCoupe
+    ? `<span class="fm-comp-match-comp coupe">Coupe</span>`
+    : `<span class="fm-comp-match-comp champ">Champ.</span>`;
+  const roundBadge = isCoupe ? escapeHtml(m.roundShort) : `J${m.journee ?? "-"}`;
+
   return `
     <div class="${rowClass}" ${opts.isNext ? 'data-next="true"' : ""}>
       <div class="fm-comp-match-date"><span class="day">${dayLabel}</span>${weekday}</div>
-      <div class="fm-comp-match-journee">J${m.journee ?? "-"}</div>
+      ${compBadge}
+      <div class="fm-comp-match-journee">${roundBadge}</div>
       <div class="fm-comp-match-side ${m.isHome ? "dom" : "ext"}">${m.isHome ? "D" : "E"}</div>
       <div class="fm-comp-match-opp" data-club-id="${m.oppId}">
         ${oppLogoHtml}
@@ -2537,7 +2754,13 @@ async function renderCompetitionsTab(viewedClubId) {
   const standingsMap = {};
   standingsList.forEach(r => { standingsMap[r.id] = r.rank; });
 
-  const matches = await getClubMatches(viewedClubId);
+  const coupeInfo = await getClubCoupeInfo(viewedClubId, viewedClubNation);
+
+  // Calendrier unifie : matchs de championnat + matchs de coupe nationale,
+  // tries chronologiquement (chaque ligne precise sa competition, cf.
+  // renderMatchRow).
+  const matches = [...(await getClubMatches(viewedClubId)), ...(coupeInfo?.matches || [])]
+    .sort((a, b) => new Date(a.date_match) - new Date(b.date_match));
   if (matches.length === 0) {
     calEl.innerHTML = `<div class="fm-comp-empty">Aucun match programmé.</div>`;
   } else {
@@ -2563,7 +2786,8 @@ async function renderCompetitionsTab(viewedClubId) {
     .maybeSingle();
 
   if (compError || !comp) {
-    rightEl.innerHTML = `<div class="fm-comp-empty">Compétition introuvable pour cette division.</div>`;
+    rightEl.innerHTML = `<div class="fm-comp-empty">Compétition introuvable pour cette division.</div>` + renderCoupeCardHtml(coupeInfo, gameId, viewedClubId);
+    bindCoupeCardEvents(rightEl, coupeInfo, viewedClubId);
     return;
   }
 
@@ -2639,7 +2863,7 @@ async function renderCompetitionsTab(viewedClubId) {
         <span>→</span>
       </div>
     </div>
-  `;
+  ` + renderCoupeCardHtml(coupeInfo, gameId, viewedClubId);
 
   document.getElementById(`fmCompCard-${comp.id}`).addEventListener("click", (e) => {
     if (e.target.closest(".fm-comp-mini-table .fm-club-link")) return;
@@ -2649,6 +2873,27 @@ async function renderCompetitionsTab(viewedClubId) {
     linkEl.addEventListener("click", (e) => {
       e.stopPropagation();
       const clubId = linkEl.getAttribute("data-club-id");
+      if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+    });
+  });
+  bindCoupeCardEvents(rightEl, coupeInfo, viewedClubId);
+}
+
+// Branche les clics de la carte coupe : la carte entiere renvoie vers
+// competition.html (meme comportement que la carte championnat), chaque
+// ligne de parcours vers la fiche de l'adversaire (stopPropagation).
+function bindCoupeCardEvents(rightEl, coupeInfo, viewedClubId) {
+  if (!coupeInfo) return;
+  const cardEl = document.getElementById(`fmCompCard-${coupeInfo.comp.id}`);
+  if (!cardEl) return;
+  cardEl.addEventListener("click", (e) => {
+    if (e.target.closest(".fm-comp-coupe-row .opp")) return;
+    window.location.href = `competition.html?game=${encodeURIComponent(gameId)}&competition=${encodeURIComponent(coupeInfo.comp.id)}&club=${encodeURIComponent(viewedClubId)}`;
+  });
+  cardEl.querySelectorAll(".fm-comp-coupe-row .opp").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const clubId = el.getAttribute("data-club-id");
       if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
     });
   });
