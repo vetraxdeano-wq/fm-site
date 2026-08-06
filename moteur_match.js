@@ -84,7 +84,9 @@ function minuteAleatoire() {
 const PROFILS_ROLE = {
   GB: {
     categorie: 'gardien',
-    attributsCles: ['reflexes', 'placement', 'sorties_dans_surface', 'communication', 'agilite', 'concentration'],
+    // attr_1c1 ("un contre un") est une vraie stat de gardien (duel face à
+    // l'attaquant lancé seul) — elle appartient ici, pas côté attaquant.
+    attributsCles: ['reflexes', 'placement', 'sorties_dans_surface', 'communication', 'agilite', 'concentration', 'attr_1c1'],
     poidsButeur: 0.001,
     poidsPasseur: 0.05,
     poidsCarton: 0.3,
@@ -123,7 +125,9 @@ const PROFILS_ROLE = {
   },
   BT: {
     categorie: 'attaquant',
-    attributsCles: ['finition', 'sang_froid', 'appels_de_balle', 'jeu_de_tete', 'attr_1c1', 'technique'],
+    // attr_1c1 retiré (c'est une stat de gardien, cf. GB ci-dessus) : remplacé
+    // par vitesse, pertinente pour un avant-centre qui se joue de la ligne défensive.
+    attributsCles: ['finition', 'sang_froid', 'appels_de_balle', 'jeu_de_tete', 'vitesse', 'technique'],
     poidsButeur: 3.2,
     poidsPasseur: 0.7,
     poidsCarton: 0.7,
@@ -475,22 +479,55 @@ function genererStatistiques(domination, forceDom, forceExt) {
 // ============================================================
 
 /**
- * Convertit les occasions franches en buts, occasion par occasion,
- * selon la qualité de l'attaque et le gardien adverse.
+ * Repère, parmi les titulaires attaquants/milieux offensifs (BT/MO — les
+ * "purs" buteurs, ailiers compris), le meilleur instinct de but individuel
+ * (finition, sang-froid, jeu de tête, un-contre-un), ramené sur 0-100. Sert
+ * à tirer la qualité de finition d'une équipe au-delà de sa seule moyenne
+ * collective : un vrai grand avant-centre change la donne même dans une
+ * attaque par ailleurs quelconque.
+ */
+function meilleurInstinctButeur(titulairesNotes) {
+  const candidats = titulairesNotes.filter((t) => t.categorie === 'attaquant' || t.categorie === 'milieu_offensif');
+  if (!candidats.length) return 50;
+
+  const scores = candidats.map((t) => {
+    const jr = t.joueur;
+    if (!jr) return 50;
+    const finition = jr.finition ?? 10;
+    const sangFroid = jr.sang_froid ?? 10;
+    const jeuDeTete = jr.jeu_de_tete ?? 10;
+    const appelsDeBalle = jr.appels_de_balle ?? 10;
+    const instinct = finition * 0.45 + sangFroid * 0.35 + jeuDeTete * 0.1 + appelsDeBalle * 0.1; // /20
+    return clamp(instinct * 5, 1, 100); // -> /100
+  });
+
+  return Math.max(...scores);
+}
+
+/**
+ * Convertit les occasions franches en buts, occasion par occasion, selon la
+ * qualité de finition de l'équipe (attaque collective ET meilleur finisseur
+ * individuel) contre la défense adverse dans son ensemble (défenseurs +
+ * gardien, pas juste le gardien).
  * Retourne { buts, arrets } pour l'équipe attaquante.
  */
-function calculerButsEquipe(statsEquipe, forceAttaque, forceGardienAdverse, contexte) {
+function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualiteDefenseAdverse, contexte) {
   const nbOccasionsAConvertir = Math.max(statsEquipe.occasions_franches, Math.round(statsEquipe.tirs_cadres * 0.7));
   let buts = 0;
   let arrets = 0;
 
-  const qualiteFinition = clamp(forceAttaque / 100, 0.15, 0.95);
-  const qualiteGardien = clamp(forceGardienAdverse / 100, 0.15, 0.95);
+  // Le meilleur finisseur tire la qualité de finition au-delà de la seule
+  // moyenne d'équipe (45% de poids) : un grand avant-centre pèse lourd même
+  // dans une attaque autrement moyenne.
+  const qualiteFinition = clamp((forceAttaque * 0.45 + meilleurFinisseur * 0.55) / 100, 0.1, 0.98);
+  const qualiteDefense = clamp(qualiteDefenseAdverse / 100, 0.1, 0.95);
   const facteurPression = 1 - (contexte?.enjeu ?? 0) * 0.05;
 
   for (let i = 0; i < nbOccasionsAConvertir; i++) {
-    // probabilité de base d'une occasion franche ~ 28%, modulée par le niveau des deux côtés
-    const probaBut = clamp(0.28 + (qualiteFinition - qualiteGardien) * 0.45, 0.05, 0.7) * facteurPression;
+    // Écart de qualité élargi (×0.75 au lieu de ×0.45, plafond relevé à 0.9) :
+    // une grande attaque face à une défense faible doit pouvoir largement
+    // dépasser le taux de conversion "normal" (~28%).
+    const probaBut = clamp(0.26 + (qualiteFinition - qualiteDefense) * 0.75, 0.04, 0.9) * facteurPression;
     if (proba(probaBut)) {
       buts++;
     } else if (proba(0.55)) {
@@ -534,11 +571,13 @@ function selectionnerBanc(compositions, joueurs, max = 5) {
  *     Si le banc est épuisé ou les 5 fenêtres déjà utilisées, l'équipe termine
  *     avec un joueur diminué (pas de changement possible).
  *  2. Changements tactiques normaux : minute d'entrée croissante au fil du match,
- *     remplaçant systématiquement le titulaire de champ le moins bien noté à
- *     l'instant T (jamais le gardien). Un coach mieux noté tactiquement et plus
- *     adaptable change un peu plus tôt et cible mieux le maillon faible ; un coach
- *     moins bon change plus tard, de façon moins optimale, et utilise parfois
- *     moins de ses fenêtres restantes.
+ *     remplaçant très majoritairement un profil offensif (attaquant/ailier en
+ *     priorité, puis milieu/latéral) — jamais le gardien, quasi jamais un
+ *     défenseur central (D), qui ne sort qu'en cas de blessure/sortie forcée
+ *     (repli sur D uniquement si aucun autre profil n'est plus disponible).
+ *     Un coach mieux noté tactiquement et plus adaptable change un peu plus
+ *     tôt ; un coach moins bon change plus tard, de façon moins optimale, et
+ *     utilise parfois moins de ses fenêtres restantes.
  */
 function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabiliteCoach = 0.6, sortiesForcees = []) {
   const dejaSorti = new Set();
@@ -594,20 +633,30 @@ function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabilit
       const entrant = bancEligible[i];
       if (!entrant) break;
 
-      const candidatsSortants = compositions.filter((c) => c.role !== 'GB' && !dejaSorti.has(c.player_id));
+      // Sorties tactiques normales : quasi jamais un défenseur central (D) —
+      // en match réel, un central ne sort que sur blessure/rouge, jamais en
+      // changement de routine. Repli sur D uniquement si aucun autre profil
+      // n'est dispo (cas extrême, fin de banc/beaucoup de sorties déjà faites).
+      let candidatsSortants = compositions.filter((c) => c.role !== 'GB' && c.role !== 'D' && !dejaSorti.has(c.player_id));
+      if (!candidatsSortants.length) {
+        candidatsSortants = compositions.filter((c) => c.role !== 'GB' && !dejaSorti.has(c.player_id));
+      }
       if (!candidatsSortants.length) break;
 
-      // Remplacement cohérent : parmi les titulaires encore sur le terrain, on fait
-      // sortir celui dont le poste est le plus proche de celui de l'entrant (un
-      // attaquant remplace un attaquant/ailier, pas un défenseur ou un milieu
-      // défensif) — la distance de poste prime. À distance égale, c'est le moins
-      // bien noté (fatigue/prestation la plus faible) qui cède sa place.
+      // Remplacement cohérent : la distance de poste avec l'entrant reste un
+      // critère, mais la priorité de sortie par poste domine — les changements
+      // réels sont très majoritairement offensifs (attaquant/ailier fatigué,
+      // changement de plan de jeu) et rarement défensifs (milieu défensif,
+      // arrière latéral). À distance/priorité égales, c'est le moins bien
+      // noté (fatigue/prestation la plus faible) qui cède sa place.
+      const PRIORITE_SORTIE = { BT: 4, MO: 3.2, AL: 1.3, MD: 1 };
       const axeEntrant = axePoste(entrant.role);
       let sortant = candidatsSortants[0];
       let meilleurScore = Infinity;
       for (const c of candidatsSortants) {
         const distancePoste = Math.abs(axePoste(c.role) - axeEntrant);
-        const score = distancePoste * 1000 + (c.note ?? 50);
+        const priorite = PRIORITE_SORTIE[c.role] ?? 0.5;
+        const score = distancePoste * 1000 - priorite * 250 + (c.note ?? 50);
         if (score < meilleurScore) {
           meilleurScore = score;
           sortant = c;
@@ -668,25 +717,93 @@ function tirerJoueurPondere(compositions, joueursParId, poidsFn) {
   return tirageAlPondere(entrees);
 }
 
-function attribuerButeur(compositions, joueursParId) {
+/**
+ * Instinct de but (0-1), spécifique au type de finition attendu pour la
+ * catégorie du poste — les stats qui font marquer un attaquant ne sont pas
+ * celles qui font marquer un défenseur ou un milieu :
+ *  - attaquant/milieu_offensif : finition pure + sang-froid devant le but.
+ *  - défenseur (D et AL) : quasiment toujours sur coup de pied arrêté
+ *    (corner, coup franc) — jeu de tête et gabarit priment, la finition
+ *    "pure" compte peu.
+ *  - milieu : frappes davantage lointaines — technique de frappe et
+ *    puissance plutôt que le sang-froid d'un buteur de surface.
+ */
+function instinctButeurParRole(categorie, jr) {
+  const finition = jr?.finition ?? 10;
+  const sangFroid = jr?.sang_froid ?? 10;
+  const jeuDeTete = jr?.jeu_de_tete ?? 10;
+  const technique = jr?.technique ?? 10;
+  const puissance = jr?.puissance ?? 10;
+
+  switch (categorie) {
+    case 'attaquant':
+    case 'milieu_offensif':
+      return (finition * 0.6 + sangFroid * 0.4) / 20;
+    case 'defenseur':
+      return (jeuDeTete * 0.65 + puissance * 0.2 + finition * 0.15) / 20;
+    case 'milieu':
+      return (technique * 0.5 + puissance * 0.3 + finition * 0.2) / 20;
+    default:
+      return (finition * 0.5 + sangFroid * 0.5) / 20;
+  }
+}
+
+function attribuerButeur(compositions, joueursParId, qualiteDefenseAdverse = 0.5) {
   return tirerJoueurPondere(compositions, joueursParId, (profil, note, jr) => {
-    const finition = jr?.finition ?? 10;
-    return profil.poidsButeur * (0.5 + finition / 20) * (0.6 + note / 100);
+    const instinctButeur = clamp(instinctButeurParRole(profil.categorie, jr), 0.1, 1);
+
+    // Une défense adverse faible profite surtout aux vrais finisseurs (BT/MO,
+    // poidsButeur élevé) — un défenseur qui marque occasionnellement n'en
+    // profite presque pas. Effet cumulatif avec calculerButsEquipe : contre
+    // une défense faible, l'équipe marque déjà plus ET son buteur naturel en
+    // capte une part encore plus grande.
+    const affiniteButeur = clamp((profil.poidsButeur - 0.6) / 2.6, 0, 1);
+    const bonusDefenseFaible = 1 + clamp((0.5 - qualiteDefenseAdverse) * 4, -0.3, 2.2) * affiniteButeur;
+
+    return profil.poidsButeur * (0.3 + instinctButeur * 1.05) * (0.6 + note / 100) * bonusDefenseFaible;
   });
 }
 
-function attribuerPasseur(compositions, joueursParId, slotButeur) {
+/**
+ * `typeButeur` : 'tete' quand le but vient d'un défenseur (D/AL) — dans ce
+ * modèle, ces buts sont quasi toujours des têtes sur corner (un défenseur ne
+ * monte jamais dans la surface adverse sur un centre de jeu ouvert de son
+ * équipe). Dans ce cas, le centre vient du meilleur tireur de corner
+ * actuellement sur le terrain (attribut `corners`) — choix déterministe du
+ * spécialiste, pas un tirage pondéré : en match réel, c'est quasi toujours
+ * le même joueur qui tire les corners d'une équipe.
+ * Hors tête de défenseur (attaquants/milieux...), la passe reste un tirage
+ * pondéré classique où l'attribut `centres` (jeu ouvert) profite surtout aux
+ * attaquants qui montent dans la surface.
+ */
+function attribuerPasseur(compositions, joueursParId, slotButeur, typeButeur = null) {
   // ~22% des buts n'ont pas de passeur (action individuelle, penalty, CSC...)
   if (proba(0.22)) return null;
 
   const candidats = compositions.filter((c) => c.slot_id !== slotButeur.slot_id);
+  if (!candidats.length) return null;
+
+  if (typeButeur === 'tete') {
+    let meilleur = candidats[0];
+    let meilleurCorners = -1;
+    for (const c of candidats) {
+      const jr = joueursParId.get(c.player_id);
+      const corners = jr?.corners ?? 5;
+      if (corners > meilleurCorners) {
+        meilleurCorners = corners;
+        meilleur = c;
+      }
+    }
+    return meilleur;
+  }
+
   return tirerJoueurPondere(candidats, joueursParId, (profil, note, jr) => {
     const creativite = ((jr?.vision_du_jeu ?? 10) + (jr?.passes ?? 10) + (jr?.centres ?? 10)) / 3;
     return profil.poidsPasseur * (0.5 + creativite / 20) * (0.6 + note / 100);
   });
 }
 
-function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, remplacements = []) {
+function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, remplacements = [], qualiteDefenseAdverse = 0.5) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const evenements = [];
 
@@ -694,9 +811,10 @@ function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, rem
     const minute = minuteAleatoire();
     const compoAuMoment = compositionEffective(compositions, remplacements, minute);
 
-    const slotButeur = attribuerButeur(compoAuMoment, joueursParId);
+    const slotButeur = attribuerButeur(compoAuMoment, joueursParId, qualiteDefenseAdverse);
     if (!slotButeur) continue;
-    const slotPasseur = attribuerPasseur(compoAuMoment, joueursParId, slotButeur);
+    const typeButeur = profilRole(slotButeur.role).categorie === 'defenseur' ? 'tete' : null;
+    const slotPasseur = attribuerPasseur(compoAuMoment, joueursParId, slotButeur, typeButeur);
 
     evenements.push({
       minute,
@@ -1251,7 +1369,12 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
   const compositions = (compositionsBase || []).map((slot) => {
     const designe = joueursParId.get(slot.player_id);
     const role = slot.role;
-    const designeBlesse = !designe || (designe.blessure_jours ?? 0) > 0;
+    // Le titulaire désigné est indisponible pour ce slot s'il est blessé OU
+    // s'il est déjà utilisé sur un autre slot (tactique source corrompue avec
+    // le même player_id sur 2 postes, ou tout autre cas où il a déjà été
+    // placé ailleurs) : dans les deux cas on DOIT chercher un remplaçant,
+    // jamais retomber sur lui — sinon il se retrouve dupliqué dans le onze.
+    const designeIndisponible = !designe || (designe.blessure_jours ?? 0) > 0 || dejaUtilises.has(designe.id);
 
     const candidats = joueurs
       .filter((j) => !dejaUtilises.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
@@ -1259,10 +1382,18 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
       .sort((a, b) => b.score - a.score);
 
     let choisi;
-    if (designeBlesse) {
-      choisi = candidats[0]?.joueur ?? designe;
+    if (designeIndisponible) {
+      choisi = candidats[0]?.joueur ?? null;
       if (designe && choisi && choisi.id !== designe.id) {
-        changements.push({ slot_id: slot.slot_id, role, raison: 'blessure', sortant_id: designe.id, sortant_nom: designe.nom, entrant_id: choisi.id, entrant_nom: choisi.nom });
+        changements.push({
+          slot_id: slot.slot_id,
+          role,
+          raison: dejaUtilises.has(designe.id) ? 'doublon' : 'blessure',
+          sortant_id: designe.id,
+          sortant_nom: designe.nom,
+          entrant_id: choisi.id,
+          entrant_nom: choisi.nom,
+        });
       }
     } else {
       const scoreDesigne = scoreSelectionJoueur(designe, role);
@@ -1284,7 +1415,15 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
       }
     }
 
-    if (!choisi) return slot; // effectif insuffisant pour ce rôle : on garde le slot tel quel (edge case)
+    // Effectif insuffisant pour ce rôle (cas extrême) : jamais retomber sur
+    // le slot d'origine si son player_id est déjà utilisé ailleurs (créerait
+    // un doublon) — on laisse le poste explicitement non pourvu.
+    if (!choisi) {
+      if (dejaUtilises.has(slot.player_id)) {
+        return { ...slot, player_id: null, player_nom: 'Poste non pourvu' };
+      }
+      return slot;
+    }
 
     dejaUtilises.add(choisi.id);
     return { ...slot, player_id: choisi.id, player_nom: choisi.nom };
@@ -1346,9 +1485,16 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   // Étape 3
   const stats = genererStatistiques(domination, forceDom, forceExt);
 
-  // Étape 4 (les buts de chaque équipe dépendent de sa propre attaque et du gardien adverse)
-  const resultatDom = calculerButsEquipe(stats.domicile, forceDom.noteAttaque, forceExt.noteGardien, contexte);
-  const resultatExt = calculerButsEquipe(stats.exterieur, forceExt.noteAttaque, forceDom.noteGardien, contexte);
+  // Étape 4 (les buts de chaque équipe dépendent de sa propre attaque, de son
+  // meilleur finisseur individuel, et de la défense adverse dans son ensemble
+  // — défenseurs + gardien, pas juste le gardien).
+  const meilleurFinisseurDom = meilleurInstinctButeur(forceDom.titulairesNotes);
+  const meilleurFinisseurExt = meilleurInstinctButeur(forceExt.titulairesNotes);
+  const qualiteDefenseFaceADom = forceExt.noteDefense * 0.65 + forceExt.noteGardien * 0.35; // défense subie par domicile
+  const qualiteDefenseFaceAExt = forceDom.noteDefense * 0.65 + forceDom.noteGardien * 0.35; // défense subie par extérieur
+
+  const resultatDom = calculerButsEquipe(stats.domicile, forceDom.noteAttaque, meilleurFinisseurDom, qualiteDefenseFaceADom, contexte);
+  const resultatExt = calculerButsEquipe(stats.exterieur, forceExt.noteAttaque, meilleurFinisseurExt, qualiteDefenseFaceAExt, contexte);
   stats.domicile.arrets_gardien_adverse = resultatExt.arrets; // arrêts réalisés PAR le gardien adverse sur les tirs de dom
   stats.exterieur.arrets_gardien_adverse = resultatDom.arrets;
 
@@ -1390,8 +1536,11 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   const toutesLesBlessures = [...blessuresTitulairesDom, ...blessuresTitulairesExt, ...blessuresEntrantsDom, ...blessuresEntrantsExt].sort((a, b) => a.minute - b.minute);
 
   // Étapes 5 & 6 (les remplaçants entrés en jeu peuvent être buteur/passeur)
-  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom);
-  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt);
+  // qualiteDefenseFaceA*/100 : même défense adverse que celle utilisée pour
+  // fixer le nombre de buts (étape 4), pour que le finisseur naturel capte
+  // une part plus grande des buts justement quand l'équipe en marque déjà plus.
+  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom, qualiteDefenseFaceADom / 100);
+  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt, qualiteDefenseFaceAExt / 100);
   const tousLesButs = [...buteursDom, ...buteursExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 7
@@ -1489,6 +1638,7 @@ const MOTEUR_MATCH_EXPORTS = {
   calculerDomination,
   genererStatistiques,
   calculerButsEquipe,
+  meilleurInstinctButeur,
   genererButeursEtPasseurs,
   genererCartonsEquipe,
   genererBlessuresTitulaires,
