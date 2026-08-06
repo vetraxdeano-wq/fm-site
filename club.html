@@ -256,13 +256,11 @@
   .pitch-name-label {
     fill: var(--text-dim); font-size: 7.5px; text-anchor: middle; pointer-events: none;
   }
-  /* Module "Dernière composition utilisée" : bloc plein largeur, vertical,
-     dédié uniquement au terrain + composition (déplacé hors de la colonne
-     latérale car il y était trop à l'étroit). */
-  .club-last-lineup { grid-column: 1 / -1; }
-  .club-last-lineup .card-title { text-align: center; justify-content: center; }
-  .club-last-lineup .pitch-caption { text-align: center; }
-  .club-last-lineup .pitch-wrap { max-width: 460px; margin: 0 auto; }
+  /* Module "Dernière composition utilisée" : reste dans la colonne latérale,
+     mais dimensionné un peu plus grand que l'ancienne version "mini" pour
+     que les visages restent lisibles, sans forcer de scroll sur la page. */
+  .club-last-lineup .pitch-wrap { max-width: 210px; margin: 0 0 0 auto; }
+  .club-last-lineup .pitch-caption { text-align: right; }
   .compo-pitch-face { transition: filter 0.15s ease; }
   .compo-pitch-player:hover .compo-pitch-face { filter: brightness(1.15); }
 
@@ -894,10 +892,10 @@
             <div class="card-title"><span>Palmarès</span></div>
             <div id="clubPalmares" class="fm-empty">Chargement...</div>
           </div>
-        </div>
-        <div class="card club-last-lineup">
-          <div class="card-title"><span>Dernière composition utilisée</span></div>
-          <div id="clubPitch"></div>
+          <div class="card club-last-lineup">
+            <div class="card-title"><span>Dernière composition utilisée</span></div>
+            <div id="clubPitch"></div>
+          </div>
         </div>
       </div>
 
