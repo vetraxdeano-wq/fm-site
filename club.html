@@ -257,10 +257,13 @@
     fill: var(--text-dim); font-size: 7.5px; text-anchor: middle; pointer-events: none;
   }
   /* Module "Dernière composition utilisée" : reste dans la colonne latérale,
-     mais dimensionné un peu plus grand que l'ancienne version "mini" pour
-     que les visages restent lisibles, sans forcer de scroll sur la page. */
-  .club-last-lineup .pitch-wrap { max-width: 210px; margin: 0 0 0 auto; }
-  .club-last-lineup .pitch-caption { text-align: right; }
+     mais sans contrainte de largeur artificielle ni excès de marge — le
+     terrain occupe toute la largeur disponible de la colonne, avec un
+     minimum de chrome autour (juste le titre du module). */
+  .club-last-lineup { padding: 12px 12px 8px; }
+  .club-last-lineup .card-title { margin-bottom: 8px; }
+  .club-last-lineup .pitch-wrap { max-width: 100%; margin: 0; }
+  .club-last-lineup .pitch-caption { text-align: center; }
   .compo-pitch-face { transition: filter 0.15s ease; }
   .compo-pitch-player:hover .compo-pitch-face { filter: brightness(1.15); }
 
