@@ -579,14 +579,17 @@ function simulerTirsAuBut(joueursDom, joueursExt) {
 }
 
 // Simule et enregistre les matchs de coupe nationale programmes a une date
-// donnee (statut = 'a_jouer' ; les byes sont deja 'termine' a la generation
-// du tour, donc jamais retournes ici). Match sec : tirs au but si egalite.
+// donnee OU EN RETARD (date_match <= dateIso). Le rattrapage est necessaire
+// car les tours preliminaires (amateurs, D2) sont espaces de 3 semaines et
+// peuvent tomber a une date deja depassee si la coupe est (re)generee en
+// cours de saison. Match sec : tirs au but si egalite. Les byes sont deja
+// 'termine' a la generation du tour, donc jamais retournes ici.
 async function simulerCoupeDuJour(dateIso, onProgress) {
   const { data: matches, error } = await supabaseClient
     .from("game_coupe_nationale_tours")
     .select("id, game_club_id_1, game_club_id_2")
     .eq("game_id", gameId)
-    .eq("date_match", dateIso)
+    .lte("date_match", dateIso)
     .eq("statut", "a_jouer");
   if (error) throw error;
   if (!matches || matches.length === 0) return 0;
