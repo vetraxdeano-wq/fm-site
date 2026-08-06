@@ -142,10 +142,107 @@
   }
   .fm-nav-icon { width: 18px; text-align: center; flex-shrink: 0; }
 
-  .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 16px 24px; }
+  .fm-content-wrap {
+    flex: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 16px 24px;
+    display: flex; flex-direction: column;
+  }
+  /* Mode "page defilante" : active uniquement pour les championnats, pour
+     pouvoir afficher le classement en entier (plus de mini-scroll interne).
+     Le reste de la page defile normalement a la place. */
+  .fm-content-wrap.fm-scrollable { overflow-y: auto; overflow-x: hidden; }
+
+  .fm-view-tabs { display: flex; gap: 8px; flex: 0 0 auto; margin-bottom: 14px; }
+  .fm-view-tab {
+    background: #14171d; border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 12px; font-weight: 700; padding: 8px 16px; border-radius: 999px;
+  }
+  .fm-view-tab:hover { color: var(--text); }
+  .fm-view-tab.active { background: rgba(251,191,36,0.14); color: var(--gold); border-color: #7a5c0f; }
+
+  .fm-view-body { flex: 1; min-height: 0; }
+  .fm-content-wrap.fm-scrollable .fm-view-body { min-height: auto; }
+  .fm-view-body #fmContent.hidden, .fm-view-body #fmHistoryPanel.hidden { display: none; }
+
   .fm-content {
     width: 100%; height: 100%; display: grid;
     grid-template-columns: 60% 40%; gap: 18px; align-items: stretch;
+  }
+  /* Championnat : le classement grandit avec son contenu (plus de scroll
+     interne) et la page entiere defile a la place si besoin. */
+  .fm-content.fm-scrollable-grid { height: auto; min-height: 100%; align-items: start; }
+  .fm-content.fm-scrollable-grid .fm-col { height: auto; }
+  .fm-content.fm-scrollable-grid .fm-col .card { flex: none; }
+  .fm-content.fm-scrollable-grid .fm-col .card .fm-scroll-area {
+    flex: none; overflow: visible; min-height: auto; max-height: none;
+  }
+
+  /* "Prochains matchs" deplace et reduit (championnat) : meme carte, juste
+     plus compacte visuellement pour laisser toute la place au classement. */
+  .card.compact-card { padding: 13px 16px; }
+  .card.compact-card .fm-card-title { font-size: 11px; margin-bottom: 8px; }
+  .card.compact-card .fm-comp-match-row { padding: 6px 0; font-size: 11.5px; gap: 10px; }
+  .card.compact-card .fm-comp-match-date { width: 42px; }
+  .card.compact-card .fm-comp-match-date .day { font-size: 11.5px; }
+
+  .fm-bracket-btn {
+    background: rgba(251,191,36,0.12); border: 1px solid #7a5c0f; color: var(--gold);
+    font-size: 10.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; flex-shrink: 0;
+  }
+  .fm-bracket-btn:hover { background: rgba(251,191,36,0.22); }
+
+  /* ---- Popup bracket complet (coupe nationale) ---- */
+  .fm-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.62); display: flex;
+    align-items: center; justify-content: center; z-index: 500; padding: 24px;
+  }
+  .fm-modal-backdrop.hidden { display: none !important; }
+  .fm-modal-panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    width: min(94vw, 1150px); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .fm-modal-header {
+    display: flex; justify-content: space-between; align-items: center; padding: 14px 18px;
+    border-bottom: 1px solid var(--border); font-weight: 800; font-size: 14px; color: var(--gold); flex: 0 0 auto;
+  }
+  .fm-modal-close {
+    background: rgba(255,255,255,0.08); border: none; color: #fff; width: 28px; height: 28px;
+    border-radius: 8px; font-size: 13px; line-height: 1;
+  }
+  .fm-modal-close:hover { background: rgba(255,255,255,0.2); }
+  .fm-modal-body { padding: 20px; overflow: auto; flex: 1; min-height: 0; }
+
+  .fm-bracket { display: flex; gap: 24px; min-width: max-content; }
+  .fm-bracket-col { display: flex; flex-direction: column; justify-content: space-around; gap: 14px; min-width: 190px; }
+  .fm-bracket-col-title {
+    font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--gold); text-align: center; margin-bottom: 4px;
+  }
+  .fm-bracket-match { background: #14171d; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .fm-bracket-match .bside { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11.5px; cursor: pointer; }
+  .fm-bracket-match .bside:hover { color: var(--gold); }
+  .fm-bracket-match .bside img { width: 14px; height: 14px; object-fit: contain; border-radius: 3px; flex-shrink: 0; }
+  .fm-bracket-match .bside .bname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .fm-bracket-match .bside .bscore { font-weight: 700; color: var(--text-dim); flex-shrink: 0; }
+  .fm-bracket-match .bside.win .bname { color: var(--accent); font-weight: 700; }
+  .fm-bracket-match .bside.win .bscore { color: var(--accent); }
+
+  /* ---- Historique / palmares ---- */
+  .fm-history-panel { height: 100%; }
+  .fm-history-panel .card { height: 100%; }
+  .fm-history-row {
+    display: flex; align-items: center; gap: 14px; padding: 12px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .fm-history-row:last-child { border-bottom: none; }
+  .fm-history-season { width: 82px; flex-shrink: 0; font-weight: 800; color: var(--text-dim); font-size: 12px; }
+  .fm-history-winner {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer;
+  }
+  .fm-history-winner:hover { color: var(--gold); text-decoration: underline; }
+  .fm-history-winner img { width: 20px; height: 20px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+  .fm-history-meta {
+    display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-dim);
+    flex-shrink: 0; text-align: right; min-width: 170px;
   }
   .fm-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; height: 100%; min-height: 0; }
   .fm-col .card {
@@ -209,9 +306,19 @@
   .fm-comp-match-date .day { font-weight: 700; color: var(--text); font-size: 13px; display: block; }
   .fm-comp-match-teams { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .fm-comp-match-teams .home, .fm-comp-match-teams .away {
-    flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+    flex: 1; min-width: 0; display: flex; cursor: pointer;
   }
-  .fm-comp-match-teams .home { text-align: right; }
+  .fm-comp-match-teams .home { justify-content: flex-end; }
+  .fm-comp-match-teams .away { justify-content: flex-start; }
+  /* Le logo est toujours colle immediatement a gauche du nom du club (ordre
+     logo -> nom, meme cote domicile qu'exterieur), avec un espacement net
+     entre les deux pour ne pas coller le texte contre l'image. */
+  .fm-comp-match-teams .club {
+    display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%;
+    font-weight: 600; overflow: hidden;
+  }
+  .fm-comp-match-teams .club .club-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fm-comp-match-teams .club img.fm-club-logo { flex-shrink: 0; }
   .fm-comp-match-teams span.club:hover { color: var(--gold); text-decoration: underline; }
   .fm-comp-match-teams .vs { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
 
@@ -223,10 +330,17 @@
   }
   .fm-coupe-fixture-row:last-child { border-bottom: none; }
   .fm-coupe-fixture-row .teams { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  /* Meme principe que pour "Prochains matchs" : le logo reste toujours
+     immediatement a gauche du nom du club (jamais apres), avec un espace
+     net entre logo et texte, cote domicile comme exterieur. */
   .fm-coupe-fixture-row .teams .club {
-    flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+    flex: 1; min-width: 0; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
   }
-  .fm-coupe-fixture-row .teams .club.home { text-align: right; }
+  .fm-coupe-fixture-row .teams .club .club-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fm-coupe-fixture-row .teams .club img.fm-club-logo { flex-shrink: 0; }
+  .fm-coupe-fixture-row .teams .club.home { justify-content: flex-end; text-align: right; }
+  .fm-coupe-fixture-row .teams .club.away { justify-content: flex-start; }
   .fm-coupe-fixture-row .teams .club:hover { color: var(--gold); text-decoration: underline; }
   .fm-coupe-fixture-row .teams .club.winner { color: var(--accent); }
   .fm-coupe-fixture-row .score {
@@ -390,54 +504,83 @@
   <div class="fm-body">
     <div class="fm-sidebar" id="fmSidebar"></div>
 
-    <div class="fm-content-wrap">
-      <div class="fm-content">
-        <div class="fm-col">
-          <div class="card">
-            <div class="fm-card-title"><span id="compCard1Title">Classement</span></div>
-            <div class="fm-stat-leaders" id="compClubLeaders" style="display:none;"></div>
-            <div class="fm-scroll-area scroll-hide" id="compStandings">
-              <div class="fm-empty">Chargement...</div>
+    <div class="fm-content-wrap" id="fmContentWrap">
+      <div class="fm-view-tabs" id="fmViewTabs">
+        <button class="fm-view-tab active" data-view="apercu">Aperçu</button>
+        <button class="fm-view-tab" data-view="historique">Historique</button>
+      </div>
+
+      <div class="fm-view-body" id="fmViewBody">
+        <div class="fm-content" id="fmContent">
+          <div class="fm-col" id="fmColLeft">
+            <div class="card" id="cardStandings">
+              <div class="fm-card-title"><span id="compCard1Title">Classement</span></div>
+              <div class="fm-stat-leaders" id="compClubLeaders" style="display:none;"></div>
+              <div class="fm-scroll-area scroll-hide" id="compStandings">
+                <div class="fm-empty">Chargement...</div>
+              </div>
+              <div class="fm-standings-legend" id="compStandingsLegend"></div>
             </div>
-            <div class="fm-standings-legend" id="compStandingsLegend"></div>
+            <div class="card" id="cardNextMatches">
+              <div class="fm-card-title"><span id="compCard2Title">Prochains matchs</span> <span class="comp-name" id="compNextJournee"></span></div>
+              <div class="fm-scroll-area scroll-hide" id="compNextMatches">
+                <div class="fm-empty">Chargement...</div>
+              </div>
+            </div>
           </div>
-          <div class="card">
-            <div class="fm-card-title"><span id="compCard2Title">Prochains matchs</span> <span class="comp-name" id="compNextJournee"></span></div>
-            <div class="fm-scroll-area scroll-hide" id="compNextMatches">
-              <div class="fm-empty">Chargement...</div>
+
+          <div class="fm-col" id="fmColRight">
+            <div class="card">
+              <div class="fm-card-title"><span id="compCard3Title">Meilleurs joueurs</span></div>
+              <div class="fm-tabs" id="fmPlayerTabs">
+                <button class="fm-tab active" data-tab="buteurs">Buteurs</button>
+                <button class="fm-tab" data-tab="passeurs">Passeurs</button>
+                <button class="fm-tab" data-tab="notes">Notes</button>
+              </div>
+              <div class="fm-scroll-area scroll-hide" id="compTopScorers">
+                <div class="fm-empty">Chargement...</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="fm-card-title">
+                <span id="compCard4Title">Stats clubs</span>
+                <button id="fmBracketBtn" class="fm-bracket-btn" style="display:none;">🔗 Bracket complet</button>
+              </div>
+              <div class="fm-tabs" id="fmClubStatsTabs">
+                <button class="fm-tab active" data-tab="attaque">Attaque</button>
+                <button class="fm-tab" data-tab="defense">Défense</button>
+                <button class="fm-tab" data-tab="possession">Possession</button>
+                <button class="fm-tab" data-tab="discipline">Discipline</button>
+                <button class="fm-tab" data-tab="gardiens">Gardiens</button>
+              </div>
+              <div class="fm-tab-sub" id="fmClubStatsSub"></div>
+              <div class="fm-scroll-area scroll-hide" id="compTopAssists">
+                <div class="fm-empty">Chargement...</div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="fm-col">
+        <div class="fm-history-panel hidden" id="fmHistoryPanel">
           <div class="card">
-            <div class="fm-card-title"><span id="compCard3Title">Meilleurs joueurs</span></div>
-            <div class="fm-tabs" id="fmPlayerTabs">
-              <button class="fm-tab active" data-tab="buteurs">Buteurs</button>
-              <button class="fm-tab" data-tab="passeurs">Passeurs</button>
-              <button class="fm-tab" data-tab="notes">Notes</button>
-            </div>
-            <div class="fm-scroll-area scroll-hide" id="compTopScorers">
-              <div class="fm-empty">Chargement...</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="fm-card-title"><span id="compCard4Title">Stats clubs</span></div>
-            <div class="fm-tabs" id="fmClubStatsTabs">
-              <button class="fm-tab active" data-tab="attaque">Attaque</button>
-              <button class="fm-tab" data-tab="defense">Défense</button>
-              <button class="fm-tab" data-tab="possession">Possession</button>
-              <button class="fm-tab" data-tab="discipline">Discipline</button>
-              <button class="fm-tab" data-tab="gardiens">Gardiens</button>
-            </div>
-            <div class="fm-tab-sub" id="fmClubStatsSub"></div>
-            <div class="fm-scroll-area scroll-hide" id="compTopAssists">
+            <div class="fm-card-title"><span>Historique — Palmarès</span></div>
+            <div class="fm-scroll-area scroll-hide" id="fmHistoryList">
               <div class="fm-empty">Chargement...</div>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="fm-modal-backdrop hidden" id="fmBracketModal">
+  <div class="fm-modal-panel">
+    <div class="fm-modal-header">
+      <span>Bracket complet</span>
+      <button id="fmBracketClose" class="fm-modal-close">✕</button>
+    </div>
+    <div class="fm-modal-body scroll-hide" id="fmBracketBody"></div>
   </div>
 </div>
 
@@ -861,6 +1004,122 @@ initHeaderSearch();
 loadDateBadge();
 fmFetchClubColor(myClubId).then(fmApplyTopbarColor);
 
+// ===================== Onglets de vue (Aperçu / Historique) =====================
+document.querySelectorAll("#fmViewTabs .fm-view-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#fmViewTabs .fm-view-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const view = btn.getAttribute("data-view");
+    document.getElementById("fmContent").classList.toggle("hidden", view !== "apercu");
+    document.getElementById("fmHistoryPanel").classList.toggle("hidden", view !== "historique");
+  });
+});
+
+// ===================== Popup "bracket complet" (coupe nationale) =====================
+function closeBracketModal() { document.getElementById("fmBracketModal").classList.add("hidden"); }
+document.getElementById("fmBracketClose").addEventListener("click", closeBracketModal);
+document.getElementById("fmBracketModal").addEventListener("click", (e) => {
+  if (e.target.id === "fmBracketModal") closeBracketModal();
+});
+
+function openBracketModal(realRows, nbTours, nameById, logoById) {
+  const rounds = [...new Set(realRows.map(r => r.tour))].sort((a, b) => a - b);
+  const body = document.getElementById("fmBracketBody");
+  const bsideHtml = (clubId, score, isWin) => `
+    <div class="bside ${isWin ? "win" : ""}" data-club-id="${clubId}">
+      ${logoById[clubId] ? `<img src="${escapeHtml(logoById[clubId])}" alt="">` : ""}
+      <span class="bname">${escapeHtml(nameById[clubId] || "?")}</span>
+      <span class="bscore">${score}</span>
+    </div>
+  `;
+  body.innerHTML = `
+    <div class="fm-bracket">
+      ${rounds.map(t => {
+        const matches = realRows.filter(r => r.tour === t);
+        return `
+          <div class="fm-bracket-col">
+            <div class="fm-bracket-col-title">${escapeHtml(coupeRoundLabelPage(t, nbTours))}</div>
+            ${matches.map(r => {
+              const played = isRowPlayed(r);
+              const homeWin = played && r.game_club_vainqueur_id === r.game_club_id_1;
+              const awayWin = played && r.game_club_vainqueur_id === r.game_club_id_2;
+              const s1 = played ? (r.score_1 ?? "-") : "-";
+              const s2 = played ? (r.score_2 ?? "-") : "-";
+              return `<div class="fm-bracket-match">${bsideHtml(r.game_club_id_1, s1, homeWin)}${bsideHtml(r.game_club_id_2, s2, awayWin)}</div>`;
+            }).join("")}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+  body.querySelectorAll(".bside[data-club-id]").forEach(el => {
+    el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+  });
+  document.getElementById("fmBracketModal").classList.remove("hidden");
+}
+
+// ===================== Historique / palmarès =====================
+// S'appuie sur game_saison_bilan (une ligne par saison + competition_ref
+// deja jouee jusqu'au bout, remplie en fin de saison in-game) : vainqueur,
+// meilleur buteur et meilleur passeur de la saison pour cette competition.
+async function loadHistorique(comp) {
+  const el = document.getElementById("fmHistoryList");
+  el.innerHTML = `<div class="fm-empty">Chargement...</div>`;
+
+  const { data, error } = await supabaseClient
+    .from("game_saison_bilan")
+    .select("saison, champion_game_club_id, meilleur_buteur_game_player_id, buts_meilleur_buteur, meilleur_passeur_game_player_id, passes_meilleur_passeur")
+    .eq("game_id", gameId)
+    .eq("competition_ref", comp.id)
+    .order("saison", { ascending: false });
+  if (error) console.error(error);
+
+  const seasons = (data || []).filter(r => r.champion_game_club_id != null);
+
+  if (seasons.length === 0) {
+    el.innerHTML = `<div class="fm-empty">Aucun historique enregistré pour cette compétition pour l'instant (disponible à partir de la fin de la première saison jouée).</div>`;
+    return;
+  }
+
+  const clubIds = [...new Set(seasons.map(s => s.champion_game_club_id))];
+  const playerIds = [...new Set(
+    seasons.flatMap(s => [s.meilleur_buteur_game_player_id, s.meilleur_passeur_game_player_id]).filter(Boolean)
+  )];
+
+  const [clubRes, playerRes] = await Promise.all([
+    supabaseClient.from("game_clubs").select("id, nom, clubs(logo_url)").in("id", clubIds),
+    playerIds.length
+      ? supabaseClient.from("game_players").select("id, nom").in("id", playerIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const clubCache = {};
+  (clubRes.data || []).forEach(c => { clubCache[c.id] = { nom: c.nom, logo: c.clubs?.logo_url || null }; });
+  const playerCache = {};
+  (playerRes.data || []).forEach(p => { playerCache[p.id] = p.nom; });
+
+  el.innerHTML = seasons.map(s => {
+    const club = clubCache[s.champion_game_club_id];
+    const buteur = s.meilleur_buteur_game_player_id ? playerCache[s.meilleur_buteur_game_player_id] : null;
+    const passeur = s.meilleur_passeur_game_player_id ? playerCache[s.meilleur_passeur_game_player_id] : null;
+    return `
+      <div class="fm-history-row">
+        <span class="fm-history-season">Saison ${escapeHtml(String(s.saison))}</span>
+        <span class="fm-history-winner" data-club-id="${s.champion_game_club_id}">
+          ${club?.logo ? `<img src="${escapeHtml(club.logo)}" alt="">` : "🏆"}
+          ${escapeHtml(club?.nom || "?")}
+        </span>
+        <span class="fm-history-meta">
+          <span>Meilleur buteur : ${buteur ? `${escapeHtml(buteur)} (${s.buts_meilleur_buteur ?? 0})` : "—"}</span>
+          <span>Meilleur passeur : ${passeur ? `${escapeHtml(passeur)} (${s.passes_meilleur_passeur ?? 0})` : "—"}</span>
+        </span>
+      </div>
+    `;
+  }).join("");
+  el.querySelectorAll(".fm-history-winner[data-club-id]").forEach(elm => {
+    elm.addEventListener("click", () => goToClub(elm.getAttribute("data-club-id")));
+  });
+}
+
 // ===================== Coupe nationale : pas de classement (elimination
 // directe), on affiche a la place le tableau du tour en cours, le prochain
 // match du club suivi, son parcours et l'historique des tours precedents. =====================
@@ -899,11 +1158,11 @@ function fixtureRowHtml(r, nameById, logoById, opts = {}) {
       ${opts.label ? `<div class="fm-comp-match-date">${escapeHtml(opts.label)}</div>` : ""}
       <div class="teams">
         <span class="club home ${homeWin ? "winner" : ""}" data-club-id="${r.game_club_id_1}">
-          ${homeLogo ? `<img class="fm-club-logo" src="${escapeHtml(homeLogo)}" alt="">` : ""}${escapeHtml(homeName)}
+          ${homeLogo ? `<img class="fm-club-logo" src="${escapeHtml(homeLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(homeName)}</span>
         </span>
         <span class="score">${scoreHtml}</span>
         <span class="club away ${awayWin ? "winner" : ""}" data-club-id="${r.game_club_id_2}">
-          ${escapeHtml(awayName)}${awayLogo ? `<img class="fm-club-logo" src="${escapeHtml(awayLogo)}" alt="">` : ""}
+          ${awayLogo ? `<img class="fm-club-logo" src="${escapeHtml(awayLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(awayName)}</span>
         </span>
       </div>
     </div>
@@ -988,6 +1247,9 @@ async function loadCoupeNationale(comp) {
   document.getElementById("compStandingsLegend").innerHTML = "";
   document.getElementById("compNextJournee").textContent = "";
 
+  document.getElementById("fmBracketBtn").style.display = "none";
+  document.getElementById("cardNextMatches").style.display = "";
+
   if (allRows.length === 0) {
     document.getElementById("compCard1Title").textContent = "Tableau";
     document.getElementById("compStandings").innerHTML = `<div class="fm-empty">Le tirage n'a pas encore eu lieu.</div>`;
@@ -1014,6 +1276,10 @@ async function loadCoupeNationale(comp) {
 
   document.getElementById("compSub").textContent = `${comp.nation}${nbTours ? ` · ${nbTours} tours` : ""}`;
 
+  const bracketBtn = document.getElementById("fmBracketBtn");
+  bracketBtn.style.display = "";
+  bracketBtn.onclick = () => openBracketModal(realRows, nbTours, nameById, logoById);
+
   const currentTour = Math.max(...allRows.map(r => r.tour));
   const currentTourRows = realRows.filter(r => r.tour === currentTour);
 
@@ -1026,26 +1292,37 @@ async function loadCoupeNationale(comp) {
   bindFixtureClicks(document.getElementById("compStandings"));
 
   // ---- Prochain match : celui du club suivi si on en a un, sinon les
-  // affiches restantes du tour en cours ----
+  // affiches restantes du tour en cours. Si le club suivi ne participe pas
+  // du tout a cette coupe (ex : on consulte la coupe d'un autre pays), le
+  // module entier est retire plutot que d'afficher un message vide. ----
   document.getElementById("compCard2Title").textContent = "Prochain match";
+  const myClubRows = myClubId ? realRows.filter(r => r.game_club_id_1 === myClubId || r.game_club_id_2 === myClubId) : [];
+  const cardNextMatchesEl = document.getElementById("cardNextMatches");
   if (myClubId) {
-    const myUpcoming = realRows.find(r => !isRowPlayed(r) && (r.game_club_id_1 === myClubId || r.game_club_id_2 === myClubId));
-    document.getElementById("compNextMatches").innerHTML = myUpcoming
-      ? fixtureRowHtml(myUpcoming, nameById, logoById, { label: coupeRoundLabelPage(myUpcoming.tour, nbTours) })
-      : `<div class="fm-empty">Aucun match à venir pour ce club.</div>`;
+    if (myClubRows.length === 0) {
+      cardNextMatchesEl.style.display = "none";
+    } else {
+      cardNextMatchesEl.style.display = "";
+      const myUpcoming = myClubRows.find(r => !isRowPlayed(r));
+      document.getElementById("compNextMatches").innerHTML = myUpcoming
+        ? fixtureRowHtml(myUpcoming, nameById, logoById, { label: coupeRoundLabelPage(myUpcoming.tour, nbTours) })
+        : `<div class="fm-empty">Aucun match à venir pour ce club.</div>`;
+      bindFixtureClicks(document.getElementById("compNextMatches"));
+    }
   } else {
+    cardNextMatchesEl.style.display = "";
     const anyUpcoming = currentTourRows.filter(r => !isRowPlayed(r));
     document.getElementById("compNextMatches").innerHTML = anyUpcoming.length
       ? anyUpcoming.map(r => fixtureRowHtml(r, nameById, logoById)).join("")
       : `<div class="fm-empty">Aucun match à venir programmé.</div>`;
+    bindFixtureClicks(document.getElementById("compNextMatches"));
   }
-  bindFixtureClicks(document.getElementById("compNextMatches"));
 
   // ---- Parcours du club suivi (round par round), ou a defaut les
   // derniers resultats de la competition ----
   if (myClubId) {
     document.getElementById("compCard3Title").textContent = "Votre parcours";
-    const myRows = realRows.filter(r => r.game_club_id_1 === myClubId || r.game_club_id_2 === myClubId).sort((a, b) => a.tour - b.tour);
+    const myRows = myClubRows.slice().sort((a, b) => a.tour - b.tour);
     document.getElementById("compTopScorers").innerHTML = myRows.length
       ? myRows.map(r => parcoursRowHtml(r, myClubId, nameById, logoById, nbTours)).join("")
       : `<div class="fm-empty">Ce club ne participe pas à la compétition cette saison.</div>`;
@@ -1070,6 +1347,8 @@ async function loadCoupeNationale(comp) {
       `).join("")
     : `<div class="fm-empty">Pas encore de tour précédent.</div>`;
   bindFixtureClicks(document.getElementById("compTopAssists"));
+
+  loadHistorique(comp);
 }
 
 // ===================== Navigation entre divisions (fleches verticales) =====================
@@ -1193,6 +1472,18 @@ async function loadCompetition() {
   }
 
   document.getElementById("compSub").textContent = `${comp.nation} · ${comp.division}`;
+
+  // Championnat : le classement doit s'afficher en entier (sans mini-scroll
+  // interne) -> on passe la page entiere en mode "defilant", et on deplace
+  // la carte "Prochains matchs" dans la colonne de droite en version reduite
+  // pour laisser toute la place au classement.
+  document.getElementById("fmContentWrap").classList.add("fm-scrollable");
+  document.getElementById("fmContent").classList.add("fm-scrollable-grid");
+  const nextMatchesCard = document.getElementById("cardNextMatches");
+  nextMatchesCard.classList.add("compact-card");
+  document.getElementById("fmColRight").appendChild(nextMatchesCard);
+
+  loadHistorique(comp);
 
   // Clubs de la division (nom + classement/points via la vue, stats detaillees via game_clubs)
   const { data: overview, error: overviewError } = await supabaseClient
@@ -1391,13 +1682,19 @@ async function loadCompetition() {
     nextMatchesEl.innerHTML = journeeMatches.map(m => {
       const d = m.date_match ? new Date(m.date_match) : null;
       const dateLabel = d ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "") : "-";
+      const homeLogo = logoById[m.club_domicile_id];
+      const awayLogo = logoById[m.club_exterieur_id];
       return `
         <div class="fm-comp-match-row">
           <div class="fm-comp-match-date">${dateLabel}</div>
           <div class="fm-comp-match-teams">
-            <span class="home"><span class="club" data-club-id="${m.club_domicile_id}">${escapeHtml(nameById[m.club_domicile_id] || "?")}</span></span>
+            <span class="home"><span class="club" data-club-id="${m.club_domicile_id}">
+              ${homeLogo ? `<img class="fm-club-logo" src="${escapeHtml(homeLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(nameById[m.club_domicile_id] || "?")}</span>
+            </span></span>
             <span class="vs">vs</span>
-            <span class="away"><span class="club" data-club-id="${m.club_exterieur_id}">${escapeHtml(nameById[m.club_exterieur_id] || "?")}</span></span>
+            <span class="away"><span class="club" data-club-id="${m.club_exterieur_id}">
+              ${awayLogo ? `<img class="fm-club-logo" src="${escapeHtml(awayLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(nameById[m.club_exterieur_id] || "?")}</span>
+            </span></span>
           </div>
         </div>
       `;
