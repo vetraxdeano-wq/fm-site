@@ -145,29 +145,29 @@
   .fm-content-wrap { flex: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 16px 24px; }
   .fm-content {
     width: 100%; height: 100%; display: grid;
-    grid-template-columns: 62% 38%; gap: 16px; align-items: stretch;
+    grid-template-columns: 60% 40%; gap: 18px; align-items: stretch;
   }
-  .fm-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; height: 100%; min-height: 0; }
+  .fm-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; height: 100%; min-height: 0; }
   .fm-col .card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    padding: 16px 18px; flex: 1; min-height: 0; display: flex; flex-direction: column;
+    padding: 18px 20px; flex: 1; min-height: 0; display: flex; flex-direction: column;
   }
   .fm-card-title {
     flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
-    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--gold); margin-bottom: 12px;
+    font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--gold); margin-bottom: 14px;
   }
   .fm-card-title .comp-name { color: var(--text); font-weight: 800; text-transform: none; letter-spacing: 0; font-size: 13.5px; }
   .fm-scroll-area { flex: 1; min-height: 0; overflow-y: auto; }
   .fm-empty { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
 
-  .fm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .fm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .fm-table th {
     position: sticky; top: 0; background: var(--panel);
     text-align: left; color: var(--text-dim); font-weight: 600; font-size: 10.5px;
-    text-transform: uppercase; letter-spacing: 0.03em; padding: 6px 7px; border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 9px; border-bottom: 1px solid var(--border);
   }
-  .fm-table td { padding: 7px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .fm-table td { padding: 9px; border-bottom: 1px solid rgba(255,255,255,0.04); }
   .fm-table tr:last-child td { border-bottom: none; }
   .fm-table tr.me td { background: rgba(251,191,36,0.1); }
   .fm-table td.clt { color: var(--text-dim); width: 26px; }
@@ -257,17 +257,17 @@
 
   /* ---- Meilleurs buteurs / passeurs ---- */
   .player-row {
-    display: flex; align-items: center; gap: 10px; padding: 8px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+    display: flex; align-items: center; gap: 12px; padding: 10px 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13.5px;
   }
   .player-row:last-child { border-bottom: none; }
-  .player-rank { width: 18px; color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+  .player-rank { width: 20px; color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
   .player-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .player-club {
-    font-size: 11px; color: var(--text-dim); flex-shrink: 0; max-width: 120px;
+    font-size: 11.5px; color: var(--text-dim); flex-shrink: 0; max-width: 130px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .player-value { font-weight: 700; color: var(--gold); flex-shrink: 0; width: 24px; text-align: right; }
+  .player-value { font-weight: 700; color: var(--gold); flex-shrink: 0; min-width: 30px; text-align: right; }
   .player-photo {
     width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
     background: #0f1115; border: 1px solid var(--border);
@@ -281,7 +281,12 @@
 
   /* ---- Zone de promotion (divisions inferieures a l'elite) : meme
      traitement visuel que les zones europeennes, couleur bleue reutilisee
-     car jamais en conflit (l'elite n'a pas de promotion). ---- */
+     car jamais en conflit (l'elite n'a pas de promotion). Le champion (1er)
+     d'une division non-elite reste en vert (comme un titre), distinct du
+     reste de la zone de promotion. ---- */
+  .fm-table tr.zone-champion td:first-child { border-left: 3px solid #22c55e; }
+  .fm-table tr.zone-champion td { background: rgba(34,197,94,0.09); }
+  .fm-table tr.me.zone-champion td { background: rgba(251,191,36,0.12); }
   .fm-table tr.zone-promo td:first-child { border-left: 3px solid #3b82f6; }
   .fm-table tr.zone-promo td { background: rgba(59,130,246,0.07); }
   .fm-table tr.me.zone-promo td { background: rgba(251,191,36,0.12); }
@@ -302,30 +307,35 @@
 
   /* ---- Chips de stats clubs (meilleure attaque/defense/possession...) ---- */
   .fm-stat-leaders {
-    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; flex: 0 0 auto;
-    margin-bottom: 12px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; flex: 0 0 auto;
+    margin-bottom: 16px;
   }
   .fm-stat-leader-chip {
-    background: #14171d; border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px;
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px;
     cursor: pointer; min-width: 0;
   }
   .fm-stat-leader-chip:hover { border-color: var(--gold); }
   .fm-stat-leader-chip .lbl {
-    font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim);
-    margin-bottom: 4px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim);
+    margin-bottom: 6px;
   }
-  .fm-stat-leader-chip .val { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; min-width: 0; }
+  .fm-stat-leader-chip .val { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; min-width: 0; }
   .fm-stat-leader-chip .val .club-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fm-stat-leader-chip .val .num { color: var(--gold); flex-shrink: 0; margin-left: auto; }
 
-  /* ---- Onglets du classeur "Meilleurs joueurs" ---- */
-  .fm-player-tabs { display: none; gap: 6px; flex: 0 0 auto; margin-bottom: 10px; }
-  .fm-player-tabs.visible { display: flex; }
-  .fm-player-tab {
+  /* ---- Onglets partages (Meilleurs joueurs / Stats clubs) ---- */
+  .fm-tabs { display: none; gap: 6px; flex: 0 0 auto; margin-bottom: 12px; flex-wrap: wrap; }
+  .fm-tabs.visible { display: flex; }
+  .fm-tab {
     background: #14171d; border: 1px solid var(--border); color: var(--text-dim);
-    font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
   }
-  .fm-player-tab.active { background: rgba(251,191,36,0.14); color: var(--gold); border-color: #7a5c0f; }
+  .fm-tab.active { background: rgba(251,191,36,0.14); color: var(--gold); border-color: #7a5c0f; }
+  .fm-tab-sub {
+    font-size: 11px; color: var(--text-dim); flex: 0 0 auto; margin: -4px 0 10px; padding: 0 2px;
+  }
+  .club-stat-row .club-value-main { font-weight: 700; color: var(--gold); flex-shrink: 0; min-width: 42px; text-align: right; }
+  .club-stat-row .club-value-sub { font-size: 11px; color: var(--text-dim); flex-shrink: 0; min-width: 60px; text-align: right; }
 
   @media (max-width: 900px) {
     html, body { overflow: auto; }
@@ -402,10 +412,10 @@
         <div class="fm-col">
           <div class="card">
             <div class="fm-card-title"><span id="compCard3Title">Meilleurs joueurs</span></div>
-            <div class="fm-player-tabs" id="fmPlayerTabs">
-              <button class="fm-player-tab active" data-tab="buteurs">Buteurs</button>
-              <button class="fm-player-tab" data-tab="passeurs">Passeurs</button>
-              <button class="fm-player-tab" data-tab="notes">Notes</button>
+            <div class="fm-tabs" id="fmPlayerTabs">
+              <button class="fm-tab active" data-tab="buteurs">Buteurs</button>
+              <button class="fm-tab" data-tab="passeurs">Passeurs</button>
+              <button class="fm-tab" data-tab="notes">Notes</button>
             </div>
             <div class="fm-scroll-area scroll-hide" id="compTopScorers">
               <div class="fm-empty">Chargement...</div>
@@ -413,6 +423,14 @@
           </div>
           <div class="card">
             <div class="fm-card-title"><span id="compCard4Title">Stats clubs</span></div>
+            <div class="fm-tabs" id="fmClubStatsTabs">
+              <button class="fm-tab active" data-tab="attaque">Attaque</button>
+              <button class="fm-tab" data-tab="defense">Défense</button>
+              <button class="fm-tab" data-tab="possession">Possession</button>
+              <button class="fm-tab" data-tab="discipline">Discipline</button>
+              <button class="fm-tab" data-tab="gardiens">Gardiens</button>
+            </div>
+            <div class="fm-tab-sub" id="fmClubStatsSub"></div>
             <div class="fm-scroll-area scroll-hide" id="compTopAssists">
               <div class="fm-empty">Chargement...</div>
             </div>
@@ -1088,34 +1106,57 @@ async function loadDivisionNav(comp) {
   downBtn.onclick = () => downComp && goToComp(downComp.id);
 }
 
-// ===================== Stats clubs agregees (possession, tirs) =====================
+// ===================== Stats clubs agregees =====================
 // Calculees a partir des stats jsonb stockees sur chaque match joue
-// (calendrier.stats), remplies par le moteur de simulation instantanee.
+// (calendrier.stats), remplies par le moteur de simulation instantanee :
+// tirs, tirs cadres, possession, corners, centres, fautes, hors-jeu, passes
+// reussies, occasions franches, arrets, cartons, clean sheets.
+function emptyClubAgg() {
+  return {
+    matchs: 0, possessionSum: 0, tirsPourSum: 0, tirsContreSum: 0, tirsCadresSum: 0,
+    cornersSum: 0, centresSum: 0, fautesSum: 0, horsJeuSum: 0, passesReussiesSum: 0,
+    occasionsFranchesSum: 0, arretsSum: 0, cartonsJaunes: 0, cartonsRouges: 0, cleanSheets: 0,
+  };
+}
 async function computeClubMatchStats(comp) {
   const { data: rows } = await supabaseClient
     .from("calendrier")
-    .select("club_domicile_id, club_exterieur_id, stats")
+    .select("club_domicile_id, club_exterieur_id, score_domicile, score_exterieur, stats")
     .eq("game_id", gameId)
     .eq("nation", comp.nation)
     .eq("division", comp.division)
     .eq("statut", "joue");
 
   const agg = {};
-  const ensure = (id) => {
-    if (!agg[id]) agg[id] = { matchs: 0, possessionSum: 0, tirsPourSum: 0, tirsContreSum: 0 };
-    return agg[id];
-  };
+  const ensure = (id) => { if (!agg[id]) agg[id] = emptyClubAgg(); return agg[id]; };
+
   (rows || []).forEach(r => {
     const s = r.stats;
-    if (!s) return;
     const homeId = r.club_domicile_id, awayId = r.club_exterieur_id;
     const h = ensure(homeId), a = ensure(awayId);
     h.matchs++; a.matchs++;
+    if ((r.score_exterieur ?? 0) === 0) h.cleanSheets++;
+    if ((r.score_domicile ?? 0) === 0) a.cleanSheets++;
+    if (!s) return;
     if (s.possession) { h.possessionSum += (s.possession.domicile ?? 0); a.possessionSum += (s.possession.exterieur ?? 0); }
     if (s.tirs) {
       h.tirsPourSum += (s.tirs.domicile ?? 0); h.tirsContreSum += (s.tirs.exterieur ?? 0);
       a.tirsPourSum += (s.tirs.exterieur ?? 0); a.tirsContreSum += (s.tirs.domicile ?? 0);
     }
+    if (s.tirs_cadres) { h.tirsCadresSum += (s.tirs_cadres.domicile ?? 0); a.tirsCadresSum += (s.tirs_cadres.exterieur ?? 0); }
+    if (s.corners) { h.cornersSum += (s.corners.domicile ?? 0); a.cornersSum += (s.corners.exterieur ?? 0); }
+    if (s.centres) { h.centresSum += (s.centres.domicile ?? 0); a.centresSum += (s.centres.exterieur ?? 0); }
+    if (s.fautes) { h.fautesSum += (s.fautes.domicile ?? 0); a.fautesSum += (s.fautes.exterieur ?? 0); }
+    if (s.hors_jeu) { h.horsJeuSum += (s.hors_jeu.domicile ?? 0); a.horsJeuSum += (s.hors_jeu.exterieur ?? 0); }
+    if (s.passes_reussies) { h.passesReussiesSum += (s.passes_reussies.domicile ?? 0); a.passesReussiesSum += (s.passes_reussies.exterieur ?? 0); }
+    if (s.occasions_franches) { h.occasionsFranchesSum += (s.occasions_franches.domicile ?? 0); a.occasionsFranchesSum += (s.occasions_franches.exterieur ?? 0); }
+    if (s.arrets) { h.arretsSum += (s.arrets.domicile ?? 0); a.arretsSum += (s.arrets.exterieur ?? 0); }
+    (s.cartons || []).forEach(c => {
+      const target = c.game_club_id === homeId ? h : (c.game_club_id === awayId ? a : null);
+      if (!target) return;
+      if (c.type === "jaune") target.cartonsJaunes++;
+      else if (c.type === "rouge_direct" || c.type === "rouge_2j") target.cartonsRouges++;
+    });
   });
   return agg;
 }
@@ -1253,13 +1294,17 @@ async function loadCompetition() {
 
   // Zone de promotion : les nb_promotion premiers, pour toute division qui
   // n'est pas l'elite (tier 1 n'a jamais de promotion, uniquement les zones
-  // europeennes calculees plus haut).
-  const nbPromotion = comp.tier > 1 ? (comp.nb_promotion || 0) : 0;
-  const promouvable = nbPromotion > 0 ? { startRank: 1, endRank: nbPromotion } : null;
+  // europeennes calculees plus haut). Le 1er de la division reste en vert
+  // ("champion"), distinct du bleu de la zone de promotion.
+  const isElite = comp.tier === 1;
+  const nbPromotion = !isElite ? (comp.nb_promotion || 0) : 0;
+  const hasChampion = !isElite;
+  const promouvable = nbPromotion > 1 ? { startRank: 2, endRank: nbPromotion } : null;
 
   const zoneClassForRank = (rank) => {
     const euro = euroZones.find(z => rank >= z.startRank && rank <= z.endRank);
     if (euro) return euro.colorClass;
+    if (hasChampion && rank === 1) return "zone-champion";
     if (promouvable && rank >= promouvable.startRank && rank <= promouvable.endRank) return "zone-promo";
     if (releguable && rank >= releguable.startRank && rank <= releguable.endRank) return "zone-releg";
     return "";
@@ -1313,6 +1358,9 @@ async function loadCompetition() {
       z.colorClass === "zone-euro-1" ? "#3b82f6" : z.colorClass === "zone-euro-2" ? "#f97316" : "#22c55e"
     };"></span>${escapeHtml(z.label)}</span>
   `);
+  if (hasChampion) {
+    legendItems.push(`<span class="legend-item"><span class="legend-dot" style="background:#22c55e;"></span>Champion</span>`);
+  }
   if (promouvable) {
     legendItems.push(`<span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Promotion</span>`);
   }
@@ -1394,29 +1442,91 @@ async function loadCompetition() {
     leadersEl.style.display = "none";
   }
 
-  // ---- Carte "Stats clubs" : detail attaque/defense/possession/tirs par club ----
+  // ---- Carte "Stats clubs" : classements filtrables par categorie, comme
+  // pour les joueurs. Chaque onglet classe tous les clubs de la division
+  // sur une metrique (calculee sur les matchs deja joues) + une metrique
+  // secondaire de contexte. ----
   const clubStatsEl = document.getElementById("compTopAssists");
-  clubStatsEl.innerHTML = sorted.map((id) => {
-    const s = statsById[id] || {};
-    const m = matchStats[id];
-    const poss = m && m.matchs ? `${(m.possessionSum / m.matchs).toFixed(0)}%` : "-";
-    const tirsP = m && m.matchs ? (m.tirsPourSum / m.matchs).toFixed(1) : "-";
-    const tirsC = m && m.matchs ? (m.tirsContreSum / m.matchs).toFixed(1) : "-";
-    return `
-      <div class="player-row">
-        <span class="fm-club-link player-club-wrap" data-club-id="${id}" style="flex:1; min-width:0;">
-          ${logoById[id] ? `<img class="fm-club-logo" src="${escapeHtml(logoById[id])}" alt="">` : ""}
-          <span class="player-name">${escapeHtml(nameById[id])}</span>
-        </span>
-        <span class="player-club" title="Buts pour / encaissés">${s.buts_pour ?? 0}/${s.buts_contre ?? 0}</span>
-        <span class="player-club" title="Possession moyenne">${poss}</span>
-        <span class="player-value" style="width:auto;" title="Tirs pour / concédés par match">${tirsP}/${tirsC}</span>
-      </div>
-    `;
-  }).join("");
-  clubStatsEl.querySelectorAll(".fm-club-link").forEach(el => {
-    el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+  const clubStatsSubEl = document.getElementById("fmClubStatsSub");
+  const clubsPlayed = clubIds.filter(id => (matchStats[id]?.matchs || 0) > 0);
+
+  const clubRow = (id, i, mainLabel, mainVal, subLabel, subVal) => `
+    <div class="player-row club-stat-row">
+      <span class="player-rank">${i + 1}</span>
+      <span class="fm-club-link player-name" data-club-id="${id}" style="display:flex; align-items:center; gap:8px;">
+        ${logoById[id] ? `<img class="fm-club-logo" src="${escapeHtml(logoById[id])}" alt="">` : ""}
+        ${escapeHtml(nameById[id] || "?")}
+      </span>
+      <span class="club-value-sub" title="${escapeHtml(subLabel)}">${subVal}</span>
+      <span class="club-value-main" title="${escapeHtml(mainLabel)}">${mainVal}</span>
+    </div>
+  `;
+
+  const clubStatsTabs = {
+    attaque: {
+      sub: "Classement par buts marqués, tirs et occasions par match.",
+      render: () => sorted.map((id, i) => {
+        const s = statsById[id] || {};
+        const m = matchStats[id];
+        const tirsP = m && m.matchs ? (m.tirsPourSum / m.matchs).toFixed(1) : "-";
+        return { id, main: `${s.buts_pour ?? 0} buts`, sub: `${tirsP} tirs/m` };
+      }).sort((a, b) => (statsById[b.id]?.buts_pour ?? 0) - (statsById[a.id]?.buts_pour ?? 0))
+        .map((r, i) => clubRow(r.id, i, "Buts marqués", r.main, "Tirs par match", r.sub)).join(""),
+    },
+    defense: {
+      sub: "Classement par buts encaissés (le moins possible en tête) et clean sheets.",
+      render: () => sorted.map(id => {
+        const s = statsById[id] || {};
+        const m = matchStats[id];
+        return { id, buts: s.buts_contre ?? 0, cs: m ? m.cleanSheets : 0 };
+      }).sort((a, b) => a.buts - b.buts)
+        .map((r, i) => clubRow(r.id, i, "Buts encaissés", `${r.buts} enc.`, "Clean sheets", `${r.cs} CS`)).join(""),
+    },
+    possession: {
+      sub: clubsPlayed.length ? "Classement par possession moyenne et passes réussies par match." : "Aucun match joué pour l'instant.",
+      render: () => clubsPlayed.map(id => {
+        const m = matchStats[id];
+        return { id, poss: m.possessionSum / m.matchs, passes: m.passesReussiesSum / m.matchs };
+      }).sort((a, b) => b.poss - a.poss)
+        .map((r, i) => clubRow(r.id, i, "Possession moyenne", `${r.poss.toFixed(0)}%`, "Passes réussies/m", r.passes.toFixed(0))).join(""),
+    },
+    discipline: {
+      sub: clubsPlayed.length ? "Classement par cartons cumulés (le moins possible en tête) et fautes par match." : "Aucun match joué pour l'instant.",
+      render: () => clubsPlayed.map(id => {
+        const m = matchStats[id];
+        return { id, cartons: m.cartonsJaunes + m.cartonsRouges * 2, jaunes: m.cartonsJaunes, rouges: m.cartonsRouges, fautes: m.fautesSum / m.matchs };
+      }).sort((a, b) => a.cartons - b.cartons)
+        .map((r, i) => clubRow(r.id, i, "Cartons (pondérés)", `${r.jaunes}🟨 ${r.rouges}🟥`, "Fautes/match", r.fautes.toFixed(1))).join(""),
+    },
+    gardiens: {
+      sub: clubsPlayed.length ? "Classement par arrêts moyens par match et clean sheets." : "Aucun match joué pour l'instant.",
+      render: () => clubsPlayed.map(id => {
+        const m = matchStats[id];
+        return { id, arrets: m.arretsSum / m.matchs, cs: m.cleanSheets };
+      }).sort((a, b) => b.arrets - a.arrets)
+        .map((r, i) => clubRow(r.id, i, "Arrêts/match", r.arrets.toFixed(1), "Clean sheets", `${r.cs} CS`)).join(""),
+    },
+  };
+
+  function renderClubStatsTab(tab) {
+    const cfg = clubStatsTabs[tab];
+    clubStatsSubEl.textContent = cfg.sub;
+    const html = cfg.render();
+    clubStatsEl.innerHTML = html || `<div class="fm-empty">Aucune donnée disponible.</div>`;
+    clubStatsEl.querySelectorAll(".fm-club-link").forEach(el => {
+      el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+    });
+  }
+
+  document.getElementById("fmClubStatsTabs").classList.add("visible");
+  document.querySelectorAll("#fmClubStatsTabs .fm-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#fmClubStatsTabs .fm-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderClubStatsTab(btn.getAttribute("data-tab"));
+    });
   });
+  renderClubStatsTab("attaque");
 
   // ---- Meilleurs joueurs (buteurs / passeurs / notes), avec photo + club ----
   const { data: players } = await supabaseClient
@@ -1474,9 +1584,9 @@ async function loadCompetition() {
   }
 
   document.getElementById("fmPlayerTabs").classList.add("visible");
-  document.querySelectorAll("#fmPlayerTabs .fm-player-tab").forEach(btn => {
+  document.querySelectorAll("#fmPlayerTabs .fm-tab").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll("#fmPlayerTabs .fm-player-tab").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll("#fmPlayerTabs .fm-tab").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       renderPlayerTab(btn.getAttribute("data-tab"));
     });
