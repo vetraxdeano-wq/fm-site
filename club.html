@@ -1693,14 +1693,14 @@ async function compoFetchPlayerPhotos(playerIds) {
 function compoPitchSvg(titulaires, photos = {}) {
   const rows = compoPitchRows(titulaires);
   const MAX_R = 26;
-  const MIN_R = 15;
-  const GAP = 16; // écart minimum souhaité entre les bords de deux cercles voisins
+  const MIN_R = 14;
+  const GAP = 24; // écart minimum souhaité entre les bords de deux cercles voisins
   const dots = rows.flatMap(row => {
     const n = row.players.length;
-    const spacing = 380 / (n + 1);
+    const spacing = 400 / (n + 1);
     const r = Math.max(MIN_R, Math.min(MAX_R, (spacing - GAP) / 2));
     return row.players.map((p, i) => {
-      const x = ((i + 1) / (n + 1)) * 380 + 35;
+      const x = ((i + 1) / (n + 1)) * 400 + 25;
       const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
       const initials = escapeHtml((p.player_nom || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase());
       const attrs = p.player_id ? ` class="compo-pitch-player" data-player-id="${escapeHtml(String(p.player_id))}"` : "";
