@@ -268,6 +268,64 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .player-value { font-weight: 700; color: var(--gold); flex-shrink: 0; width: 24px; text-align: right; }
+  .player-photo {
+    width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    background: #0f1115; border: 1px solid var(--border);
+  }
+  .player-photo-placeholder {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; background: #232833;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-dim);
+  }
+  .player-club-logo { width: 14px; height: 14px; object-fit: contain; flex-shrink: 0; border-radius: 3px; }
+  .player-club-wrap { display: flex; align-items: center; gap: 4px; }
+
+  /* ---- Zone de promotion (divisions inferieures a l'elite) : meme
+     traitement visuel que les zones europeennes, couleur bleue reutilisee
+     car jamais en conflit (l'elite n'a pas de promotion). ---- */
+  .fm-table tr.zone-promo td:first-child { border-left: 3px solid #3b82f6; }
+  .fm-table tr.zone-promo td { background: rgba(59,130,246,0.07); }
+  .fm-table tr.me.zone-promo td { background: rgba(251,191,36,0.12); }
+  /* Zone de barrage promotion/relegation : liseret pointille distinct. */
+  .fm-table tr.zone-barrage td:first-child { border-left: 3px dashed #a855f7; }
+  .fm-table tr.zone-barrage td { background: rgba(168,85,247,0.07); }
+  .fm-table tr.me.zone-barrage td { background: rgba(251,191,36,0.12); }
+
+  /* ---- Fleches de changement de division dans la topbar ---- */
+  .fm-division-nav { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+  .fm-division-nav button {
+    width: 20px; height: 15px; border: none; background: rgba(255,255,255,0.14); color: #fff;
+    font-size: 9px; line-height: 1; display: flex; align-items: center; justify-content: center;
+    padding: 0; border-radius: 4px;
+  }
+  .fm-division-nav button:hover:not(:disabled) { background: rgba(255,255,255,0.28); }
+  .fm-division-nav button:disabled { opacity: 0.25; cursor: default; }
+
+  /* ---- Chips de stats clubs (meilleure attaque/defense/possession...) ---- */
+  .fm-stat-leaders {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; flex: 0 0 auto;
+    margin-bottom: 12px;
+  }
+  .fm-stat-leader-chip {
+    background: #14171d; border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px;
+    cursor: pointer; min-width: 0;
+  }
+  .fm-stat-leader-chip:hover { border-color: var(--gold); }
+  .fm-stat-leader-chip .lbl {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .fm-stat-leader-chip .val { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; min-width: 0; }
+  .fm-stat-leader-chip .val .club-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fm-stat-leader-chip .val .num { color: var(--gold); flex-shrink: 0; margin-left: auto; }
+
+  /* ---- Onglets du classeur "Meilleurs joueurs" ---- */
+  .fm-player-tabs { display: none; gap: 6px; flex: 0 0 auto; margin-bottom: 10px; }
+  .fm-player-tabs.visible { display: flex; }
+  .fm-player-tab {
+    background: #14171d; border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+  }
+  .fm-player-tab.active { background: rgba(251,191,36,0.14); color: var(--gold); border-color: #7a5c0f; }
 
   @media (max-width: 900px) {
     html, body { overflow: auto; }
@@ -303,6 +361,10 @@
     </div>
     <div class="right-block">
       <span class="fm-comp-tag" id="compTag"></span>
+      <div class="fm-division-nav" id="fmDivisionNav" style="display:none;">
+        <button id="fmDivUp" title="Division supérieure">▲</button>
+        <button id="fmDivDown" title="Division inférieure">▼</button>
+      </div>
       <div class="fm-date-badge" id="fmDateBadge" style="display:none;">
         <div class="day-num" id="fmDateLabel">-</div>
         <div class="season-line" id="fmSeasonLabel">Saison -</div>
@@ -323,6 +385,7 @@
         <div class="fm-col">
           <div class="card">
             <div class="fm-card-title"><span id="compCard1Title">Classement</span></div>
+            <div class="fm-stat-leaders" id="compClubLeaders" style="display:none;"></div>
             <div class="fm-scroll-area scroll-hide" id="compStandings">
               <div class="fm-empty">Chargement...</div>
             </div>
@@ -338,13 +401,18 @@
 
         <div class="fm-col">
           <div class="card">
-            <div class="fm-card-title"><span id="compCard3Title">Meilleurs buteurs</span></div>
+            <div class="fm-card-title"><span id="compCard3Title">Meilleurs joueurs</span></div>
+            <div class="fm-player-tabs" id="fmPlayerTabs">
+              <button class="fm-player-tab active" data-tab="buteurs">Buteurs</button>
+              <button class="fm-player-tab" data-tab="passeurs">Passeurs</button>
+              <button class="fm-player-tab" data-tab="notes">Notes</button>
+            </div>
             <div class="fm-scroll-area scroll-hide" id="compTopScorers">
               <div class="fm-empty">Chargement...</div>
             </div>
           </div>
           <div class="card">
-            <div class="fm-card-title"><span id="compCard4Title">Meilleurs passeurs</span></div>
+            <div class="fm-card-title"><span id="compCard4Title">Stats clubs</span></div>
             <div class="fm-scroll-area scroll-hide" id="compTopAssists">
               <div class="fm-empty">Chargement...</div>
             </div>
@@ -986,6 +1054,72 @@ async function loadCoupeNationale(comp) {
   bindFixtureClicks(document.getElementById("compTopAssists"));
 }
 
+// ===================== Navigation entre divisions (fleches verticales) =====================
+// Permet de passer d'une division a l'autre au sein d'une meme nation (ex:
+// Ligue 1 <-> Ligue 2) via les fleches haut/bas de la topbar.
+async function loadDivisionNav(comp) {
+  const nav = document.getElementById("fmDivisionNav");
+  const upBtn = document.getElementById("fmDivUp");
+  const downBtn = document.getElementById("fmDivDown");
+  if (comp.tier == null) { nav.style.display = "none"; return; }
+
+  const { data: siblings } = await supabaseClient
+    .from("competitions")
+    .select("id, tier")
+    .eq("type", "championnat")
+    .eq("nation", comp.nation)
+    .order("tier", { ascending: true });
+
+  const list = siblings || [];
+  const upComp = list.filter(c => c.tier < comp.tier).sort((a, b) => b.tier - a.tier)[0];
+  const downComp = list.filter(c => c.tier > comp.tier).sort((a, b) => a.tier - b.tier)[0];
+
+  if (!upComp && !downComp) { nav.style.display = "none"; return; }
+  nav.style.display = "";
+
+  const goToComp = (id) => {
+    const qs = new URLSearchParams({ game: gameId, competition: id, club: myClubId || "" });
+    window.location.href = `competition.html?${qs.toString()}`;
+  };
+
+  upBtn.disabled = !upComp;
+  downBtn.disabled = !downComp;
+  upBtn.onclick = () => upComp && goToComp(upComp.id);
+  downBtn.onclick = () => downComp && goToComp(downComp.id);
+}
+
+// ===================== Stats clubs agregees (possession, tirs) =====================
+// Calculees a partir des stats jsonb stockees sur chaque match joue
+// (calendrier.stats), remplies par le moteur de simulation instantanee.
+async function computeClubMatchStats(comp) {
+  const { data: rows } = await supabaseClient
+    .from("calendrier")
+    .select("club_domicile_id, club_exterieur_id, stats")
+    .eq("game_id", gameId)
+    .eq("nation", comp.nation)
+    .eq("division", comp.division)
+    .eq("statut", "joue");
+
+  const agg = {};
+  const ensure = (id) => {
+    if (!agg[id]) agg[id] = { matchs: 0, possessionSum: 0, tirsPourSum: 0, tirsContreSum: 0 };
+    return agg[id];
+  };
+  (rows || []).forEach(r => {
+    const s = r.stats;
+    if (!s) return;
+    const homeId = r.club_domicile_id, awayId = r.club_exterieur_id;
+    const h = ensure(homeId), a = ensure(awayId);
+    h.matchs++; a.matchs++;
+    if (s.possession) { h.possessionSum += (s.possession.domicile ?? 0); a.possessionSum += (s.possession.exterieur ?? 0); }
+    if (s.tirs) {
+      h.tirsPourSum += (s.tirs.domicile ?? 0); h.tirsContreSum += (s.tirs.exterieur ?? 0);
+      a.tirsPourSum += (s.tirs.exterieur ?? 0); a.tirsContreSum += (s.tirs.domicile ?? 0);
+    }
+  });
+  return agg;
+}
+
 async function loadCompetition() {
   if (!gameId || !competitionId) {
     document.getElementById("fmSearchInput").placeholder = "Compétition introuvable";
@@ -994,7 +1128,7 @@ async function loadCompetition() {
 
   const { data: comp, error: compError } = await supabaseClient
     .from("competitions")
-    .select("id, nom, nation, division, tier, nb_clubs, type")
+    .select("id, nom, nation, division, tier, nb_clubs, type, nb_promotion, nb_relegation")
     .eq("id", competitionId)
     .single();
 
@@ -1006,6 +1140,10 @@ async function loadCompetition() {
   document.getElementById("fmSearchInput").placeholder = comp.nom;
   document.getElementById("compTag").textContent = comp.type === "championnat" ? "Championnat" : comp.type === "coupe_nationale" ? "Coupe nationale" : comp.type;
   document.title = `FM Web — ${comp.nom}`;
+
+  if (comp.type === "championnat") {
+    loadDivisionNav(comp);
+  }
 
   if (comp.type === "coupe_nationale") {
     document.getElementById("compSub").textContent = comp.nation;
@@ -1046,6 +1184,8 @@ async function loadCompetition() {
     statsById[c.id] = c;
     logoById[c.id] = c.clubs?.logo_url || null;
   });
+
+  const matchStats = await computeClubMatchStats(comp);
 
   const sorted = clubIds.slice().sort((a, b) => {
     const sa = statsById[a] || {};
@@ -1111,9 +1251,16 @@ async function loadCompetition() {
     ? { startRank: sorted.length - nbRelegation + 1, endRank: sorted.length }
     : null;
 
+  // Zone de promotion : les nb_promotion premiers, pour toute division qui
+  // n'est pas l'elite (tier 1 n'a jamais de promotion, uniquement les zones
+  // europeennes calculees plus haut).
+  const nbPromotion = comp.tier > 1 ? (comp.nb_promotion || 0) : 0;
+  const promouvable = nbPromotion > 0 ? { startRank: 1, endRank: nbPromotion } : null;
+
   const zoneClassForRank = (rank) => {
     const euro = euroZones.find(z => rank >= z.startRank && rank <= z.endRank);
     if (euro) return euro.colorClass;
+    if (promouvable && rank >= promouvable.startRank && rank <= promouvable.endRank) return "zone-promo";
     if (releguable && rank >= releguable.startRank && rank <= releguable.endRank) return "zone-releg";
     return "";
   };
@@ -1166,6 +1313,9 @@ async function loadCompetition() {
       z.colorClass === "zone-euro-1" ? "#3b82f6" : z.colorClass === "zone-euro-2" ? "#f97316" : "#22c55e"
     };"></span>${escapeHtml(z.label)}</span>
   `);
+  if (promouvable) {
+    legendItems.push(`<span class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Promotion</span>`);
+  }
   if (releguable) {
     legendItems.push(`<span class="legend-item"><span class="legend-dot" style="background:var(--danger);"></span>Relégation</span>`);
   }
@@ -1209,41 +1359,130 @@ async function loadCompetition() {
     });
   }
 
-  // Meilleurs buteurs / passeurs de la competition
+  // ---- Chips "meilleure attaque / défense / possession / tirs" ----
+  const leadersEl = document.getElementById("compClubLeaders");
+  const clubsWithMatches = clubIds.filter(id => (matchStats[id]?.matchs || 0) > 0);
+  if (clubsWithMatches.length > 0) {
+    const bestAttack = clubIds.slice().sort((a, b) => (statsById[b]?.buts_pour ?? 0) - (statsById[a]?.buts_pour ?? 0))[0];
+    const bestDefense = clubIds.slice().sort((a, b) => (statsById[a]?.buts_contre ?? 0) - (statsById[b]?.buts_contre ?? 0))[0];
+    const bestPossession = clubsWithMatches.slice().sort((a, b) =>
+      (matchStats[b].possessionSum / matchStats[b].matchs) - (matchStats[a].possessionSum / matchStats[a].matchs))[0];
+    const bestShots = clubsWithMatches.slice().sort((a, b) =>
+      (matchStats[b].tirsPourSum / matchStats[b].matchs) - (matchStats[a].tirsPourSum / matchStats[a].matchs))[0];
+
+    const chip = (label, clubId, valueText) => `
+      <div class="fm-stat-leader-chip" data-club-id="${clubId}">
+        <div class="lbl">${escapeHtml(label)}</div>
+        <div class="val">
+          ${logoById[clubId] ? `<img class="fm-club-logo" src="${escapeHtml(logoById[clubId])}" alt="">` : ""}
+          <span class="club-name">${escapeHtml(nameById[clubId] || "?")}</span>
+          <span class="num">${valueText}</span>
+        </div>
+      </div>
+    `;
+    leadersEl.innerHTML = [
+      chip("Meilleure attaque", bestAttack, `${statsById[bestAttack]?.buts_pour ?? 0} buts`),
+      chip("Meilleure défense", bestDefense, `${statsById[bestDefense]?.buts_contre ?? 0} enc.`),
+      chip("Possession moy.", bestPossession, `${(matchStats[bestPossession].possessionSum / matchStats[bestPossession].matchs).toFixed(0)}%`),
+      chip("Tirs/match", bestShots, `${(matchStats[bestShots].tirsPourSum / matchStats[bestShots].matchs).toFixed(1)}`),
+    ].join("");
+    leadersEl.style.display = "";
+    leadersEl.querySelectorAll(".fm-stat-leader-chip").forEach(el => {
+      el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+    });
+  } else {
+    leadersEl.style.display = "none";
+  }
+
+  // ---- Carte "Stats clubs" : detail attaque/defense/possession/tirs par club ----
+  const clubStatsEl = document.getElementById("compTopAssists");
+  clubStatsEl.innerHTML = sorted.map((id) => {
+    const s = statsById[id] || {};
+    const m = matchStats[id];
+    const poss = m && m.matchs ? `${(m.possessionSum / m.matchs).toFixed(0)}%` : "-";
+    const tirsP = m && m.matchs ? (m.tirsPourSum / m.matchs).toFixed(1) : "-";
+    const tirsC = m && m.matchs ? (m.tirsContreSum / m.matchs).toFixed(1) : "-";
+    return `
+      <div class="player-row">
+        <span class="fm-club-link player-club-wrap" data-club-id="${id}" style="flex:1; min-width:0;">
+          ${logoById[id] ? `<img class="fm-club-logo" src="${escapeHtml(logoById[id])}" alt="">` : ""}
+          <span class="player-name">${escapeHtml(nameById[id])}</span>
+        </span>
+        <span class="player-club" title="Buts pour / encaissés">${s.buts_pour ?? 0}/${s.buts_contre ?? 0}</span>
+        <span class="player-club" title="Possession moyenne">${poss}</span>
+        <span class="player-value" style="width:auto;" title="Tirs pour / concédés par match">${tirsP}/${tirsC}</span>
+      </div>
+    `;
+  }).join("");
+  clubStatsEl.querySelectorAll(".fm-club-link").forEach(el => {
+    el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+  });
+
+  // ---- Meilleurs joueurs (buteurs / passeurs / notes), avec photo + club ----
   const { data: players } = await supabaseClient
     .from("game_players")
-    .select("id, nom, game_club_id, buts_saison, passes_decisives_saison, poste_brut")
+    .select("id, nom, game_club_id, buts_saison, passes_decisives_saison, note_moyenne_saison, matchs_joues_saison, poste_brut, players(photo_url)")
     .eq("game_id", gameId)
     .in("game_club_id", clubIds);
 
   const topScorersEl = document.getElementById("compTopScorers");
-  const topAssistsEl = document.getElementById("compTopAssists");
 
   if (!players || players.length === 0) {
     topScorersEl.innerHTML = `<div class="fm-empty">Pas encore de données.</div>`;
-    topAssistsEl.innerHTML = `<div class="fm-empty">Pas encore de données.</div>`;
     return;
   }
 
-  const topScorers = players.slice().sort((a, b) => (b.buts_saison ?? 0) - (a.buts_saison ?? 0)).slice(0, 15);
-  const topAssists = players.slice().sort((a, b) => (b.passes_decisives_saison ?? 0) - (a.passes_decisives_saison ?? 0)).slice(0, 15);
+  const renderPlayerList = (list, valueKey, emptyLabel, formatVal) => list.length === 0
+    ? `<div class="fm-empty">${escapeHtml(emptyLabel)}</div>`
+    : list.map((p, i) => `
+      <div class="player-row">
+        <span class="player-rank">${i + 1}</span>
+        ${p.players?.photo_url
+          ? `<img class="player-photo" src="${escapeHtml(p.players.photo_url)}" alt="">`
+          : `<span class="player-photo-placeholder">🧍</span>`}
+        <span class="player-name" data-club-id="${p.game_club_id}">${escapeHtml(p.nom)}</span>
+        <span class="player-club player-club-wrap">
+          ${logoById[p.game_club_id] ? `<img class="player-club-logo" src="${escapeHtml(logoById[p.game_club_id])}" alt="">` : ""}
+          ${escapeHtml(nameById[p.game_club_id] || "")}
+        </span>
+        <span class="player-value">${formatVal ? formatVal(p[valueKey]) : (p[valueKey] ?? 0)}</span>
+      </div>
+    `).join("");
 
-  const renderPlayerList = (list, valueKey) => list.map((p, i) => `
-    <div class="player-row">
-      <span class="player-rank">${i + 1}</span>
-      <span class="player-name">${escapeHtml(p.nom)}</span>
-      <span class="player-club">${escapeHtml(nameById[p.game_club_id] || "")}</span>
-      <span class="player-value">${p[valueKey] ?? 0}</span>
-    </div>
-  `).join("");
+  const playerTabs = {
+    buteurs: () => renderPlayerList(
+      players.slice().filter(p => (p.buts_saison ?? 0) > 0).sort((a, b) => (b.buts_saison ?? 0) - (a.buts_saison ?? 0)).slice(0, 15),
+      "buts_saison", "Aucun but marqué pour l'instant."
+    ),
+    passeurs: () => renderPlayerList(
+      players.slice().filter(p => (p.passes_decisives_saison ?? 0) > 0).sort((a, b) => (b.passes_decisives_saison ?? 0) - (a.passes_decisives_saison ?? 0)).slice(0, 15),
+      "passes_decisives_saison", "Aucune passe décisive pour l'instant."
+    ),
+    notes: () => renderPlayerList(
+      players.slice().filter(p => (p.matchs_joues_saison ?? 0) > 0 && p.note_moyenne_saison != null)
+        .sort((a, b) => (b.note_moyenne_saison ?? 0) - (a.note_moyenne_saison ?? 0)).slice(0, 15),
+      "note_moyenne_saison", "Pas encore de note disponible.", (v) => (v != null ? Number(v).toFixed(2) : "-")
+    ),
+  };
 
-  topScorersEl.innerHTML = topScorers.every(p => !p.buts_saison)
-    ? `<div class="fm-empty">Aucun but marqué pour l'instant.</div>`
-    : renderPlayerList(topScorers, "buts_saison");
+  function renderPlayerTab(tab) {
+    topScorersEl.innerHTML = playerTabs[tab]();
+    topScorersEl.querySelectorAll(".player-name[data-club-id]").forEach(el => {
+      el.style.cursor = "pointer";
+      el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+    });
+  }
 
-  topAssistsEl.innerHTML = topAssists.every(p => !p.passes_decisives_saison)
-    ? `<div class="fm-empty">Aucune passe décisive pour l'instant.</div>`
-    : renderPlayerList(topAssists, "passes_decisives_saison");
+  document.getElementById("fmPlayerTabs").classList.add("visible");
+  document.querySelectorAll("#fmPlayerTabs .fm-player-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#fmPlayerTabs .fm-player-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderPlayerTab(btn.getAttribute("data-tab"));
+    });
+  });
+
+  renderPlayerTab("buteurs");
 }
 
 loadCompetition();
