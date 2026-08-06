@@ -256,9 +256,15 @@
   .pitch-name-label {
     fill: var(--text-dim); font-size: 7.5px; text-anchor: middle; pointer-events: none;
   }
-  /* Version miniature du terrain, casee en bas de la colonne laterale */
-  .pitch-mini .pitch-wrap { max-width: 170px; margin: 0 0 0 auto; }
-  .pitch-mini .pitch-caption { text-align: right; }
+  /* Module "Dernière composition utilisée" : bloc plein largeur, vertical,
+     dédié uniquement au terrain + composition (déplacé hors de la colonne
+     latérale car il y était trop à l'étroit). */
+  .club-last-lineup { grid-column: 1 / -1; }
+  .club-last-lineup .card-title { text-align: center; justify-content: center; }
+  .club-last-lineup .pitch-caption { text-align: center; }
+  .club-last-lineup .pitch-wrap { max-width: 460px; margin: 0 auto; }
+  .compo-pitch-face { transition: filter 0.15s ease; }
+  .compo-pitch-player:hover .compo-pitch-face { filter: brightness(1.15); }
 
   /* ---- Compétitions (sous-onglet) : calendrier horizontal en haut (pleine
      largeur, plus d'espace), compétitions du club en dessous ---- */
@@ -888,10 +894,10 @@
             <div class="card-title"><span>Palmarès</span></div>
             <div id="clubPalmares" class="fm-empty">Chargement...</div>
           </div>
-          <div class="card pitch-mini">
-            <div class="card-title"><span>Dernière composition utilisée</span></div>
-            <div id="clubPitch"></div>
-          </div>
+        </div>
+        <div class="card club-last-lineup">
+          <div class="card-title"><span>Dernière composition utilisée</span></div>
+          <div id="clubPitch"></div>
         </div>
       </div>
 
@@ -1654,44 +1660,66 @@ function compoPitchRows(titulaires) {
   if (al[1]) defOrdered.push(al[1]);
   if (al.length > 2) defOrdered.push(...al.slice(2));
   return [
-    { y: 400, players: bands.GB },
-    { y: 322, players: defOrdered },
-    { y: 244, players: bands.MD },
-    { y: 152, players: bands.MO },
-    { y: 60, players: bands.BT },
+    { y: 600, players: bands.GB },
+    { y: 483, players: defOrdered },
+    { y: 366, players: bands.MD },
+    { y: 228, players: bands.MO },
+    { y: 90, players: bands.BT },
   ].filter(row => row.players.length);
 }
 
-function compoNoteColor(note) {
-  const n = Number(note);
-  if (!Number.isFinite(n)) return "#94a3b8";
-  if (n >= 7.5) return "#4ade80";
-  if (n >= 6.5) return "#a3e635";
-  if (n >= 5.5) return "#cbd5e1";
-  if (n >= 4.5) return "#fbbf24";
-  return "#ef4444";
+// Photos des titulaires affiches sur ce terrain (referentiel public.players,
+// colonne photo_url, reliee via game_players -> players). Meme logique que
+// tacFetchPlayerPhotos (onglet Tactique), duplique ici pour ne pas dependre
+// de l'ordre de declaration des fonctions dans le fichier.
+async function compoFetchPlayerPhotos(playerIds) {
+  const ids = [...new Set((playerIds || []).filter(id => id != null))];
+  const photos = {};
+  if (!ids.length) return photos;
+  const { data } = await supabaseClient
+    .from("game_players")
+    .select("id, players(photo_url)")
+    .in("id", ids);
+  (data || []).forEach(p => {
+    const url = p.players?.photo_url;
+    if (url) photos[p.id] = url;
+  });
+  return photos;
 }
 
-function compoPitchSvg(titulaires) {
+function compoPitchSvg(titulaires, photos = {}) {
   const rows = compoPitchRows(titulaires);
+  const R = 26;
   const dots = rows.flatMap(row => {
     const n = row.players.length;
     return row.players.map((p, i) => {
-      const x = ((i + 1) / (n + 1)) * 240 + 30;
+      const x = ((i + 1) / (n + 1)) * 360 + 45;
       const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
+      const initials = escapeHtml((p.player_nom || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase());
       const attrs = p.player_id ? ` class="compo-pitch-player" data-player-id="${escapeHtml(String(p.player_id))}"` : "";
+      const photoUrl = p.player_id ? photos[p.player_id] : null;
+      const clipId = `compoClip-${p.player_id != null ? p.player_id : `${row.y}-${i}`}`;
+      const faceContent = photoUrl
+        ? `
+          <defs><clipPath id="${clipId}"><circle r="${R - 2}"/></clipPath></defs>
+          <image class="compo-pitch-face" href="${escapeHtml(photoUrl)}" x="${-R}" y="${-R}" width="${R * 2}" height="${R * 2}"
+            preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"
+            onerror="this.remove()"/>
+        `
+        : `<text text-anchor="middle" dy="6" font-size="15" font-weight="800" fill="#fff">${initials}</text>`;
       return `
         <g${attrs} transform="translate(${x},${row.y})">
-          <circle r="15" fill="${compoNoteColor(p.note)}" stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
-          <text text-anchor="middle" dy="4" font-size="10" font-weight="800" fill="#0b0f14">${escapeHtml(Number.isFinite(Number(p.note)) ? Number(p.note).toFixed(1) : "-")}</text>
-          <text text-anchor="middle" y="27" font-size="10" font-weight="600" fill="#fff" stroke="rgba(0,0,0,0.75)" stroke-width="3" paint-order="stroke">${escapeHtml(nomCourt)}</text>
+          <circle r="${R}" fill="#1c2029" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
+          ${faceContent}
+          <circle r="${R}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+          <text text-anchor="middle" y="${R + 18}" font-size="13" font-weight="700" fill="#fff" stroke="rgba(0,0,0,0.8)" stroke-width="3" paint-order="stroke">${escapeHtml(nomCourt)}</text>
         </g>
       `;
     });
   }).join("");
   return `
     <div class="pitch-wrap">
-      <svg class="pitch-svg" viewBox="0 0 300 430" xmlns="http://www.w3.org/2000/svg">
+      <svg class="pitch-svg" viewBox="0 0 450 650" xmlns="http://www.w3.org/2000/svg">
         ${pitchBackground()}
         ${dots}
       </svg>
@@ -1735,9 +1763,11 @@ async function renderPitch() {
   if (formation) captionParts.push(formation);
   captionParts.push(`vs ${oppClub?.nom || "?"}${dateLabel ? ` (${dateLabel})` : ""}`);
 
+  const photos = await compoFetchPlayerPhotos(titulaires.map(t => t.player_id));
+
   el.innerHTML = `
     <div class="pitch-caption">${escapeHtml(captionParts.join(" · "))}</div>
-    ${compoPitchSvg(titulaires)}
+    ${compoPitchSvg(titulaires, photos)}
   `;
   el.querySelectorAll(".compo-pitch-player[data-player-id]").forEach(node => {
     node.addEventListener("click", () => window.mdetGoToPlayer(gameClubId, node.getAttribute("data-player-id")));
@@ -1746,18 +1776,18 @@ async function renderPitch() {
 
 function pitchBackground() {
   return `
-    <rect x="0" y="0" width="300" height="430" rx="6" fill="#123a1f"/>
-    <rect x="6" y="6" width="288" height="418" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
-    <line x1="6" y1="215" x2="294" y2="215" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
-    <circle cx="150" cy="215" r="34" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
-    <rect x="80" y="6" width="140" height="46" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
-    <rect x="80" y="378" width="140" height="46" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <rect x="0" y="0" width="450" height="650" rx="9" fill="#123a1f"/>
+    <rect x="9" y="9" width="432" height="632" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <line x1="9" y1="325" x2="441" y2="325" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <circle cx="225" cy="325" r="51" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <rect x="120" y="9" width="210" height="69" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+    <rect x="120" y="572" width="210" height="69" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
   `;
 }
 function emptyPitchSvg() {
   return `
     <div class="pitch-wrap">
-      <svg class="pitch-svg" viewBox="0 0 300 430" xmlns="http://www.w3.org/2000/svg">
+      <svg class="pitch-svg" viewBox="0 0 450 650" xmlns="http://www.w3.org/2000/svg">
         ${pitchBackground()}
       </svg>
     </div>
