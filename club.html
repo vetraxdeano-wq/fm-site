@@ -1959,29 +1959,62 @@ function renderKeyPeople(club, players, rawClub) {
 }
 
 // ===================== PALMARES =====================
-// Pas encore de table de trophees dediee : on tente de lire un champ deja
-// present sur la fiche club brute (au cas ou), sinon etat honnete "aucun
-// trophee pour l'instant" (coherent avec une partie qui commence en pre-saison).
-function renderPalmares(rawClub) {
+// Branche sur la vraie table de trophees game_titres (une ligne par titre
+// remporte : saison + type_titre + competition_ref), jointe a competitions
+// pour le nom affiche. Regroupe par competition + type de titre avec un
+// compteur, trie par nombre de titres decroissant.
+const TYPE_TITRE_LABEL_CLUB = {
+  championnat: "Champion",
+  coupe_nationale: "Vainqueur",
+};
+
+async function loadAndRenderPalmares(gid, gameClubIdParam) {
   const el = document.getElementById("clubPalmares");
-  const raw = rawClub?.palmares || rawClub?.titres || rawClub?.trophees;
 
-  let list = null;
-  if (Array.isArray(raw)) list = raw;
-  else if (raw && typeof raw === "object") list = Object.entries(raw).map(([nom, count]) => ({ nom, count }));
+  const { data, error } = await supabaseClient
+    .from("game_titres")
+    .select("saison, type_titre, competitions(nom)")
+    .eq("game_id", gid)
+    .eq("game_club_id", gameClubIdParam);
 
-  if (!list || list.length === 0) {
+  if (error) {
+    console.error(error);
+    el.innerHTML = `<div class="fm-empty">Impossible de charger le palmarès.</div>`;
+    return;
+  }
+
+  renderPalmares(data || []);
+}
+
+function renderPalmares(rows) {
+  const el = document.getElementById("clubPalmares");
+
+  if (!rows || rows.length === 0) {
     el.innerHTML = `<div class="fm-empty">Aucun trophée remporté pour l'instant.</div>`;
     return;
   }
 
+  const byKey = new Map();
+  rows.forEach(r => {
+    const compNom = r.competitions?.nom || "Compétition inconnue";
+    const key = `${r.type_titre}::${compNom}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, { nom: `${TYPE_TITRE_LABEL_CLUB[r.type_titre] || r.type_titre} — ${compNom}`, count: 0, saisons: [] });
+    }
+    const entry = byKey.get(key);
+    entry.count++;
+    if (r.saison != null) entry.saisons.push(r.saison);
+  });
+
+  const list = [...byKey.values()].sort((a, b) => b.count - a.count || a.nom.localeCompare(b.nom));
+
   el.innerHTML = `
     <div class="palmares-list">
       ${list.map(item => `
-        <div class="palmares-item">
+        <div class="palmares-item" title="${escapeHtml(item.saisons.sort((a, b) => a - b).map(s => `Saison ${s}`).join(", "))}">
           <span class="trophy">🏆</span>
-          <span>${escapeHtml(item.nom || item.titre || String(item))}</span>
-          ${item.count ? `<span class="count">×${escapeHtml(String(item.count))}</span>` : ""}
+          <span>${escapeHtml(item.nom)}</span>
+          ${item.count > 1 ? `<span class="count">×${item.count}</span>` : ""}
         </div>
       `).join("")}
     </div>
@@ -3257,7 +3290,7 @@ async function loadClub() {
   renderFinances(club);
   renderReputation(club, players || []);
   renderKeyPeople(club, players || [], rawClub);
-  renderPalmares(rawClub);
+  loadAndRenderPalmares(gameId, gameClubId);
 }
 
 function showFatalError(message) {
