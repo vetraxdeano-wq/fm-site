@@ -8288,11 +8288,11 @@ function wireSearchField(inputId, dropdownId, wrapId) {
 
 async function runGlobalSearch(q, dropdown) {
   // Recherche approximative : insensible aux accents et aux abreviations
-  // courantes (voir fmMatchScore plus haut). Clubs et competitions sont peu
-  // nombreux par partie : on recupere la liste complete pour les classer par
-  // pertinence cote client. Les joueurs restent filtres cote serveur (mot
-  // par mot, table potentiellement volumineuse) puis reclasses de la meme
-  // maniere.
+  // courantes (voir fmMatchScore plus haut). Clubs, competitions et joueurs
+  // sont tous filtres cote serveur d'abord (l'API tronque silencieusement
+  // au-dela d'un certain nombre de lignes, donc on ne peut pas tout
+  // rapatrier pour une table volumineuse), puis reclasses cote client par
+  // pertinence + notoriete.
   const words = q.trim().split(/\s+/).filter(Boolean);
 
   let playerQuery = supabaseClient
@@ -8301,25 +8301,40 @@ async function runGlobalSearch(q, dropdown) {
     .eq("game_id", gameId);
   words.forEach(w => { playerQuery = playerQuery.ilike("nom", `%${w}%`); });
 
+  // Un jeu peut compter des dizaines de milliers de clubs (toutes divisions,
+  // toutes nations confondues) : impossible de tous les rapatrier pour
+  // filtrer cote client, l'API tronque silencieusement au-dela d'un certain
+  // nombre de lignes et des clubs pourtant existants (ex: Paris Saint-Germain,
+  // Montpellier) pouvaient alors ne jamais apparaitre. On filtre donc cote
+  // serveur mot par mot (comme pour les joueurs), avec une requete par
+  // variante de recherche (accents/surnoms geres par fmSearchVariants : "psg"
+  // lance aussi une recherche sur "paris saint germain", etc.), puis on
+  // fusionne et on classe cote client par pertinence + notoriete.
+  const clubVariants = fmSearchVariants(q).slice(0, 4);
+  const clubQueries = clubVariants.map(variant => {
+    const vWords = variant.split(" ").filter(Boolean);
+    let query = supabaseClient.from("game_clubs").select("id, nom, club_ref").eq("game_id", gameId);
+    vWords.forEach(w => { query = query.ilike("nom", `%${w}%`); });
+    return query.limit(40);
+  });
+
   const [
-    { data: allClubs, error: clubsError },
+    clubResults,
     { data: allCompetitions, error: competitionsError },
     { data: players, error: playersError },
   ] = await Promise.all([
-    supabaseClient.from("game_clubs").select("id, nom, club_ref").eq("game_id", gameId),
+    Promise.all(clubQueries),
     supabaseClient.from("competitions").select("id, nom, nation, division, tier"), // pas de game_id : table globale (referentiel de competitions), pas clonee par partie
     playerQuery.order("reputation_mondiale", { ascending: false, nullsFirst: false }).limit(20),
   ]);
-  if (clubsError) console.error(clubsError);
+  clubResults.forEach(r => { if (r.error) console.error(r.error); });
   if (competitionsError) console.error(competitionsError);
   if (playersError) console.error(playersError);
 
-  // Une requete large ("paris", "real"...) peut matcher des dizaines de
-  // clubs a l'identique (equipes reserves, amateurs...). On garde une marge
-  // avant de trier par notoriete (table clubs.reputation) pour que le grand
-  // club recherche sorte bien dans le top 6, plutot que de trier seulement
-  // par ordre alphabetique.
-  const clubsMatched = (allClubs || [])
+  const clubCandidates = new Map();
+  clubResults.forEach(r => { (r.data || []).forEach(c => clubCandidates.set(c.id, c)); });
+
+  const clubsMatched = [...clubCandidates.values()]
     .map(c => ({ ...c, _score: fmMatchScore(c.nom, q) }))
     .filter(c => c._score > 0)
     .sort((a, b) => b._score - a._score || a.nom.localeCompare(b.nom))
