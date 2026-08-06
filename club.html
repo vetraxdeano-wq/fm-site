@@ -3548,18 +3548,42 @@ function mdetHueDistance(h1, h2) {
   return d > 180 ? 360 - d : d;
 }
 
-async function mdetPickBarColors(logoDomUrl, nomDom, logoExtUrl, nomExt) {
-  const [domExtracted, extExtracted] = await Promise.all([
-    mdetDominantColorFromLogo(logoDomUrl),
-    mdetDominantColorFromLogo(logoExtUrl),
-  ]);
-  let [hDom, sDom, lDom] = domExtracted || [mdetHueFromName(nomDom), 62, 46];
-  let [hExt, sExt, lExt] = extExtracted || [mdetHueFromName(nomExt), 62, 46];
+// Couleurs des barres a partir de clubs.couleur_dominante (meme source que
+// la topbar et dashboard.html), plutot que d'une extraction live depuis le
+// logo : garantit que la barre d'un club affiche exactement la meme teinte
+// que sa topbar quand on consulte sa page.
+async function mdetFetchClubColors(clubIds) {
+  const ids = [...new Set(clubIds.filter(Boolean))];
+  const colors = {};
+  if (!ids.length) return colors;
+  try {
+    const { data: gameClubs } = await supabaseClient
+      .from("game_clubs")
+      .select("id, clubs(couleur_dominante)")
+      .in("id", ids);
+    (gameClubs || []).forEach(g => {
+      const c = g?.clubs?.couleur_dominante;
+      if (c && c.h != null) colors[g.id] = c;
+    });
+  } catch (e) {
+    console.error(e);
+  }
+  return colors;
+}
 
-  if (mdetHueDistance(hDom, hExt) < 35 && Math.abs(lDom - lExt) < 18) {
-    // Trop proches (meme teinte dominante) : on decale l'exterieur pour
-    // garder les deux barres lisibles l'une a cote de l'autre.
-    hExt = (hDom + 150) % 360;
+function mdetPickBarColors(colorDom, nomDom, colorExt, nomExt) {
+  let hDom = colorDom?.h, sDom = colorDom?.s ?? 62, lDom = colorDom?.l ?? 46;
+  let hExt = colorExt?.h, sExt = colorExt?.s ?? 62, lExt = colorExt?.l ?? 46;
+  if (hDom == null) hDom = mdetHueFromName(nomDom);
+  if (hExt == null) hExt = mdetHueFromName(nomExt);
+
+  // On ne touche a la couleur exterieure que si les deux teintes sont
+  // quasiment identiques (memes teinte/saturation/luminosite a quelques
+  // degres pres) : au-dela, chaque club garde sa vraie couleur, meme si
+  // elles restent "de la meme famille" (ex: jaune contre vert).
+  if (mdetHueDistance(hDom, hExt) < 12 && Math.abs(sDom - sExt) < 15 && Math.abs(lDom - lExt) < 12) {
+    hExt = (hExt + 20) % 360;
+    lExt = lExt > 45 ? Math.max(lExt - 14, 22) : Math.min(lExt + 14, 68);
   }
   return {
     dom: `hsl(${Math.round(hDom)}, ${Math.round(sDom)}%, ${Math.round(lDom)}%)`,
@@ -3699,7 +3723,8 @@ async function openMatchDetails(matchId) {
   const logoExtSmall = mdetLogoHtml(logos[m.club_exterieur_id], nomExt, 30);
   const remplacementsDom = (stats.remplacements || []).filter(r => r.game_club_id === m.club_domicile_id);
   const remplacementsExt = (stats.remplacements || []).filter(r => r.game_club_id === m.club_exterieur_id);
-  const barColors = await mdetPickBarColors(logos[m.club_domicile_id], nomDom, logos[m.club_exterieur_id], nomExt);
+  const clubColors = await mdetFetchClubColors([m.club_domicile_id, m.club_exterieur_id]);
+  const barColors = mdetPickBarColors(clubColors[m.club_domicile_id], nomDom, clubColors[m.club_exterieur_id], nomExt);
 
   content.innerHTML = `
     <div class="mdet-header">
