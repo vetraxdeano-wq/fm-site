@@ -342,9 +342,10 @@ document.getElementById("createRoomBtn").addEventListener("click", async () => {
 
     if (memberErr) throw memberErr;
 
-    toast(`Room creee ! Code : ${code}`);
+    toast(`Room creee ! Generation du monde en cours (jusqu'a ~2 min)...`);
     document.getElementById("roomNameInput").value = "";
     loadRooms();
+    startGenerationPolling();
   } catch (e) {
     console.error(e);
     toast("Erreur lors de la creation : " + e.message, true);
@@ -513,6 +514,45 @@ async function kickParticipant(gameId, targetUserId, targetPseudo, btnEl) {
 }
 
 // ============================================================
+// GENERATION DU MONDE (asynchrone, via pg_cron cote base)
+// ============================================================
+let generationPollTimer = null;
+
+function startGenerationPolling() {
+  if (generationPollTimer) return; // deja en cours
+  generationPollTimer = setInterval(async () => {
+    await loadRooms();
+  }, 5000);
+}
+
+function stopGenerationPolling() {
+  if (generationPollTimer) {
+    clearInterval(generationPollTimer);
+    generationPollTimer = null;
+  }
+}
+
+async function retryGeneration(gameId, btnEl) {
+  btnEl.disabled = true;
+  try {
+    const { error } = await supabaseClient
+      .from("games")
+      .update({ monde_genere: false, monde_generation_erreur: null })
+      .eq("id", gameId);
+
+    if (error) throw error;
+
+    toast("Nouvelle tentative de generation lancee...");
+    loadRooms();
+    startGenerationPolling();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur en relancant la generation : " + e.message, true);
+    btnEl.disabled = false;
+  }
+}
+
+// ============================================================
 // LISTER MES ROOMS
 // ============================================================
 async function loadRooms() {
@@ -521,7 +561,7 @@ async function loadRooms() {
   try {
     const { data: memberships, error } = await supabaseClient
       .from("game_participants")
-      .select("game_id, is_host, games(id, nom, code_invitation, statut, jour_actuel, saison)")
+      .select("game_id, is_host, games(id, nom, code_invitation, statut, jour_actuel, saison, monde_genere, monde_generation_erreur)")
       .eq("user_id", userId);
 
     if (error) throw error;
@@ -553,7 +593,10 @@ async function loadRooms() {
       div.className = "room-item";
 
       const participants = participantsByGame[g.id] || [];
-      const canStart = m.is_host && g.statut === "lobby";
+      const isGenerating = !g.monde_genere && !g.monde_generation_erreur;
+      const hasError = !!g.monde_generation_erreur;
+      const isReady = g.monde_genere && !hasError;
+      const canStart = m.is_host && g.statut === "lobby" && isReady;
       const pseudosHtml = participants
         .map(p => {
           const kickable = m.is_host && p.user_id !== userId;
@@ -563,6 +606,13 @@ async function loadRooms() {
           return `<span class="pseudo-chip">${p.is_host ? "👑 " : ""}${escapeHtml(p.pseudo || "?")}${kickBtn}</span>`;
         })
         .join("");
+
+      let statusBannerHtml = "";
+      if (isGenerating) {
+        statusBannerHtml = `<div class="start-hint">⏳ Generation du monde en cours (clubs, joueurs, staff...) — jusqu'a 2 minutes. La page se met a jour toute seule.</div>`;
+      } else if (hasError) {
+        statusBannerHtml = `<div class="start-hint" style="color:#e05656">⚠️ Echec de la generation du monde : ${escapeHtml(g.monde_generation_erreur)}</div>`;
+      }
 
       div.innerHTML = `
         <div class="room-item-top">
@@ -574,15 +624,24 @@ async function loadRooms() {
         </div>
         <div class="pseudo-list">${pseudosHtml}</div>
         <div class="host-actions">
-          <button class="secondary" data-goto="${g.id}">Acceder a la partie</button>
+          <button class="secondary" data-goto="${g.id}" ${isReady ? "" : "disabled"}>Acceder a la partie</button>
           ${canStart ? `<button class="gold" data-start="${g.id}">Demarrer la partie</button>` : ""}
+          ${hasError && m.is_host ? `<button class="secondary" data-retry="${g.id}">Reessayer la generation</button>` : ""}
           ${m.is_host ? `<button class="danger" data-delete="${g.id}">Supprimer</button>` : `<button class="danger" data-leave="${g.id}">Quitter</button>`}
         </div>
+        ${statusBannerHtml}
         ${canStart ? `<div class="start-hint">Demarre le decompte des jours (mercato, matchs...) pour tout le monde. A faire une fois que tous les joueurs attendus ont rejoint — impossible d'ajouter quelqu'un apres.</div>` : ""}
       `;
 
       container.appendChild(div);
     });
+
+    // Polling automatique tant qu'au moins une room est en cours de generation
+    if (memberships.some(m => m.games && !m.games.monde_genere && !m.games.monde_generation_erreur)) {
+      startGenerationPolling();
+    } else {
+      stopGenerationPolling();
+    }
 
     container.querySelectorAll("[data-start]").forEach(btn => {
       btn.addEventListener("click", () => startGame(btn.getAttribute("data-start"), btn));
@@ -604,6 +663,9 @@ async function loadRooms() {
         btn.getAttribute("data-kick-pseudo"),
         btn
       ));
+    });
+    container.querySelectorAll("[data-retry]").forEach(btn => {
+      btn.addEventListener("click", () => retryGeneration(btn.getAttribute("data-retry"), btn));
     });
     container.querySelectorAll("[data-goto]").forEach(btn => {
       btn.addEventListener("click", () => {
