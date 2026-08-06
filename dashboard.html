@@ -9534,10 +9534,13 @@ function mdetPickBarColors(colorDom, nomDom, colorExt, nomExt) {
   if (hDom == null) hDom = mdetHueFromName(nomDom);
   if (hExt == null) hExt = mdetHueFromName(nomExt);
 
-  if (mdetHueDistance(hDom, hExt) < 35 && Math.abs(lDom - lExt) < 18) {
-    // Trop proches (meme teinte dominante) : on decale l'exterieur pour
-    // garder les deux barres lisibles l'une a cote de l'autre.
-    hExt = (hDom + 150) % 360;
+  // On ne touche a la couleur exterieure que si les deux teintes sont
+  // quasiment identiques (memes teinte/saturation/luminosite a quelques
+  // degres pres) : au-dela, chaque club garde sa vraie couleur, meme si
+  // elles restent "de la meme famille" (ex: jaune contre vert).
+  if (mdetHueDistance(hDom, hExt) < 12 && Math.abs(sDom - sExt) < 15 && Math.abs(lDom - lExt) < 12) {
+    hExt = (hExt + 20) % 360;
+    lExt = lExt > 45 ? Math.max(lExt - 14, 22) : Math.min(lExt + 14, 68);
   }
   return {
     dom: `hsl(${Math.round(hDom)}, ${Math.round(sDom)}%, ${Math.round(lDom)}%)`,
