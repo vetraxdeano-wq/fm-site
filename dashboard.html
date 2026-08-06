@@ -10182,12 +10182,6 @@ async function startGame(participantCount) {
   const btn = document.getElementById("startGameBtn");
   btn.disabled = true;
 
-  if (participantCount < 2) {
-    toast("Il faut au moins 2 joueurs pour demarrer", true);
-    btn.disabled = false;
-    return;
-  }
-
   try {
     const { error } = await supabaseClient
       .from("games")
