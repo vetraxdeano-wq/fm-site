@@ -1276,6 +1276,42 @@ function renderFmHeader(pseudo, headerClubName, canSearch = true) {
   initHeaderSearch();
 }
 
+// ===================== COULEUR DE LA TOPBAR SELON LE CLUB =====================
+// La couleur dominante de chaque club (calculee cote serveur, stockee en HSL
+// dans clubs.couleur_dominante) habille la topbar : club affiche sur cette
+// page (effectif/infos club consultes) ou club du manager connecte (pages
+// sans club unique affiche, ex: dashboard, competitions).
+async function fmFetchClubColor(gameClubId) {
+  if (!gameClubId) return null;
+  try {
+    const { data } = await supabaseClient
+      .from("game_clubs")
+      .select("clubs(couleur_dominante)")
+      .eq("id", gameClubId)
+      .single();
+    return data?.clubs?.couleur_dominante || null;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+function fmApplyTopbarColor(color) {
+  const header = document.getElementById("fmHeader");
+  if (!header) return;
+  if (!color || color.h == null) {
+    header.style.background = "";
+    return;
+  }
+  const h = Math.round(color.h);
+  const s = Math.round(color.s ?? 70);
+  const l = Math.round(color.l ?? 40);
+  const dark = Math.max(l - 24, 8);
+  const bright = Math.min(l + 16, 60);
+  header.style.background =
+    `linear-gradient(120deg, hsl(${h}, ${s}%, ${dark}%), hsl(${h}, ${s}%, ${l}%) 55%, hsl(${h}, ${Math.max(s - 8, 0)}%, ${bright}%))`;
+}
+
 // ===================== MOTEUR DE RECHERCHE APPROXIMATIVE =====================
 // Recherche insensible aux accents, aux abreviations et aux surnoms de clubs
 // courants ("man city" -> Manchester City, "munich" -> Bayern Munchen, "psg"
@@ -1323,20 +1359,29 @@ function fmMatchScore(name, query) {
   const normName = fmNormSearch(name);
   if (!normName) return 0;
   const nameWords = normName.split(" ").filter(Boolean);
+  const flatName = nameWords.join("");
   const initials = nameWords.map(w => w[0]).join("");
   let best = 0;
   fmSearchVariants(query).forEach(variant => {
     const qWords = variant.split(" ").filter(Boolean);
     if (!qWords.length) return;
+    // Acronyme (ex : "psg" -> Paris Saint-Germain).
     if (qWords.length === 1 && qWords[0].length >= 2 && qWords[0] === initials) {
       best = Math.max(best, 90);
     }
-    const allPrefix = qWords.every(qw => nameWords.some(nw => nw.startsWith(qw)));
-    if (allPrefix) {
+    // Chaque mot de la requete doit apparaitre comme sous-chaine dans au
+    // moins un mot du nom, peu importe l'ordre : equivalent (en mieux, avec
+    // accents/surnoms geres) au filtre ilike mot-par-mot d'origine.
+    const allMatch = qWords.every(qw => nameWords.some(nw => nw.includes(qw)));
+    if (allMatch) {
       const exact = qWords.every(qw => nameWords.includes(qw));
-      best = Math.max(best, exact ? 100 : 80);
+      const allPrefix = qWords.every(qw => nameWords.some(nw => nw.startsWith(qw)));
+      best = Math.max(best, exact ? 100 : (allPrefix ? 85 : 70));
     }
-    if (normName.replace(/\s+/g, "").includes(variant.replace(/\s+/g, ""))) {
+    // Repli : la requete entiere (mots colles) est une sous-chaine du nom
+    // complet (mots colles) -- utile si la coupure en mots ne correspond pas
+    // exactement (tirets, apostrophes...).
+    if (flatName.includes(variant.replace(/\s+/g, ""))) {
       best = Math.max(best, 60);
     }
   });
@@ -1400,11 +1445,11 @@ function wireSearchField(inputId, dropdownId, wrapId) {
 
 async function runGlobalSearch(q, dropdown) {
   // Recherche approximative : insensible aux accents et aux abreviations
-  // courantes (voir fmMatchScore plus haut). Clubs et competitions sont peu
-  // nombreux par partie : on recupere la liste complete pour les classer par
-  // pertinence cote client. Les joueurs restent filtres cote serveur (mot
-  // par mot, table potentiellement volumineuse) puis reclasses de la meme
-  // maniere.
+  // courantes (voir fmMatchScore plus haut). Clubs, competitions et joueurs
+  // sont tous filtres cote serveur d'abord (l'API tronque silencieusement
+  // au-dela d'un certain nombre de lignes, donc on ne peut pas tout
+  // rapatrier pour une table volumineuse), puis reclasses cote client par
+  // pertinence + notoriete.
   const words = q.trim().split(/\s+/).filter(Boolean);
 
   let playerQuery = supabaseClient
@@ -1413,29 +1458,63 @@ async function runGlobalSearch(q, dropdown) {
     .eq("game_id", gameId);
   words.forEach(w => { playerQuery = playerQuery.ilike("nom", `%${w}%`); });
 
+  // Un jeu peut compter des dizaines de milliers de clubs (toutes divisions,
+  // toutes nations confondues) : impossible de tous les rapatrier pour
+  // filtrer cote client, l'API tronque silencieusement au-dela d'un certain
+  // nombre de lignes et des clubs pourtant existants (ex: Paris Saint-Germain,
+  // Montpellier) pouvaient alors ne jamais apparaitre. On filtre donc cote
+  // serveur mot par mot (comme pour les joueurs), avec une requete par
+  // variante de recherche (accents/surnoms geres par fmSearchVariants : "psg"
+  // lance aussi une recherche sur "paris saint germain", etc.), puis on
+  // fusionne et on classe cote client par pertinence + notoriete.
+  const clubVariants = fmSearchVariants(q).slice(0, 4);
+  const clubQueries = clubVariants.map(variant => {
+    const vWords = variant.split(" ").filter(Boolean);
+    let query = supabaseClient.from("game_clubs").select("id, nom, club_ref").eq("game_id", gameId);
+    vWords.forEach(w => { query = query.ilike("nom", `%${w}%`); });
+    return query.limit(40);
+  });
+
   const [
-    { data: allClubs, error: clubsError },
+    clubResults,
     { data: allCompetitions, error: competitionsError },
     { data: players, error: playersError },
   ] = await Promise.all([
-    supabaseClient.from("game_clubs").select("id, nom").eq("game_id", gameId),
-    supabaseClient.from("competitions").select("id, nom, nation, division").eq("game_id", gameId),
+    Promise.all(clubQueries),
+    supabaseClient.from("competitions").select("id, nom, nation, division, tier"), // pas de game_id : table globale (referentiel de competitions), pas clonee par partie
     playerQuery.order("reputation_mondiale", { ascending: false, nullsFirst: false }).limit(20),
   ]);
-  if (clubsError) console.error(clubsError);
+  clubResults.forEach(r => { if (r.error) console.error(r.error); });
   if (competitionsError) console.error(competitionsError);
   if (playersError) console.error(playersError);
 
-  const clubs = (allClubs || [])
+  const clubCandidates = new Map();
+  clubResults.forEach(r => { (r.data || []).forEach(c => clubCandidates.set(c.id, c)); });
+
+  const clubsMatched = [...clubCandidates.values()]
     .map(c => ({ ...c, _score: fmMatchScore(c.nom, q) }))
     .filter(c => c._score > 0)
     .sort((a, b) => b._score - a._score || a.nom.localeCompare(b.nom))
+    .slice(0, 40);
+
+  let clubReputationByRef = {};
+  if (clubsMatched.length > 0) {
+    const refs = [...new Set(clubsMatched.map(c => c.club_ref).filter(Boolean))];
+    if (refs.length > 0) {
+      const { data: repRows } = await supabaseClient.from("clubs").select("id, reputation").in("id", refs);
+      (repRows || []).forEach(r => { clubReputationByRef[r.id] = r.reputation; });
+    }
+  }
+  const clubs = clubsMatched
+    .sort((a, b) => (b._score - a._score)
+      || ((clubReputationByRef[b.club_ref] ?? 0) - (clubReputationByRef[a.club_ref] ?? 0))
+      || a.nom.localeCompare(b.nom))
     .slice(0, 6);
 
   const competitions = (allCompetitions || [])
     .map(c => ({ ...c, _score: fmMatchScore(c.nom, q) }))
     .filter(c => c._score > 0)
-    .sort((a, b) => b._score - a._score || a.nom.localeCompare(b.nom))
+    .sort((a, b) => b._score - a._score || ((a.tier ?? 999) - (b.tier ?? 999)) || a.nom.localeCompare(b.nom))
     .slice(0, 6);
 
   const rankedPlayers = (players || [])
@@ -3133,6 +3212,7 @@ async function loadClub() {
   document.getElementById("clubGrid").style.display = "";
 
   renderFmHeader(me.pseudo, headerClubName);
+  fmFetchClubColor(gameClubId).then(fmApplyTopbarColor);
   renderFmSidebar(myClubId, getClubLogoUrl(rawClub), club.nom);
   renderFmSubtabs(gameClubId);
   renderClubHero(club, rawClub);
