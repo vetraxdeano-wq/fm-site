@@ -256,14 +256,15 @@
   .pitch-name-label {
     fill: var(--text-dim); font-size: 7.5px; text-anchor: middle; pointer-events: none;
   }
-  /* Module "Dernière composition utilisée" : reste dans la colonne latérale,
-     sans excès de chrome autour — le terrain est dimensionné par la hauteur
-     (et non plus par la largeur de la colonne) pour ne jamais provoquer de
-     scroll : sa hauteur est plafonnée à une fraction de la fenêtre. */
-  .club-last-lineup { padding: 12px 12px 8px; }
+  /* Module "Dernière composition utilisée" : la carte ne s'étire plus sur
+     toute la largeur de la colonne (contrairement à Effectif clé / Palmarès) ;
+     elle se resserre à la largeur du terrain, ce qui laisse de la marge pour
+     agrandir le terrain sans que la carte paraisse démesurée. Hauteur
+     toujours plafonnée pour ne jamais provoquer de scroll. */
+  .club-last-lineup { width: fit-content; max-width: 100%; padding: 12px 12px 8px; }
   .club-last-lineup .card-title { margin-bottom: 8px; }
   .club-last-lineup .pitch-wrap { max-width: 100%; margin: 0; text-align: center; }
-  .club-last-lineup .pitch-svg { width: auto; height: min(34vh, 300px); max-width: 100%; display: inline-block; }
+  .club-last-lineup .pitch-svg { width: auto; height: min(46vh, 380px); max-width: 100%; display: inline-block; }
   .club-last-lineup .pitch-caption { text-align: center; }
   .compo-pitch-face { transition: filter 0.15s ease; }
   .compo-pitch-player:hover .compo-pitch-face { filter: brightness(1.15); }
