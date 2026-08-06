@@ -56,6 +56,12 @@
   .state-value.date { font-size: 15px; }
   .state-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
 
+  /* Game master (toujours visible en haut) */
+  #gameMasterCard {
+    position: sticky; top: 12px; z-index: 30;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  }
+
   /* Bouton continuer */
   .continue-panel { text-align: center; padding: 8px 0 4px; }
   #continueBtn {
@@ -72,6 +78,24 @@
     text-align: center; font-size: 13px; color: var(--text-dim);
     padding: 14px; border: 1px dashed var(--border); border-radius: 10px;
   }
+
+  /* Simuler jusqu'à une date */
+  .simulate-panel {
+    margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+  }
+  .simulate-panel input[type="date"] {
+    background: #14171d; border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 9px 10px; font-size: 13px; font-family: inherit;
+  }
+  #simulateBtn {
+    background: transparent; color: var(--text); border: 1px solid var(--border);
+    padding: 9px 18px; border-radius: 999px; font-weight: 700; font-size: 13px;
+    cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  #simulateBtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  #simulateBtn:disabled { opacity: 0.45; cursor: default; }
+  .simulate-progress { width: 100%; text-align: center; font-size: 12px; color: var(--accent); margin-top: 8px; min-height: 16px; }
 
   /* Matchs du jour / journal */
   .match-row {
@@ -122,6 +146,19 @@
 
 <div class="wrap">
 
+  <div class="card" id="gameMasterCard">
+    <h2>Game master</h2>
+    <div class="continue-panel">
+      <button id="continueBtn" disabled>Continuer</button>
+      <div class="continue-hint" id="continueHint">Chargement...</div>
+    </div>
+    <div class="simulate-panel" id="simulatePanel">
+      <input type="date" id="simulateDateInput">
+      <button id="simulateBtn" disabled>Simuler jusqu'à cette date</button>
+      <div class="simulate-progress" id="simulateProgress"></div>
+    </div>
+  </div>
+
   <div class="card">
     <h2>État de la partie</h2>
     <div class="state-grid">
@@ -143,14 +180,6 @@
   <div class="card">
     <h2>Aujourd'hui</h2>
     <div id="todayMatches"><div class="empty-hint">Chargement...</div></div>
-  </div>
-
-  <div class="card">
-    <h2>Game master</h2>
-    <div class="continue-panel">
-      <button id="continueBtn" disabled>Continuer</button>
-      <div class="continue-hint" id="continueHint">Chargement...</div>
-    </div>
   </div>
 
   <div class="card" id="logCard">
@@ -227,6 +256,7 @@ async function init() {
 
   await loadState();
   document.getElementById("continueBtn").addEventListener("click", onContinue);
+  document.getElementById("simulateBtn").addEventListener("click", onSimulerJusque);
 }
 
 async function loadState() {
@@ -253,21 +283,39 @@ async function loadState() {
 
   const btn = document.getElementById("continueBtn");
   const hint = document.getElementById("continueHint");
+  const simPanel = document.getElementById("simulatePanel");
+  const simBtn = document.getElementById("simulateBtn");
+  const simInput = document.getElementById("simulateDateInput");
+
   if (!isHost) {
     btn.classList.add("hidden");
     hint.textContent = "Seul le créateur de la partie peut faire avancer le jeu.";
+    simPanel.classList.add("hidden");
   } else if (game.statut === "lobby") {
     btn.classList.remove("hidden");
     btn.disabled = true;
     hint.textContent = "La partie doit être démarrée (depuis le dashboard) avant de pouvoir avancer les jours.";
+    simPanel.classList.remove("hidden");
+    simBtn.disabled = true;
   } else if (game.statut === "terminee") {
     btn.classList.remove("hidden");
     btn.disabled = true;
     hint.textContent = "Cette partie est terminée.";
+    simPanel.classList.remove("hidden");
+    simBtn.disabled = true;
   } else {
     btn.classList.remove("hidden");
     btn.disabled = false;
     hint.textContent = "Fait avancer la partie d'un jour : simule les matchs programmés, met à jour les classements, gère les fins de saison.";
+    simPanel.classList.remove("hidden");
+    simBtn.disabled = false;
+  }
+
+  // La date cible ne peut être qu'après la date actuelle de la partie
+  if (realDate) {
+    const minIso = toISODate(new Date(realDate.getTime() + 86400000));
+    simInput.min = minIso;
+    if (!simInput.value || simInput.value < minIso) simInput.value = minIso;
   }
 
   await loadTodayMatches(realDate);
@@ -578,35 +626,41 @@ async function simulerCoupeDuJour(dateIso, onProgress) {
   return matches.length;
 }
 
+// Fait avancer la partie d'exactement un jour (simulation client des matchs/
+// barrages/coupe du jour a venir, puis RPC avancer_jour). Factorisee pour
+// etre appelee soit une fois (bouton Continuer), soit en boucle (Simuler
+// jusqu'a une date). onProgress(type, fait, total) est optionnel.
+async function avancerUnJour(onProgress) {
+  const prochainJour = (Number(currentGame?.jour_actuel) || 0) + 1;
+  const prochaineDate = computeRealDate(currentGame?.date_debut, prochainJour);
+  const prochaineDateIso = toISODate(prochaineDate);
+
+  if (prochaineDateIso) {
+    const nbMatchs = await simulerMatchsDuJour(prochaineDateIso, onProgress);
+    const nbBarrages = await simulerBarragesDuJour(prochaineDateIso, onProgress);
+    const nbCoupe = await simulerCoupeDuJour(prochaineDateIso, onProgress);
+    if (onProgress && (nbMatchs > 0 || nbBarrages > 0 || nbCoupe > 0)) onProgress("finalisation", 1, 1);
+  }
+
+  const { data, error } = await supabaseClient.rpc("avancer_jour", { p_game_id: gameId });
+  if (error) throw error;
+  return data;
+}
+
 async function onContinue() {
   const btn = document.getElementById("continueBtn");
+  const simBtn = document.getElementById("simulateBtn");
   const hint = document.getElementById("continueHint");
   btn.disabled = true;
+  simBtn.disabled = true;
   try {
-    // 1) Simuler cote client les matchs/barrages du jour a venir
-    //    (avancer_jour incremente jour_actuel PUIS traite cette date-la).
-    const prochainJour = (Number(currentGame?.jour_actuel) || 0) + 1;
-    const prochaineDate = computeRealDate(currentGame?.date_debut, prochainJour);
-    const prochaineDateIso = toISODate(prochaineDate);
-
-    if (prochaineDateIso) {
-      btn.textContent = "Simulation...";
-      const onProgress = (type, fait, total) => {
-        const label = type === "barrage" ? "des barrages" : type === "coupe" ? "des matchs de coupe" : "des matchs";
-        hint.textContent = `Simulation ${label} : ${fait}/${total}...`;
-      };
-      const nbMatchs = await simulerMatchsDuJour(prochaineDateIso, onProgress);
-      const nbBarrages = await simulerBarragesDuJour(prochaineDateIso, onProgress);
-      const nbCoupe = await simulerCoupeDuJour(prochaineDateIso, onProgress);
-      if (nbMatchs > 0 || nbBarrages > 0 || nbCoupe > 0) hint.textContent = "Finalisation...";
-    }
-
-    // 2) avancer_jour : fait avancer le jour, resout les matchs restants
-    //    (deja simules cote client donc ignores), tirs au but si besoin,
-    //    fins de saison...
+    btn.textContent = "Simulation...";
+    const onProgress = (type, fait, total) => {
+      const label = type === "barrage" ? "des barrages" : type === "coupe" ? "des matchs de coupe" : type === "finalisation" ? null : "des matchs";
+      hint.textContent = label ? `Simulation ${label} : ${fait}/${total}...` : "Finalisation...";
+    };
+    const data = await avancerUnJour(onProgress);
     btn.textContent = "...";
-    const { data, error } = await supabaseClient.rpc("avancer_jour", { p_game_id: gameId });
-    if (error) throw error;
     appendLogEntry(data);
     await loadState();
     toast(`Jour ${data.jour_actuel} — ${formatRealDate(new Date(data.date + "T00:00:00"))}`);
@@ -615,7 +669,77 @@ async function onContinue() {
     toast("Erreur : " + e.message, true);
   } finally {
     btn.textContent = "Continuer";
-    btn.disabled = !isHost;
+    btn.disabled = !isHost || currentGame?.statut === "lobby" || currentGame?.statut === "terminee";
+    simBtn.disabled = btn.disabled;
+  }
+}
+
+// Enchaine avancerUnJour() automatiquement, jour apres jour, jusqu'a
+// atteindre (ou depasser) la date choisie dans le champ, sans que l'hote
+// ait besoin de recliquer manuellement sur Continuer a chaque fois.
+async function onSimulerJusque() {
+  const continueBtn = document.getElementById("continueBtn");
+  const simBtn = document.getElementById("simulateBtn");
+  const simInput = document.getElementById("simulateDateInput");
+  const hint = document.getElementById("continueHint");
+  const progressEl = document.getElementById("simulateProgress");
+
+  const targetIso = simInput.value;
+  if (!targetIso) { toast("Choisis une date cible", true); return; }
+  const targetDate = new Date(`${targetIso}T00:00:00`);
+  if (isNaN(targetDate.getTime())) { toast("Date invalide", true); return; }
+
+  const currentRealDate = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (currentRealDate && targetDate <= currentRealDate) {
+    toast("La date cible doit être après la date actuelle", true);
+    return;
+  }
+
+  continueBtn.disabled = true;
+  simBtn.disabled = true;
+  simInput.disabled = true;
+  let joursSimules = 0;
+  const MAX_JOURS = 730; // garde-fou anti-boucle infinie (~2 saisons)
+
+  try {
+    while (joursSimules < MAX_JOURS) {
+      const realDate = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+      if (!realDate || realDate >= targetDate) break;
+      if (currentGame?.statut === "terminee") { toast("La partie est terminée."); break; }
+
+      joursSimules++;
+      progressEl.textContent = `Simulation en cours : jour ${joursSimules} (avant le ${formatRealDate(targetDate)})...`;
+      const onProgress = (type, fait, total) => {
+        const label = type === "barrage" ? "des barrages" : type === "coupe" ? "des matchs de coupe" : type === "finalisation" ? null : "des matchs";
+        if (label) hint.textContent = `Jour ${joursSimules} — simulation ${label} : ${fait}/${total}...`;
+      };
+
+      const data = await avancerUnJour(onProgress);
+      appendLogEntry(data);
+      await loadState();
+
+      if (currentGame?.statut === "terminee") {
+        toast("Fin de saison atteinte pendant la simulation.");
+        break;
+      }
+    }
+
+    progressEl.textContent = "";
+    if (joursSimules >= MAX_JOURS) {
+      toast("Limite de sécurité atteinte (730 jours simulés).", true);
+    } else if (joursSimules > 0) {
+      toast(`${joursSimules} jour(s) simulé(s) jusqu'au ${formatRealDate(targetDate)}`);
+    } else {
+      toast("Rien à simuler, la partie est déjà à cette date ou après.");
+    }
+  } catch (e) {
+    console.error(e);
+    progressEl.textContent = "";
+    toast("Erreur pendant la simulation : " + e.message, true);
+  } finally {
+    simInput.disabled = false;
+    continueBtn.disabled = !isHost || currentGame?.statut === "lobby" || currentGame?.statut === "terminee";
+    simBtn.disabled = continueBtn.disabled;
   }
 }
 
