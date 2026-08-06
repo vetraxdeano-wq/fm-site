@@ -314,6 +314,12 @@
      de .fm-squad-card) pour que .infirmerie-panel ci-dessous (flex:1;
      min-height:0) soit reellement contraint et scrollable, plutot que de
      grandir indefiniment avec son contenu. */
+  /* Meme raisonnement que pour #infirmerieMaintabPanel ci-dessus : sans ce
+     contexte flex + min-height:0, le tableau de l'effectif (potentiellement
+     long : equipe A + reserve + U18) grandissait indefiniment et se faisait
+     couper net par l'overflow:hidden de .fm-squad-card, sans aucun scroll
+     possible pour voir les joueurs en bas de liste. */
+  #effectifMaintabPanel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
   #infirmerieMaintabPanel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
   .infirmerie-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
   /* Scrollbar discrete (pas de grosse barre blanche moche) quand la liste
