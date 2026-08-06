@@ -8115,7 +8115,6 @@ function updateMoreFiltersButtonLabel() {
 
 function renderFmHeader(club, pseudo, game, canChange) {
   const el = document.getElementById("fmHeader");
-  const managerLine = `${escapeHtml((pseudo || "Manager").toUpperCase())} - ${escapeHtml(club.nom.toUpperCase())} (ID:${club.game_club_id})`;
 
   const realDate = computeRealDate(game.date_debut, game.jour_actuel);
   const dateLabel = formatRealDate(realDate) || `Jour ${game.jour_actuel ?? "-"}`;
@@ -8126,7 +8125,6 @@ function renderFmHeader(club, pseudo, game, canChange) {
       <div class="page-title-wrap" id="fmSearchWrap">
         <input type="text" class="page-title-input" id="fmSearchInput" placeholder="PAGE D'ACCUEIL" autocomplete="off">
         <div class="fm-search-dropdown hidden" id="fmSearchDropdown"></div>
-        <div class="manager-line">${managerLine}</div>
       </div>
     </div>
     <div class="right-block">
@@ -8153,6 +8151,42 @@ function renderFmHeader(club, pseudo, game, canChange) {
   }
 
   initHeaderSearch();
+}
+
+// ===================== COULEUR DE LA TOPBAR SELON LE CLUB =====================
+// La couleur dominante de chaque club (calculee cote serveur, stockee en HSL
+// dans clubs.couleur_dominante) habille la topbar : club affiche sur cette
+// page (effectif/infos club consultes) ou club du manager connecte (pages
+// sans club unique affiche, ex: dashboard, competitions).
+async function fmFetchClubColor(gameClubId) {
+  if (!gameClubId) return null;
+  try {
+    const { data } = await supabaseClient
+      .from("game_clubs")
+      .select("clubs(couleur_dominante)")
+      .eq("id", gameClubId)
+      .single();
+    return data?.clubs?.couleur_dominante || null;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+function fmApplyTopbarColor(color) {
+  const header = document.getElementById("fmHeader");
+  if (!header) return;
+  if (!color || color.h == null) {
+    header.style.background = "";
+    return;
+  }
+  const h = Math.round(color.h);
+  const s = Math.round(color.s ?? 70);
+  const l = Math.round(color.l ?? 40);
+  const dark = Math.max(l - 24, 8);
+  const bright = Math.min(l + 16, 60);
+  header.style.background =
+    `linear-gradient(120deg, hsl(${h}, ${s}%, ${dark}%), hsl(${h}, ${s}%, ${l}%) 55%, hsl(${h}, ${Math.max(s - 8, 0)}%, ${bright}%))`;
 }
 
 // ===================== MOTEUR DE RECHERCHE APPROXIMATIVE =====================
@@ -10110,6 +10144,7 @@ async function showMyClub(gameClubId, canChange) {
   const me = (participants || []).find(p => p.user_id === userId);
 
   renderFmHeader(club, me?.pseudo, currentGame, canChange);
+  fmFetchClubColor(gameClubId).then(fmApplyTopbarColor);
   await renderFmSidebar(gameClubId);
   bindHomeCardNav(gameClubId);
   renderNextMatch();
