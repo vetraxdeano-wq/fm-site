@@ -1664,10 +1664,10 @@ function compoPitchRows(titulaires) {
   if (al.length > 2) defOrdered.push(...al.slice(2));
   return [
     { y: 600, players: bands.GB },
-    { y: 483, players: defOrdered },
-    { y: 366, players: bands.MD },
-    { y: 228, players: bands.MO },
-    { y: 90, players: bands.BT },
+    { y: 478, players: defOrdered },
+    { y: 350, players: bands.MD },
+    { y: 205, players: bands.MO },
+    { y: 50, players: bands.BT },
   ].filter(row => row.players.length);
 }
 
@@ -1692,11 +1692,15 @@ async function compoFetchPlayerPhotos(playerIds) {
 
 function compoPitchSvg(titulaires, photos = {}) {
   const rows = compoPitchRows(titulaires);
-  const R = 26;
+  const MAX_R = 26;
+  const MIN_R = 15;
+  const GAP = 16; // écart minimum souhaité entre les bords de deux cercles voisins
   const dots = rows.flatMap(row => {
     const n = row.players.length;
+    const spacing = 380 / (n + 1);
+    const r = Math.max(MIN_R, Math.min(MAX_R, (spacing - GAP) / 2));
     return row.players.map((p, i) => {
-      const x = ((i + 1) / (n + 1)) * 360 + 45;
+      const x = ((i + 1) / (n + 1)) * 380 + 35;
       const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
       const initials = escapeHtml((p.player_nom || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase());
       const attrs = p.player_id ? ` class="compo-pitch-player" data-player-id="${escapeHtml(String(p.player_id))}"` : "";
@@ -1704,18 +1708,18 @@ function compoPitchSvg(titulaires, photos = {}) {
       const clipId = `compoClip-${p.player_id != null ? p.player_id : `${row.y}-${i}`}`;
       const faceContent = photoUrl
         ? `
-          <defs><clipPath id="${clipId}"><circle r="${R - 2}"/></clipPath></defs>
-          <image class="compo-pitch-face" href="${escapeHtml(photoUrl)}" x="${-R}" y="${-R}" width="${R * 2}" height="${R * 2}"
+          <defs><clipPath id="${clipId}"><circle r="${r - 2}"/></clipPath></defs>
+          <image class="compo-pitch-face" href="${escapeHtml(photoUrl)}" x="${-r}" y="${-r}" width="${r * 2}" height="${r * 2}"
             preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"
             onerror="this.remove()"/>
         `
-        : `<text text-anchor="middle" dy="6" font-size="15" font-weight="800" fill="#fff">${initials}</text>`;
+        : `<text text-anchor="middle" dy="5" font-size="${Math.max(11, r * 0.55)}" font-weight="800" fill="#fff">${initials}</text>`;
       return `
         <g${attrs} transform="translate(${x},${row.y})">
-          <circle r="${R}" fill="#1c2029" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
+          <circle r="${r}" fill="#1c2029" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
           ${faceContent}
-          <circle r="${R}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
-          <text text-anchor="middle" y="${R + 18}" font-size="13" font-weight="700" fill="#fff" stroke="rgba(0,0,0,0.8)" stroke-width="3" paint-order="stroke">${escapeHtml(nomCourt)}</text>
+          <circle r="${r}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+          <text text-anchor="middle" y="${r + 18}" font-size="13" font-weight="700" fill="#fff" stroke="rgba(0,0,0,0.8)" stroke-width="3" paint-order="stroke">${escapeHtml(nomCourt)}</text>
         </g>
       `;
     });
