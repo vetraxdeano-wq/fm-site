@@ -241,7 +241,7 @@
   #statsPanel.hidden, .wrap.hidden { display: none !important; }
 
   /* --- Sous-onglet Stats : saison en cours + historique de carriere --- */
-  #statsPanel { padding: clamp(10px, 1.4vw, 20px); display: flex; flex-direction: column; gap: clamp(10px,1.2vw,18px); }
+  #statsPanel, #historiquePanel { padding: clamp(10px, 1.4vw, 20px); display: flex; flex-direction: column; gap: clamp(10px,1.2vw,18px); }
   .stats-tiles-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(8px,1vw,14px); }
   @media (max-width: 700px) { .stats-tiles-row { grid-template-columns: repeat(2, 1fr); } }
   .stats-big-tile {
@@ -457,6 +457,7 @@
       <div class="fiche-subtab-bar" id="ficheSubtabBar">
         <button type="button" class="fiche-subtab-btn active" data-subtab="apercu"><span class="fiche-subtab-icon">🧍</span>Aperçu</button>
         <button type="button" class="fiche-subtab-btn" data-subtab="stats"><span class="fiche-subtab-icon">📊</span>Stats</button>
+        <button type="button" class="fiche-subtab-btn" data-subtab="historique"><span class="fiche-subtab-icon">📜</span>Historique</button>
         <button type="button" class="fiche-subtab-btn" data-subtab="blessures"><span class="fiche-subtab-icon">🩹</span>Blessures</button>
       </div>
 
@@ -535,10 +536,17 @@
           <h3>Matchs de la saison</h3>
           <div id="statsMatchLogHolder"><div class="stats-loading">Chargement des matchs…</div></div>
         </div>
+      </div>
+
+      <div id="historiquePanel" class="hidden">
+        <div class="card">
+          <h3>Historique par saison</h3>
+          <div id="historiqueCareerHolder"><div class="stats-loading">Chargement de l'historique…</div></div>
+        </div>
 
         <div class="card">
-          <h3>Historique de carrière</h3>
-          <div id="statsCareerHolder"><div class="stats-loading">Chargement de l'historique…</div></div>
+          <h3>Trophées</h3>
+          <div id="historiqueTrophiesHolder"><div class="stats-loading">Chargement des trophées…</div></div>
         </div>
       </div>
 
@@ -1838,11 +1846,13 @@ async function loadFiche() {
 let ficheStatsLoaded = false;
 let ficheStatsRows = null;
 let ficheBlessuresLoaded = false;
+let ficheHistoriqueLoaded = false;
 
 function showFicheSubtab(key) {
   document.querySelectorAll(".fiche-subtab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-subtab") === key));
   document.getElementById("content").classList.toggle("hidden", key !== "apercu");
   document.getElementById("statsPanel").classList.toggle("hidden", key !== "stats");
+  document.getElementById("historiquePanel").classList.toggle("hidden", key !== "historique");
   document.getElementById("blessuresPanel").classList.toggle("hidden", key !== "blessures");
   if (key === "blessures" && !ficheBlessuresLoaded) {
     ficheBlessuresLoaded = true;
@@ -1851,6 +1861,10 @@ function showFicheSubtab(key) {
   if (key === "stats" && !ficheStatsLoaded) {
     ficheStatsLoaded = true;
     loadPlayerStats();
+  }
+  if (key === "historique" && !ficheHistoriqueLoaded) {
+    ficheHistoriqueLoaded = true;
+    loadPlayerHistorique();
   }
   scheduleFitScale();
 }
@@ -1875,7 +1889,6 @@ async function loadPlayerStats() {
   if (error) {
     console.error(error);
     document.getElementById("statsMatchLogHolder").innerHTML = `<div class="stats-empty">Impossible de charger les statistiques.</div>`;
-    document.getElementById("statsCareerHolder").innerHTML = `<div class="stats-empty">Impossible de charger les statistiques.</div>`;
     document.getElementById("statsSaisonTiles").innerHTML = statTilesHtml(currentGamePlayer, true);
     return;
   }
@@ -1895,7 +1908,6 @@ async function loadPlayerStats() {
   if (saisonEmptyHintEl) saisonEmptyHintEl.hidden = (saisonAgg.matchs_joues ?? saisonAgg.matchs_joues_saison ?? 0) > 0;
 
   renderMatchLogTable(rowsThisSeason);
-  renderCareerTable(ficheStatsRows);
 }
 
 // ---------- Sous-onglet "Blessures" ----------
@@ -2009,7 +2021,7 @@ function renderMatchLogTable(rows) {
 }
 
 function renderCareerTable(rows) {
-  const holder = document.getElementById("statsCareerHolder");
+  const holder = document.getElementById("historiqueCareerHolder");
   if (!rows.length) {
     holder.innerHTML = `<div class="stats-empty">Aucun match simulé pour ce joueur pour le moment : l'historique de carrière apparaîtra ici au fil des saisons jouées.</div>`;
     return;
@@ -2053,6 +2065,71 @@ function renderCareerTable(rows) {
       <table class="fm-stats-table">
         <thead><tr><th>Saison</th><th>Club</th><th>MJ</th><th>Buts</th><th>Passes D.</th><th>Note moy.</th></tr></thead>
         <tbody>${body}${totalRow}</tbody>
+      </table>
+    </div>`;
+}
+
+// ---------- Sous-onglet "Historique" : saisons + trophées ----------
+// Réutilise ficheStatsRows (rempli par loadPlayerStats) si déjà chargé lors
+// d'une visite du sous-onglet "Stats", sinon va chercher les mêmes données
+// via le même RPC pour ne rien dupliquer côté base.
+async function loadPlayerHistorique() {
+  if (!currentGamePlayer) return;
+
+  if (ficheStatsRows) {
+    renderCareerTable(ficheStatsRows);
+  } else {
+    const { data, error } = await supabaseClient.rpc("get_player_match_history", { p_game_player_id: currentGamePlayer.id });
+    if (error) {
+      console.error(error);
+      document.getElementById("historiqueCareerHolder").innerHTML = `<div class="stats-empty">Impossible de charger l'historique.</div>`;
+    } else {
+      ficheStatsRows = data || [];
+      renderCareerTable(ficheStatsRows);
+    }
+  }
+
+  loadPlayerTrophees();
+}
+
+const TYPE_TITRE_LABEL = {
+  championnat: "Champion",
+  coupe_nationale: "Vainqueur de la coupe nationale",
+};
+
+async function loadPlayerTrophees() {
+  const holder = document.getElementById("historiqueTrophiesHolder");
+
+  const { data, error } = await supabaseClient.rpc("get_player_titres", { p_game_player_id: currentGamePlayer.id });
+
+  if (error) {
+    console.error(error);
+    holder.innerHTML = `<div class="stats-empty">Impossible de charger les trophées.</div>`;
+    return;
+  }
+
+  renderTrophiesTable(data || []);
+}
+
+function renderTrophiesTable(rows) {
+  const holder = document.getElementById("historiqueTrophiesHolder");
+  if (!rows.length) {
+    holder.innerHTML = `<div class="stats-empty">Aucun trophée remporté par ce joueur pour le moment.</div>`;
+    return;
+  }
+  const body = rows.map(r => `
+    <tr>
+      <td>Saison ${r.saison ?? "-"}</td>
+      <td>🏆 ${escapeHtml(TYPE_TITRE_LABEL[r.type_titre] || r.type_titre || "-")}</td>
+      <td>${escapeHtml(r.competition_nom || "-")}</td>
+      <td>${escapeHtml(r.club_nom || "-")}</td>
+    </tr>
+  `).join("");
+  holder.innerHTML = `
+    <div class="stats-table-wrap">
+      <table class="fm-stats-table">
+        <thead><tr><th>Saison</th><th>Titre</th><th>Compétition</th><th>Club</th></tr></thead>
+        <tbody>${body}</tbody>
       </table>
     </div>`;
 }
