@@ -33,10 +33,21 @@ function moyenne(arr) {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
-/** Bruit gaussien approximé (somme de 3 uniformes), pour un "faible aléatoire" contrôlé. */
+/**
+ * Bruit gaussien approximé (somme de 3 uniformes ~ forme cloche bornée à
+ * ±3 écarts-types). ATTENTION à la normalisation : la somme brute
+ * (R1+R2+R3-1.5) a un écart-type réel de 0.5, PAS 1 — sans le facteur *2
+ * ci-dessous, tous les appelants du fichier recevaient deux fois MOINS de
+ * dispersion que le paramètre `ecartType` ne le laissait penser. C'était
+ * l'une des causes principales des stats de match trop resserrées et trop
+ * similaires d'un match à l'autre (possession, danger, tirs, cartons du jour
+ * du joueur...) : chaque source de variabilité du moteur était de facto
+ * amputée de moitié. Avec le *2, `ecartType` est bien l'écart-type réellement
+ * obtenu par l'appelant.
+ */
 function bruitGaussien(ecartType = 1) {
   const u = Math.random() + Math.random() + Math.random() - 1.5;
-  return u * ecartType;
+  return u * 2 * ecartType;
 }
 
 /** Tirage pondéré : items = [{ item, poids }], renvoie un item. */
@@ -404,7 +415,7 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, gro
  */
 function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt = null) {
   const diff = forceDom.noteGlobale - forceExt.noteGlobale; // typiquement -60..+60
-  const bruit = bruitGaussien(6); // légère variabilité match à match
+  const bruit = bruitGaussien(6); // variabilité match à match
   const diffAjuste = diff + bruit;
 
   // Logistique centrée : possession moyenne 50%, s'écarte selon l'écart de force
@@ -417,12 +428,24 @@ function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt 
   const ajustDom = (mismatchDom?.bonusDanger ?? 0) - (mismatchExt?.malusExposition ?? 0);
   const ajustExt = (mismatchExt?.bonusDanger ?? 0) - (mismatchDom?.malusExposition ?? 0);
 
-  const dangerDom = clamp(50 + (forceDom.noteAttaque - forceExt.noteDefense) * 0.5 + ajustDom + bruitGaussien(4), 15, 92);
-  const dangerExt = clamp(50 + (forceExt.noteAttaque - forceDom.noteDefense) * 0.5 + ajustExt + bruitGaussien(4), 15, 92);
+  // Choc de forme du jour : LA source de variabilité "physionomie du match",
+  // un par équipe, tiré une seule fois puis réutilisé partout où cette équipe
+  // intervient (danger ci-dessous, ET les perfs individuelles côté
+  // simulerMatch/calculerNotesJoueurs) — plutôt que d'avoir un bruit
+  // indépendant à chaque métrique, ce qui décorrèle artificiellement les
+  // stats d'équipe et les stats individuelles d'un même match (une équipe qui
+  // écrase le match côté stats globales doit aussi gagner davantage de duels
+  // individuels ce jour-là, pas un tirage complètement déconnecté).
+  const chocFormeDom = bruitGaussien(9);
+  const chocFormeExt = bruitGaussien(9);
+
+  const dangerDom = clamp(50 + (forceDom.noteAttaque - forceExt.noteDefense) * 0.5 + ajustDom + chocFormeDom, 15, 92);
+  const dangerExt = clamp(50 + (forceExt.noteAttaque - forceDom.noteDefense) * 0.5 + ajustExt + chocFormeExt, 15, 92);
 
   return {
     possession: { domicile: Math.round(possessionDom), exterieur: Math.round(possessionExt) },
     danger: { domicile: dangerDom, exterieur: dangerExt },
+    chocForme: { domicile: chocFormeDom, exterieur: chocFormeExt },
   };
 }
 
@@ -2086,6 +2109,30 @@ function simulerMatch({ domicile, exterieur, contexte = {}, appliquerComposition
   const tousLesButs = [...buteursDom, ...buteursExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 9 (notes incluant les entrants, variance selon la régularité de chaque joueur)
+  //
+  // Résistance adverse pour les perfs individuelles (duels/dribbles/passes) :
+  // pas seulement la force "de saison" (forceExt/forceDom, identique à chaque
+  // confrontation), mais cette force MODULÉE par le choc de forme du jour de
+  // l'équipe adverse (domination.chocForme) — la même valeur qui a déjà
+  // dessiné le danger/la possession de ce match précis. Une équipe qui a un
+  // jour sans (chocForme négatif : moins de possession/danger que sa force
+  // habituelle ne le laissait attendre) doit aussi voir ses joueurs
+  // individuellement perdre plus de duels ce match-là, et inversement — pour
+  // que les stats individuelles et les stats d'équipe racontent la même
+  // histoire au lieu d'être deux tirages indépendants et décorrélés.
+  const adversaireDom = {
+    attaque: clamp(forceExt.noteAttaque + domination.chocForme.exterieur, 1, 100),
+    defense: clamp(forceExt.noteDefense + domination.chocForme.exterieur, 1, 100),
+    milieu: clamp(forceExt.noteMilieu + domination.chocForme.exterieur, 1, 100),
+    aerienne: qualiteAerienneFaceADom,
+  };
+  const adversaireExt = {
+    attaque: clamp(forceDom.noteAttaque + domination.chocForme.domicile, 1, 100),
+    defense: clamp(forceDom.noteDefense + domination.chocForme.domicile, 1, 100),
+    milieu: clamp(forceDom.noteMilieu + domination.chocForme.domicile, 1, 100),
+    aerienne: qualiteAerienneFaceAExt,
+  };
+
   const notesDom = calculerNotesJoueurs({
     compositions: compoDom,
     joueurs: domicile.joueurs,
@@ -2099,9 +2146,7 @@ function simulerMatch({ domicile, exterieur, contexte = {}, appliquerComposition
     nul: scoreDom === scoreExt,
     butsMarques: scoreDom,
     butsEncaisses: scoreExt,
-    // Résistance adverse pour simuler les actions individuelles (étape 9) :
-    // le camp d'en face (extérieur) vu par le prisme attaque/défense/milieu/aérien.
-    adversaire: { attaque: forceExt.noteAttaque, defense: forceExt.noteDefense, milieu: forceExt.noteMilieu, aerienne: qualiteAerienneFaceADom },
+    adversaire: adversaireDom,
   });
   const notesExt = calculerNotesJoueurs({
     compositions: compoExt,
@@ -2114,11 +2159,12 @@ function simulerMatch({ domicile, exterieur, contexte = {}, appliquerComposition
     statsEquipe: { arrets: resultatDom.arrets },
     victoire: scoreExt > scoreDom,
     nul: scoreDom === scoreExt,
-    adversaire: { attaque: forceDom.noteAttaque, defense: forceDom.noteDefense, milieu: forceDom.noteMilieu, aerienne: qualiteAerienneFaceAExt },
+    adversaire: adversaireExt,
     butsMarques: scoreExt,
     butsEncaisses: scoreDom,
   });
   const hommeDuMatch = determinerHommeDuMatch(notesDom, notesExt);
+
 
   // Étape 10
   const resume = genererResume({
