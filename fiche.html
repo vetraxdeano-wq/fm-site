@@ -1676,12 +1676,15 @@ async function loadFiche() {
   if (!session?.user) { window.location.href = "index.html"; return; }
 
   const { data: game } = await supabaseClient
-    .from("games").select("date_debut, jour_actuel, saison").eq("id", gameId).single();
+    .from("games").select("date_debut, jour_actuel, saison, calendrier_saison_genere").eq("id", gameId).single();
   if (game) {
     gameCurrentDate = new Date(game.date_debut);
     gameCurrentDate.setDate(gameCurrentDate.getDate() + (game.jour_actuel || 0));
     renderFmDateBadge(game);
-    currentSeason = game.saison ?? null;
+    // calendrier.saison stocke l'année civile de génération du calendrier
+    // (ex. 2023), pas le compteur interne games.saison (1, 2, 3...) : il faut
+    // comparer avec calendrier_saison_genere, pas avec saison.
+    currentSeason = game.calendrier_saison_genere ?? game.saison ?? null;
   }
 
   // IMPORTANT : on ne sélectionne jamais ca / potentiel / traits cachés ici.
