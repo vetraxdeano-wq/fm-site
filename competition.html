@@ -258,13 +258,40 @@
   .fm-scroll-area { flex: 1; min-height: 0; overflow-y: auto; }
   .fm-empty { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
 
-  .fm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  /* Colonne de gauche (championnat) : le classement doit toujours etre
+     affiche en entier (jamais de mini-scroll), il recoit donc la plus
+     grande part de hauteur disponible de la colonne ; la carte "Resultats"
+     se contente du reste et garde son propre mini-scroll si une journee a
+     beaucoup de matchs. La densite des lignes du classement (police +
+     espacement, via --fm-row-py/--fm-row-font) est recalculee en JS pour
+     que toutes les equipes tiennent, sans jamais faire defiler la page
+     entiere. */
+  #cardStandings { flex: 3 1 0; }
+  #cardNextMatches { flex: 1 1 0; min-height: 100px; }
+  #compStandings { overflow: hidden; }
+
+  /* Fleches de navigation entre journees (carte "Resultats"), masquees par
+     defaut (coupe nationale n'en a pas besoin) et activees en JS pour un
+     championnat. */
+  .fm-journee-nav { display: inline-flex; align-items: center; gap: 8px; }
+  .fm-journee-arrow {
+    display: none; align-items: center; justify-content: center;
+    width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10.5px;
+    background: rgba(255,255,255,0.08); border: 1px solid var(--border); color: var(--text);
+  }
+  .fm-journee-arrow.visible { display: inline-flex; }
+  .fm-journee-arrow:hover:not(:disabled) { background: rgba(251,191,36,0.18); color: var(--gold); }
+  .fm-journee-arrow:disabled { opacity: 0.3; cursor: default; }
+  .fm-comp-match-teams .vs.score { color: var(--text); font-weight: 800; font-size: 13px; }
+
+  .fm-table { width: 100%; border-collapse: collapse; font-size: var(--fm-row-font, 13px); }
   .fm-table th {
     position: sticky; top: 0; background: var(--panel);
     text-align: left; color: var(--text-dim); font-weight: 600; font-size: 10.5px;
-    text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 9px; border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.03em;
+    padding: var(--fm-row-py, 8px) 9px; border-bottom: 1px solid var(--border);
   }
-  .fm-table td { padding: 9px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .fm-table td { padding: var(--fm-row-py, 9px) 9px; border-bottom: 1px solid rgba(255,255,255,0.04); }
   .fm-table tr:last-child td { border-bottom: none; }
   .fm-table tr.me td { background: rgba(251,191,36,0.1); }
   .fm-table td.clt { color: var(--text-dim); width: 26px; }
@@ -522,7 +549,14 @@
               <div class="fm-standings-legend" id="compStandingsLegend"></div>
             </div>
             <div class="card" id="cardNextMatches">
-              <div class="fm-card-title"><span id="compCard2Title">Prochains matchs</span> <span class="comp-name" id="compNextJournee"></span></div>
+              <div class="fm-card-title">
+                <span id="compCard2Title">Prochains matchs</span>
+                <span class="fm-journee-nav">
+                  <button type="button" class="fm-journee-arrow" id="compJourneePrev" aria-label="Journée précédente">◀</button>
+                  <span class="comp-name" id="compNextJournee"></span>
+                  <button type="button" class="fm-journee-arrow" id="compJourneeNext" aria-label="Journée suivante">▶</button>
+                </span>
+              </div>
               <div class="fm-scroll-area scroll-hide" id="compNextMatches">
                 <div class="fm-empty">Chargement...</div>
               </div>
@@ -1123,6 +1157,31 @@ async function loadHistorique(comp) {
 // ===================== Coupe nationale : pas de classement (elimination
 // directe), on affiche a la place le tableau du tour en cours, le prochain
 // match du club suivi, son parcours et l'historique des tours precedents. =====================
+// Recalcule la densite des lignes du tableau de classement (police +
+// espacement vertical) pour que toutes les equipes tiennent exactement
+// dans la hauteur disponible de la carte, sans jamais faire apparaitre de
+// scroll interne ni faire defiler la page entiere.
+let fmLastStandingsRowCount = 0;
+function fitStandingsTable(rowCount) {
+  if (rowCount) fmLastStandingsRowCount = rowCount;
+  const box = document.getElementById("compStandings");
+  if (!box || !fmLastStandingsRowCount) return;
+  const available = box.clientHeight;
+  if (!available) return;
+  const totalRows = fmLastStandingsRowCount + 1; // + ligne d'en-tete
+  let rowH = available / totalRows;
+  rowH = Math.max(14, Math.min(34, rowH));
+  const font = Math.max(9, Math.min(13, rowH * 0.4));
+  const py = Math.max(2, Math.min(9, (rowH - font * 1.35) / 2));
+  box.style.setProperty("--fm-row-font", font.toFixed(1) + "px");
+  box.style.setProperty("--fm-row-py", py.toFixed(1) + "px");
+}
+let fmFitResizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(fmFitResizeTimer);
+  fmFitResizeTimer = setTimeout(() => fitStandingsTable(), 120);
+});
+
 function isRowPlayed(r) { return r.statut === "termine"; }
 
 function coupeRoundLabelPage(tour, nbTours) {
@@ -1473,16 +1532,6 @@ async function loadCompetition() {
 
   document.getElementById("compSub").textContent = `${comp.nation} · ${comp.division}`;
 
-  // Championnat : le classement doit s'afficher en entier (sans mini-scroll
-  // interne) -> on passe la page entiere en mode "defilant", et on deplace
-  // la carte "Prochains matchs" dans la colonne de droite en version reduite
-  // pour laisser toute la place au classement.
-  document.getElementById("fmContentWrap").classList.add("fm-scrollable");
-  document.getElementById("fmContent").classList.add("fm-scrollable-grid");
-  const nextMatchesCard = document.getElementById("cardNextMatches");
-  nextMatchesCard.classList.add("compact-card");
-  document.getElementById("fmColRight").appendChild(nextMatchesCard);
-
   loadHistorique(comp);
 
   // Clubs de la division (nom + classement/points via la vue, stats detaillees via game_clubs)
@@ -1659,49 +1708,79 @@ async function loadCompetition() {
     legendItems.push(`<span class="legend-item"><span class="legend-dot" style="background:var(--danger);"></span>Relégation</span>`);
   }
   document.getElementById("compStandingsLegend").innerHTML = legendItems.join("");
+  fitStandingsTable(sorted.length);
 
-  // Prochains matchs : la prochaine journee non jouee de la competition
-  const { data: upcoming } = await supabaseClient
+  // ---- Resultats : carte navigable par journee (fleches). Par defaut on
+  // affiche la prochaine journee non jouee ("prochains matchs"), et les
+  // fleches permettent de remonter vers les journees deja jouees (scores
+  // affiches a la place de "vs") ou d'avancer vers les journees futures. ----
+  document.getElementById("compCard2Title").textContent = "Résultats";
+  const journeePrevBtn = document.getElementById("compJourneePrev");
+  const journeeNextBtn = document.getElementById("compJourneeNext");
+  journeePrevBtn.classList.add("visible");
+  journeeNextBtn.classList.add("visible");
+
+  const { data: allMatches } = await supabaseClient
     .from("calendrier")
-    .select("id, date_match, journee, club_domicile_id, club_exterieur_id")
+    .select("id, date_match, journee, club_domicile_id, club_exterieur_id, score_domicile, score_exterieur, statut")
     .eq("game_id", gameId)
     .eq("nation", comp.nation)
     .eq("division", comp.division)
-    .eq("statut", "a_jouer")
-    .order("date_match", { ascending: true })
-    .order("journee", { ascending: true });
+    .order("journee", { ascending: true })
+    .order("date_match", { ascending: true });
 
   const nextMatchesEl = document.getElementById("compNextMatches");
-  if (!upcoming || upcoming.length === 0) {
-    document.getElementById("compNextJournee").textContent = "";
-    nextMatchesEl.innerHTML = `<div class="fm-empty">Aucun match à venir programmé.</div>`;
+  const journeeLabelEl = document.getElementById("compNextJournee");
+
+  if (!allMatches || allMatches.length === 0) {
+    journeeLabelEl.textContent = "";
+    nextMatchesEl.innerHTML = `<div class="fm-empty">Aucun match programmé.</div>`;
+    journeePrevBtn.disabled = true;
+    journeeNextBtn.disabled = true;
   } else {
-    const nextJournee = upcoming[0].journee;
-    document.getElementById("compNextJournee").textContent = `Journée ${nextJournee}`;
-    const journeeMatches = upcoming.filter(m => m.journee === nextJournee);
-    nextMatchesEl.innerHTML = journeeMatches.map(m => {
-      const d = m.date_match ? new Date(m.date_match) : null;
-      const dateLabel = d ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "") : "-";
-      const homeLogo = logoById[m.club_domicile_id];
-      const awayLogo = logoById[m.club_exterieur_id];
-      return `
-        <div class="fm-comp-match-row">
-          <div class="fm-comp-match-date">${dateLabel}</div>
-          <div class="fm-comp-match-teams">
-            <span class="home"><span class="club" data-club-id="${m.club_domicile_id}">
-              ${homeLogo ? `<img class="fm-club-logo" src="${escapeHtml(homeLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(nameById[m.club_domicile_id] || "?")}</span>
-            </span></span>
-            <span class="vs">vs</span>
-            <span class="away"><span class="club" data-club-id="${m.club_exterieur_id}">
-              ${awayLogo ? `<img class="fm-club-logo" src="${escapeHtml(awayLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(nameById[m.club_exterieur_id] || "?")}</span>
-            </span></span>
+    const journeeNums = [...new Set(allMatches.map(m => m.journee))].sort((a, b) => a - b);
+    const byJournee = {};
+    journeeNums.forEach(j => { byJournee[j] = allMatches.filter(m => m.journee === j); });
+
+    const firstUnplayed = journeeNums.find(j => byJournee[j].some(m => m.statut !== "joue"));
+    let currentIdx = firstUnplayed != null ? journeeNums.indexOf(firstUnplayed) : journeeNums.length - 1;
+
+    const renderJournee = (idx) => {
+      const journee = journeeNums[idx];
+      const matches = byJournee[journee];
+      journeeLabelEl.textContent = `Journée ${journee}`;
+      nextMatchesEl.innerHTML = matches.map(m => {
+        const played = m.statut === "joue";
+        const d = m.date_match ? new Date(m.date_match) : null;
+        const dateLabel = d ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "") : "-";
+        const homeLogo = logoById[m.club_domicile_id];
+        const awayLogo = logoById[m.club_exterieur_id];
+        return `
+          <div class="fm-comp-match-row">
+            <div class="fm-comp-match-date">${dateLabel}</div>
+            <div class="fm-comp-match-teams">
+              <span class="home"><span class="club" data-club-id="${m.club_domicile_id}">
+                ${homeLogo ? `<img class="fm-club-logo" src="${escapeHtml(homeLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(nameById[m.club_domicile_id] || "?")}</span>
+              </span></span>
+              <span class="vs${played ? " score" : ""}">${played ? `${m.score_domicile ?? 0} - ${m.score_exterieur ?? 0}` : "vs"}</span>
+              <span class="away"><span class="club" data-club-id="${m.club_exterieur_id}">
+                ${awayLogo ? `<img class="fm-club-logo" src="${escapeHtml(awayLogo)}" alt="">` : ""}<span class="club-name-text">${escapeHtml(nameById[m.club_exterieur_id] || "?")}</span>
+              </span></span>
+            </div>
           </div>
-        </div>
-      `;
-    }).join("");
-    nextMatchesEl.querySelectorAll(".club").forEach(el => {
-      el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
-    });
+        `;
+      }).join("");
+      nextMatchesEl.querySelectorAll(".club").forEach(el => {
+        el.addEventListener("click", () => goToClub(el.getAttribute("data-club-id")));
+      });
+      journeePrevBtn.disabled = idx <= 0;
+      journeeNextBtn.disabled = idx >= journeeNums.length - 1;
+    };
+
+    journeePrevBtn.onclick = () => { if (currentIdx > 0) { currentIdx--; renderJournee(currentIdx); } };
+    journeeNextBtn.onclick = () => { if (currentIdx < journeeNums.length - 1) { currentIdx++; renderJournee(currentIdx); } };
+
+    renderJournee(currentIdx);
   }
 
   // ---- Chips "meilleure attaque / défense / possession / tirs" ----
