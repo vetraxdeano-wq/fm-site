@@ -198,6 +198,56 @@ function joueurPeutJouerRole(joueurRow, role) {
   return false;
 }
 
+/**
+ * Rôles "proches" d'un rôle donné, tactiquement acceptables en dépannage
+ * quand AUCUN joueur de l'effectif n'est tagué pour le rôle exact (cas d'un
+ * effectif trop juste sur un poste précis, ex: un seul "AL" dans tout le
+ * groupe) — sans ce repli, le slot restait explicitement "Poste non pourvu"
+ * et l'équipe démarrait le match à 10 ou 9, MÊME sans aucun blessé/suspendu
+ * (bug observé : effectif Salernitana au complet, poste laissé vide faute de
+ * candidat exactement tagué). Le gardien et l'attaquant de pointe n'ont pas
+ * de repli : jouer un joueur de champ dans les buts (ou l'inverse) reste un
+ * cas d'urgence bien plus rare/dégradé qu'un latéral dépanné en défenseur
+ * axial ou un milieu offensif reculé d'un cran, donc volontairement exclu ici.
+ */
+const ROLES_PROCHES = {
+  GB: [],
+  D: ['AL'],
+  AL: ['D'],
+  MD: ['MO'],
+  MO: ['MD'],
+  BT: [],
+};
+
+/**
+ * Un joueur est-il disponible pour un rôle, en repli, si aucun joueur de
+ * l'effectif ne porte le tag exact ? Renvoie true pour un rôle tactiquement
+ * proche (cf. ROLES_PROCHES) — ne dit rien sur le rôle exact, à tester en
+ * premier via `joueurPeutJouerRole`.
+ */
+function joueurPeutJouerRoleEnRepli(joueurRow, role) {
+  return (ROLES_PROCHES[role] || []).some((r) => joueurPeutJouerRole(joueurRow, r));
+}
+
+/**
+ * Filtre l'effectif dispo pour un rôle donné (hors blessés/suspendus/déjà
+ * utilisés), en essayant d'abord le tag exact puis, seulement si personne ne
+ * correspond, les rôles proches (cf. ROLES_PROCHES) — c'est ce repli qui
+ * évite les "Poste non pourvu" évitables quand l'effectif est juste sur un
+ * poste précis mais a des joueurs compatibles à côté.
+ * @returns {{ pool: Array, enRepli: boolean }}
+ */
+function poolDisponiblePourRole(role, joueurs, idsExclus) {
+  const exclus = new Set(idsExclus);
+  const dispo = joueurs.filter(
+    (j) => !exclus.has(j.id) && (j.blessure_jours ?? 0) === 0 && j.statut_special !== 'Sus'
+  );
+  const exact = dispo.filter((j) => joueurPeutJouerRole(j, role));
+  if (exact.length) return { pool: exact, enRepli: false };
+  const repli = dispo.filter((j) => joueurPeutJouerRoleEnRepli(j, role));
+  return { pool: repli, enRepli: repli.length > 0 };
+}
+
 // ============================================================
 // PROFIL TACTIQUE DES ÉQUIPES (style, mentalité, pressing, ligne)
 // Alimente le mismatch tactique (étape 1bis) à partir de `tactiques`
@@ -742,7 +792,9 @@ function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualit
  */
 function selectionnerBanc(compositions, joueurs, max = 5) {
   const idsTitulaires = new Set(compositions.map((c) => c.player_id));
-  const candidats = joueurs.filter((j) => !idsTitulaires.has(j.id) && (j.blessure_jours ?? 0) <= 0);
+  const candidats = joueurs.filter(
+    (j) => !idsTitulaires.has(j.id) && (j.blessure_jours ?? 0) <= 0 && j.statut_special !== 'Sus'
+  );
 
   const evalues = candidats.map((jr) => {
     const role = inferRolePrincipal(jr);
@@ -1958,10 +2010,17 @@ function joueurTropFatigue(joueurRow, seuilFatigueForcee = 55) {
  * @returns {Array<{ joueur, score, tropFatigue }>}
  */
 function alternativesPourPoste(role, joueurs, idsExclus = []) {
-  const exclus = new Set(idsExclus);
-  return joueurs
-    .filter((j) => !exclus.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
-    .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role), tropFatigue: joueurTropFatigue(j) }))
+  const { pool, enRepli } = poolDisponiblePourRole(role, joueurs, idsExclus);
+  return pool
+    .map((j) => ({
+      joueur: j,
+      // Score pénalisé si c'est un repli (rôle proche, pas le tag exact) :
+      // reflète dans l'UI/l'ordre que ce candidat est un dépannage, pas un
+      // titulaire naturel à ce poste.
+      score: scoreSelectionJoueur(j, role) - (enRepli ? 8 : 0),
+      tropFatigue: joueurTropFatigue(j),
+      enRepli,
+    }))
     .sort((a, b) => b.score - a.score);
 }
 
@@ -1982,15 +2041,24 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
     // remplaçant, jamais retomber sur lui — sinon il se retrouve dupliqué dans
     // le onze ou titulaire alors qu'il ne devrait pas l'être.
     const designeBlesse = !designe || (designe.blessure_jours ?? 0) > 0;
+    const designeSuspendu = !!designe && designe.statut_special === 'Sus';
     const designeTropFatigue = !!designe && joueurTropFatigue(designe, seuilFatigueForcee);
-    const designeIndisponible = designeBlesse || designeTropFatigue || dejaUtilises.has(designe?.id);
+    const designeIndisponible = designeBlesse || designeSuspendu || designeTropFatigue || dejaUtilises.has(designe?.id);
 
     // Un joueur trop fatigué reste éligible comme candidat de repli si vraiment
     // aucune autre option compatible n'existe pour ce poste (effectif juste) —
-    // seul un joueur blessé est totalement exclu des candidats.
-    const candidats = joueurs
-      .filter((j) => !dejaUtilises.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
-      .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role), tropFatigue: joueurTropFatigue(j, seuilFatigueForcee) }))
+    // seul un joueur blessé ou suspendu est totalement exclu des candidats.
+    // Si personne n'a le tag exact du poste, on élargit aux rôles proches
+    // (cf. poolDisponiblePourRole) plutôt que de laisser le slot vide alors
+    // que l'effectif a des joueurs sains et disponibles juste à côté.
+    const { pool: poolRole, enRepli } = poolDisponiblePourRole(role, joueurs, dejaUtilises);
+    const candidats = poolRole
+      .map((j) => ({
+        joueur: j,
+        score: scoreSelectionJoueur(j, role) - (enRepli ? 8 : 0),
+        tropFatigue: joueurTropFatigue(j, seuilFatigueForcee),
+        enRepli,
+      }))
       .sort((a, b) => {
         if (a.tropFatigue !== b.tropFatigue) return a.tropFatigue ? 1 : -1; // les non-fatigués passent devant
         return b.score - a.score;
@@ -2003,7 +2071,7 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
         changements.push({
           slot_id: slot.slot_id,
           role,
-          raison: dejaUtilises.has(designe.id) ? 'doublon' : designeBlesse ? 'blessure' : 'fatigue',
+          raison: dejaUtilises.has(designe.id) ? 'doublon' : designeSuspendu ? 'suspension' : designeBlesse ? 'blessure' : 'fatigue',
           sortant_id: designe.id,
           sortant_nom: designe.nom,
           sortant_forme: designe.forme ?? null,
@@ -2087,9 +2155,9 @@ function assurerCompositionSansDoublon(compositions, joueurs) {
     // la compo — on cherche le meilleur remplaçant compatible et libre.
     const designe = joueursParId.get(slot.player_id);
     const role = slot.role;
-    const candidats = joueurs
-      .filter((j) => !dejaUtilises.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
-      .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role) }))
+    const { pool: poolRole, enRepli } = poolDisponiblePourRole(role, joueurs, dejaUtilises);
+    const candidats = poolRole
+      .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role) - (enRepli ? 8 : 0) }))
       .sort((a, b) => b.score - a.score);
     const choisi = candidats[0]?.joueur ?? null;
 
