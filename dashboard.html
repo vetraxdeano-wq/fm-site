@@ -5166,6 +5166,8 @@ async function showStaffDbSubtab(clubId) {
 let sdbLoaded = false;
 let sdbLoadingComplete = false;
 let sdbAllStaff = [];
+let sdbFetcher = null;
+let sdbKnownStaffIds = new Set();
 let sdbTotalStaff = 0;
 let sdbClubNameById = {};
 let sdbClubLogoById = {};
@@ -5269,46 +5271,108 @@ function wireSdbSortableHeaders() {
 
 // Le staff recrutable peut malgre tout representer plusieurs milliers de
 // lignes une fois toute la base de clubs prise en compte : pagination
-// complete via .range(), comme pour la BDD de joueurs, avec un filtre
-// .in("poste", ...) directement cote serveur pour ne jamais telecharger le
-// staff non recrutable (medical, preparateurs...).
+// complete par bornage d'id (voir createIdChunkFetcher plus bas), comme
+// pour la BDD de joueurs, avec un filtre .in("poste", ...) directement cote
+// serveur pour ne jamais telecharger le staff non recrutable (medical,
+// preparateurs...).
 const SDB_FETCH_PAGE_SIZE = 1000;
 const SDB_FETCH_RETRIES = 4;
 const SDB_FETCH_CONCURRENCY = 8;
 const SDB_FIRST_WAVE_SIZE = 1500;
 
-async function fetchStaffPageWithRetry(from) {
-  let lastErr;
-  for (let attempt = 0; attempt < SDB_FETCH_RETRIES; attempt++) {
-    const { data, error } = await supabaseClient
-      .from("game_staff")
-      .select("id, staff_ref, nom, poste, salaire_actuel, contrat_expire, game_club_id")
-      .eq("game_id", gameId)
-      .in("poste", STAFF_DB_ALLOWED_POSTES)
-      .order("id", { ascending: true })
-      .range(from, from + SDB_FETCH_PAGE_SIZE - 1);
-    if (!error) return data || [];
-    lastErr = error;
-    console.warn(`Echec chargement page staff ${from} (tentative ${attempt + 1}/${SDB_FETCH_RETRIES})`, error);
-    await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
-  }
-  throw lastErr;
-}
+// --- Pagination sans OFFSET, par bornage d'id ---------------------------
+// L'ancienne pagination via .range(from, from+size-1) demande a Postgres de
+// parcourir puis jeter tout l'offset a chaque page : sur une table de
+// 75 000+ lignes, les dernieres pages coutaient jusqu'a 7-8s CHACUNE (mesure
+// en base via pg_stat_statements), ce qui saturait la base et provoquait des
+// timeouts ailleurs (57014), y compris sur gameflow.html (avancer_jour).
+// Ici, l'espace des id est decoupe en `concurrency` tranches contigues via
+// les bornes min/max (2 requetes tres bon marche, indexees), puis chaque
+// tranche est parcourue en curseur (id >= a AND id < b ORDER BY id LIMIT n) :
+// chaque appel s'appuie uniquement sur l'index (game_id, id), a cout
+// constant quelle que soit la profondeur deja parcourue. Les tranches
+// tournent en parallele, ce qui conserve (et ameliore) le debit de l'ancien
+// systeme par lots.
+function createIdChunkFetcher({ table, select, applyFilters, concurrency, retries }) {
+  let chunks = null;
 
-async function fetchGameStaffPages(pageStarts, concurrency, onBatch) {
-  const collected = [];
-  const pendingBatchWork = [];
-  for (let i = 0; i < pageStarts.length; i += concurrency) {
-    const batch = pageStarts.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map(from => fetchStaffPageWithRetry(from)));
-    const batchRows = [];
-    results.forEach(data => batchRows.push(...data));
-    collected.push(...batchRows);
-    if (onBatch) {
-      pendingBatchWork.push(Promise.resolve().then(() => onBatch(batchRows)).catch(err => console.error(err)));
+  function withFilters(q) {
+    return applyFilters ? applyFilters(q) : q;
+  }
+
+  async function init() {
+    const base = () => withFilters(supabaseClient.from(table).select("id").eq("game_id", gameId));
+    const [{ data: minRows, error: minErr }, { data: maxRows, error: maxErr }] = await Promise.all([
+      base().order("id", { ascending: true }).limit(1),
+      base().order("id", { ascending: false }).limit(1),
+    ]);
+    if (minErr) throw minErr;
+    if (maxErr) throw maxErr;
+    if (!minRows?.length) { chunks = []; return; }
+    const minId = minRows[0].id, maxId = maxRows[0].id;
+    const width = Math.max(1, Math.ceil((maxId - minId + 1) / concurrency));
+    chunks = [];
+    for (let start = minId; start <= maxId; start += width) {
+      chunks.push({ cursor: start, end: Math.min(start + width, maxId + 1), done: false });
     }
   }
-  if (pendingBatchWork.length) await Promise.all(pendingBatchWork);
+
+  async function fetchChunkPage(chunk, pageSize) {
+    let lastErr;
+    for (let attempt = 0; attempt < retries; attempt++) {
+      const { data, error } = await withFilters(
+        supabaseClient.from(table).select(select).eq("game_id", gameId)
+          .gte("id", chunk.cursor).lt("id", chunk.end)
+      ).order("id", { ascending: true }).limit(pageSize);
+      if (!error) return data || [];
+      lastErr = error;
+      console.warn(`Echec page ${table} [${chunk.cursor}, ${chunk.end}) (tentative ${attempt + 1}/${retries})`, error);
+      await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+    }
+    throw lastErr;
+  }
+
+  // Recupere un "round" : une page par tranche encore active, en parallele.
+  async function fetchNextRound(pageSize) {
+    if (!chunks) await init();
+    const active = chunks.filter(c => !c.done);
+    if (!active.length) return [];
+    const results = await Promise.all(active.map(async chunk => {
+      const rows = await fetchChunkPage(chunk, pageSize);
+      if (rows.length) chunk.cursor = rows[rows.length - 1].id + 1;
+      if (rows.length < pageSize || chunk.cursor >= chunk.end) chunk.done = true;
+      return rows;
+    }));
+    return results.flat();
+  }
+
+  async function isDone() {
+    if (!chunks) await init();
+    return chunks.every(c => c.done);
+  }
+
+  return { fetchNextRound, isDone };
+}
+
+// Recupere l'integralite des lignes via un fetcher a bornage d'id, en
+// dedupliquant par id : permet de reprendre un chargement partiel (cache
+// IndexedDB) sans avoir a rejouer exactement le meme decoupage en tranches
+// d'une session a l'autre — un peu de recouvrement est refetch, jamais un
+// trou. `alreadyKnownIds` et `onBatch` sont optionnels.
+async function drainIdChunkFetcher(fetcher, { pageSize, alreadyKnownIds, onBatch, stopAtCount }) {
+  const known = alreadyKnownIds || new Set();
+  const collected = [];
+  while (!(await fetcher.isDone())) {
+    const round = await fetcher.fetchNextRound(pageSize);
+    if (!round.length) break;
+    const fresh = round.filter(r => !known.has(r.id));
+    fresh.forEach(r => known.add(r.id));
+    if (fresh.length) {
+      collected.push(...fresh);
+      if (onBatch) await onBatch(fresh);
+    }
+    if (stopAtCount && collected.length >= stopAtCount) break;
+  }
   return collected;
 }
 
@@ -5401,6 +5465,7 @@ async function loadStaffDb(clubId) {
   countEl.textContent = "Chargement...";
 
   sdbAllStaff = [];
+  sdbKnownStaffIds = new Set();
   sdbClubNameById = {};
   sdbClubLogoById = {};
   sdbKnownClubIds = new Set();
@@ -5426,12 +5491,20 @@ async function loadStaffDb(clubId) {
       return;
     }
 
+    sdbFetcher = createIdChunkFetcher({
+      table: "game_staff",
+      select: "id, staff_ref, nom, poste, salaire_actuel, contrat_expire, game_club_id",
+      applyFilters: q => q.in("poste", STAFF_DB_ALLOWED_POSTES),
+      concurrency: SDB_FETCH_CONCURRENCY,
+      retries: SDB_FETCH_RETRIES,
+    });
+
     // 1) Premiere vague rapide, affichee tout de suite.
-    const firstWaveStarts = [];
-    for (let from = 0; from < Math.min(SDB_FIRST_WAVE_SIZE, sdbTotalStaff); from += SDB_FETCH_PAGE_SIZE) {
-      firstWaveStarts.push(from);
-    }
-    const firstWaveRaw = await fetchGameStaffPages(firstWaveStarts, SDB_FETCH_CONCURRENCY);
+    const firstWaveRaw = await drainIdChunkFetcher(sdbFetcher, {
+      pageSize: SDB_FETCH_PAGE_SIZE,
+      alreadyKnownIds: sdbKnownStaffIds,
+      stopAtCount: SDB_FIRST_WAVE_SIZE,
+    });
     sdbAllStaff = await enrichStaffBatch(firstWaveRaw);
     sdbLoaded = true;
     populateStaffDbFilterOptions();
@@ -5459,20 +5532,33 @@ async function loadStaffDb(clubId) {
 // route).
 async function loadRemainingStaffDb() {
   try {
-    const remainingStarts = [];
-    for (let from = sdbAllStaff.length; from < sdbTotalStaff; from += SDB_FETCH_PAGE_SIZE) {
-      remainingStarts.push(from);
+    // Si on arrive ici depuis un cache restaure (page rouverte, chargement
+    // precedent interrompu), il n'y a pas encore de fetcher : on le cree
+    // ici, en marquant deja connus les ids presents dans sdbAllStaff pour
+    // ne pas les re-livrer (un peu de recouvrement refetch est possible,
+    // jamais un trou).
+    if (!sdbFetcher) {
+      sdbKnownStaffIds = new Set(sdbAllStaff.map(s => s.id));
+      sdbFetcher = createIdChunkFetcher({
+        table: "game_staff",
+        select: "id, staff_ref, nom, poste, salaire_actuel, contrat_expire, game_club_id",
+        applyFilters: q => q.in("poste", STAFF_DB_ALLOWED_POSTES),
+        concurrency: SDB_FETCH_CONCURRENCY,
+        retries: SDB_FETCH_RETRIES,
+      });
     }
 
-    if (remainingStarts.length > 0) {
-      await fetchGameStaffPages(remainingStarts, SDB_FETCH_CONCURRENCY, async (batchRaw) => {
+    await drainIdChunkFetcher(sdbFetcher, {
+      pageSize: SDB_FETCH_PAGE_SIZE,
+      alreadyKnownIds: sdbKnownStaffIds,
+      onBatch: async (batchRaw) => {
         const batchEnriched = await enrichStaffBatch(batchRaw);
         sdbAllStaff.push(...batchEnriched);
         populateStaffDbFilterOptions();
         applyStaffDbFilters({ resetPage: false });
         maybeSaveSdbStaffToCache();
-      });
-    }
+      },
+    });
 
     sdbLoadingComplete = true;
     applyStaffDbFilters({ resetPage: false });
@@ -6266,6 +6352,8 @@ function wireStaffDbFilters(clubId) {
 // masques pour tous les joueurs, sauf ceux de son propre effectif.
 let pdbLoaded = false;
 let pdbAllPlayers = [];
+let pdbFetcher = null;
+let pdbKnownPlayerIds = new Set();
 let pdbClubNameById = {};
 let pdbClubLogoById = {};
 let pdbClubReputation = null;
@@ -7032,54 +7120,15 @@ function wirePlayersDbFilters(clubId) {
 
 // Le nombre de joueurs peut largement depasser la limite par defaut de
 // Supabase/PostgREST (1000 lignes par requete) : ici, la base compte plus de
-// 75 000 joueurs pour une seule partie. Recupere les pages demandees
-// (pageStarts, par lots de PAGE_SIZE) via .range(), en parallele par
-// paquets de `concurrency` requetes. Si onBatch est fourni, il est declenche
-// a la reception de chaque paquet MAIS PAS attendu avant d'enchainer sur le
-// paquet suivant : ca evite que les requetes reseau annexes (noms de club,
-// reputation) ou le rendu de l'UI ralentissent le telechargement des pages
-// suivantes. Toutes les executions d'onBatch sont malgre tout garanties
-// terminees avant que la fonction ne retourne.
-const PDB_FETCH_PAGE_SIZE = 1000;
-const PDB_FETCH_RETRIES = 4;
-
+// 75 000 joueurs pour une seule partie. Pagination par bornage d'id (voir
+// createIdChunkFetcher / drainIdChunkFetcher plus haut, section staff) :
+// aucun OFFSET, cout constant quelle que soit la profondeur deja parcourue.
 // Une page qui echoue (timeout, erreur reseau ponctuelle...) est retentee
 // plusieurs fois avec un delai croissant, plutot que de faire planter tout
 // le chargement en arriere-plan et tronquer silencieusement la base a mi-
 // chemin (c'etait la cause du "62 000 joueurs au lieu de 75 000+").
-async function fetchPlayersPageWithRetry(from) {
-  let lastErr;
-  for (let attempt = 0; attempt < PDB_FETCH_RETRIES; attempt++) {
-    const { data, error } = await supabaseClient
-      .from("game_players")
-      .select("*")
-      .eq("game_id", gameId)
-      .order("id", { ascending: true })
-      .range(from, from + PDB_FETCH_PAGE_SIZE - 1);
-    if (!error) return data || [];
-    lastErr = error;
-    console.warn(`Echec chargement page ${from} (tentative ${attempt + 1}/${PDB_FETCH_RETRIES})`, error);
-    await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
-  }
-  throw lastErr;
-}
-
-async function fetchGamePlayersPages(pageStarts, concurrency, onBatch) {
-  const collected = [];
-  const pendingBatchWork = [];
-  for (let i = 0; i < pageStarts.length; i += concurrency) {
-    const batch = pageStarts.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map(from => fetchPlayersPageWithRetry(from)));
-    const batchPlayers = [];
-    results.forEach(data => batchPlayers.push(...data));
-    collected.push(...batchPlayers);
-    if (onBatch) {
-      pendingBatchWork.push(Promise.resolve().then(() => onBatch(batchPlayers)).catch(err => console.error(err)));
-    }
-  }
-  if (pendingBatchWork.length) await Promise.all(pendingBatchWork);
-  return collected;
-}
+const PDB_FETCH_PAGE_SIZE = 1000;
+const PDB_FETCH_RETRIES = 4;
 
 function sortPdbPlayersByReputation(players) {
   players.sort((a, b) => {
@@ -7138,6 +7187,7 @@ async function loadPlayersDb(clubId) {
   countEl.textContent = "Chargement...";
 
   pdbAllPlayers = [];
+  pdbKnownPlayerIds = new Set();
   pdbClubNameById = {};
   pdbClubLogoById = {};
   pdbClubReputationById = {};
@@ -7164,12 +7214,19 @@ async function loadPlayersDb(clubId) {
       return;
     }
 
+    pdbFetcher = createIdChunkFetcher({
+      table: "game_players",
+      select: "*",
+      concurrency: PDB_FETCH_CONCURRENCY,
+      retries: PDB_FETCH_RETRIES,
+    });
+
     // 1) Premiere vague rapide.
-    const firstWaveStarts = [];
-    for (let from = 0; from < Math.min(PDB_FIRST_WAVE_SIZE, pdbTotalPlayers); from += PDB_FETCH_PAGE_SIZE) {
-      firstWaveStarts.push(from);
-    }
-    const firstWave = await fetchGamePlayersPages(firstWaveStarts, PDB_FETCH_CONCURRENCY);
+    const firstWave = await drainIdChunkFetcher(pdbFetcher, {
+      pageSize: PDB_FETCH_PAGE_SIZE,
+      alreadyKnownIds: pdbKnownPlayerIds,
+      stopAtCount: PDB_FIRST_WAVE_SIZE,
+    });
     firstWave.forEach(p => { p._atomicPostes = computePlayerAtomicPostes(p); });
     sortPdbPlayersByReputation(firstWave);
     pdbAllPlayers = firstWave;
@@ -7207,21 +7264,33 @@ async function loadPlayersDb(clubId) {
 //   sans cet appel, le reste de la base ne se telechargeait plus jamais.
 async function loadRemainingPlayersDb(clubId) {
   try {
-    const remainingStarts = [];
-    for (let from = pdbAllPlayers.length; from < pdbTotalPlayers; from += PDB_FETCH_PAGE_SIZE) {
-      remainingStarts.push(from);
+    // Si on arrive ici depuis un cache restaure (page rouverte, chargement
+    // precedent interrompu), il n'y a pas encore de fetcher : on le cree
+    // ici, en marquant deja connus les ids presents dans pdbAllPlayers pour
+    // ne pas les re-livrer (un peu de recouvrement refetch est possible,
+    // jamais un trou).
+    if (!pdbFetcher) {
+      pdbKnownPlayerIds = new Set(pdbAllPlayers.map(p => p.id));
+      pdbFetcher = createIdChunkFetcher({
+        table: "game_players",
+        select: "*",
+        concurrency: PDB_FETCH_CONCURRENCY,
+        retries: PDB_FETCH_RETRIES,
+      });
     }
 
-    if (remainingStarts.length > 0) {
-      await fetchGamePlayersPages(remainingStarts, PDB_FETCH_CONCURRENCY, async (batchPlayers) => {
+    await drainIdChunkFetcher(pdbFetcher, {
+      pageSize: PDB_FETCH_PAGE_SIZE,
+      alreadyKnownIds: pdbKnownPlayerIds,
+      onBatch: async (batchPlayers) => {
         batchPlayers.forEach(p => { p._atomicPostes = computePlayerAtomicPostes(p); });
         pdbAllPlayers.push(...batchPlayers);
         await refreshPdbClubLookups(batchPlayers, clubId);
         populatePlayersDbFilterOptions();
         applyPlayersDbFilters(clubId, { resetPage: false });
         maybeSavePdbPlayersToCache(clubId);
-      });
-    }
+      },
+    });
 
     sortPdbPlayersByReputation(pdbAllPlayers);
     pdbLoadingComplete = true;
