@@ -1286,6 +1286,92 @@ function completerRemplacementsAvecBlessuresEntrants(remplacements, banc, blessu
  */
 const POIDS_DEFENSIF_CATEGORIE = { defenseur: 1, milieu: 0.55, milieu_offensif: 0.2, attaquant: 0.08, gardien: 0 };
 
+/**
+ * Simule les actions individuelles d'un joueur SUR CE MATCH (duels, tacles,
+ * passes, dribbles, centres... selon son poste), en confrontant ses
+ * attributs à la résistance de l'équipe adverse (attaque/défense/milieu/jeu
+ * aérien, cf. `calculerForceEquipe`). C'est la vraie mesure de "qualité du
+ * match" demandée : pas une projection statique du CA, mais un tirage
+ * d'actions réussies/perdues comme le reste du moteur (mêmes outils —
+ * `tiragePoisson`, tirage de probabilité — que pour les buts/tirs).
+ *
+ * @param {object} adversaire - { attaque, defense, milieu, aerienne } : notes
+ *   0-100 du camp d'en face (cf. forceDom/forceExt.noteAttaque etc.), utilisées
+ *   comme résistance selon le type d'action.
+ * @returns {{ stats: object, noteDelta: number }|null} compteurs d'actions
+ *   (tentées/réussies, exploitables pour des stats détaillées côté fiche
+ *   joueur) + un delta de note (~ -1.4 à +1.4) reflétant la performance
+ *   réelle de CE match.
+ */
+function simulerPerformanceJoueur(joueurRow, role, minutesJouees, adversaire = {}) {
+  if (!joueurRow || !(minutesJouees > 0)) return null;
+  const facteurMinutes = clamp(minutesJouees / 90, 0.08, 1);
+  const get = (attr, def = 11) => clamp(joueurRow[attr] ?? def, 1, 20);
+  const moyAttrs = (...attrs) => moyenne(attrs.map((a) => get(a)));
+
+  const resAttaque = adversaire.attaque ?? 50;
+  const resDefense = adversaire.defense ?? 50;
+  const resMilieu = adversaire.milieu ?? 50;
+  const resAerienne = adversaire.aerienne ?? 50;
+
+  const stats = {};
+  let deltaBrut = 0;
+
+  // Une "catégorie d'action" : X tentatives ~Poisson(volume attendu sur les
+  // minutes jouées), chacune réussie avec une proba dérivée de l'attribut du
+  // joueur (1-20) face à la résistance adverse (0-100) — centré 50/50 quand
+  // un joueur moyen (attribut 11/20) affronte une résistance moyenne (50).
+  const categorieAction = (cle, attrMoyenne, resistance, volumeBase, poidsNote) => {
+    const tentatives = tiragePoisson(volumeBase * facteurMinutes);
+    stats[`${cle}_tentes`] = tentatives;
+    stats[`${cle}_reussis`] = 0;
+    if (tentatives <= 0) return;
+    const forceJoueur = (attrMoyenne / 20) * 100;
+    const p = clamp(0.5 + (forceJoueur - resistance) / 130, 0.2, 0.92);
+    let reussis = 0;
+    for (let i = 0; i < tentatives; i++) if (proba(p)) reussis++;
+    stats[`${cle}_reussis`] = reussis;
+    // Pondéré par la taille de l'échantillon (sqrt pour amortir l'effet d'un
+    // gros volume d'actions anodines) : un écart de réussite sur beaucoup de
+    // ballons pèse plus qu'un coup de chance sur 2 tentatives.
+    deltaBrut += (reussis / tentatives - 0.5) * poidsNote * Math.sqrt(tentatives);
+  };
+
+  switch (role) {
+    case 'D':
+      categorieAction('duels_defensifs', moyAttrs('tacles', 'marquage'), resAttaque, 5, 1.1);
+      categorieAction('duels_aeriens', get('jeu_de_tete'), resAerienne, 3, 0.9);
+      categorieAction('relances', moyAttrs('placement', 'anticipation'), resMilieu, 12, 0.55);
+      break;
+    case 'AL':
+      categorieAction('duels_defensifs', moyAttrs('tacles', 'marquage'), resAttaque, 4, 0.9);
+      categorieAction('centres', get('centres'), resDefense, 4, 0.7);
+      categorieAction('duels_offensifs', get('vitesse'), resDefense, 3, 0.5);
+      break;
+    case 'MD':
+      categorieAction('duels_milieu', moyAttrs('tacles', 'anticipation', 'agressivite'), resMilieu, 6, 1);
+      categorieAction('passes', get('passes'), resMilieu, 30, 0.85);
+      break;
+    case 'MO':
+      categorieAction('dribbles', get('dribbles'), resDefense, 4, 1);
+      categorieAction('passes_creatrices', moyAttrs('passes', 'vision_du_jeu'), resMilieu, 18, 0.85);
+      categorieAction('duels_offensifs', get('controle_de_balle'), resDefense, 3, 0.5);
+      break;
+    case 'BT':
+      categorieAction('duels_aeriens', get('jeu_de_tete'), resAerienne, 3, 0.9);
+      categorieAction('dribbles', moyAttrs('technique', 'vitesse'), resDefense, 3, 0.9);
+      break;
+    case 'GB':
+      categorieAction('sorties', moyAttrs('sorties_dans_surface', 'attr_1c1'), resAttaque, 2, 1);
+      break;
+    default:
+      categorieAction('duels', moyAttrs('tacles', 'passes'), resMilieu, 5, 0.8);
+  }
+
+  const noteDelta = clamp(deltaBrut * 0.5, -1.4, 1.4);
+  return { stats, noteDelta };
+}
+
 function calculerNotesJoueurs({
   compositions,
   joueurs = [],
@@ -1299,9 +1385,11 @@ function calculerNotesJoueurs({
   nul,
   butsMarques = 0,
   butsEncaisses = 0,
+  adversaire = {},
 }) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const BASE_NOTE = 6.5;
+  const expulsions = extraireExpulsions(cartons || []);
 
   // Participants = les 11 titulaires + les entrants qui sont réellement montés au jeu.
   const participants = [
@@ -1319,24 +1407,29 @@ function calculerNotesJoueurs({
     // match à l'autre, un joueur très régulier reste plus stable — mais dans
     // les deux cas cet aléa ne dépend PAS du CA, donc il ne favorise ni ne
     // pénalise structurellement personne sur une saison complète.
-    const ecartTypeNote = clamp(0.65 - regularite * 0.022, 0.2, 0.6); // joueur régulier = notes resserrées
+    const ecartTypeNote = clamp(0.5 - regularite * 0.018, 0.15, 0.45); // joueur régulier = notes resserrées
 
     // Un entrant a joué moins longtemps : note de base plus prudente, sauf s'il a pesé sur le match (but/passe)
     const baseEntrant = slot.entrant ? BASE_NOTE - clamp((slot.minuteEntree - 46) / 90, 0, 0.3) : BASE_NOTE;
     let note = baseEntrant + bruitGaussien(ecartTypeNote);
 
-    // --- Talent / qualité de jeu intrinsèque : c'est ici que doit se jouer
-    // l'essentiel de la note d'un défenseur/milieu qui ne "state" pas
-    // forcément beaucoup mais qui est fort dans le jeu (duels, placement,
-    // relance...). Basé sur son CA + ses attributs clés du poste + forme/
-    // moral, avec son propre aléa de jour de match (régularité). Un joueur
-    // fort doit pouvoir se démarquer sur une saison MÊME si son équipe flop
-    // et qu'il est le seul bon élément — cette composante est donc
-    // volontairement le plus gros levier, avant même le résultat collectif.
+    // --- Performance individuelle RÉELLE de ce match ------------------------
+    // C'est ici que doit se jouer l'essentiel de la note d'un défenseur/
+    // milieu qui ne "state" pas forcément beaucoup mais qui est fort dans le
+    // jeu : on simule ses duels/tacles/passes/dribbles (selon son poste)
+    // face à la résistance de l'équipe adverse, comme pour n'importe quelle
+    // autre action du moteur (buts, tirs...), plutôt que de se contenter
+    // d'une projection statique de son CA. Un joueur fort doit pouvoir se
+    // démarquer sur une saison MÊME si son équipe flop et qu'il est le seul
+    // bon élément — cette composante est donc volontairement le plus gros
+    // levier, avant même le résultat collectif.
+    let performanceMatch = null;
     if (jr) {
-      const qualiteMatch = noteJoueurMatch(jr, role); // 1-100, avec son propre aléa (régularité)
-      const deltaTalent = clamp((qualiteMatch - 55) * 0.022, -0.9, 0.9);
-      note += deltaTalent;
+      const minutesJouees = slot.entrant
+        ? clamp(90 - (slot.minuteEntree ?? 0), 1, 90)
+        : minutesJoueesParJoueur(slot.player_id, compositions, remplacements, expulsions);
+      performanceMatch = simulerPerformanceJoueur(jr, role, minutesJouees, adversaire);
+      if (performanceMatch) note += performanceMatch.noteDelta;
     }
 
     const butsSlot = buteurs.filter((b) => b.game_club_id === gameClubId && b.buteur_id === slot.player_id).length;
@@ -1390,6 +1483,10 @@ function calculerNotesJoueurs({
       entrant: slot.entrant || false,
       role: slot.role || null,
       note: Math.round(clamp(note, 2, 10) * 10) / 10,
+      // Détail des actions individuelles simulées (duels, passes, dribbles...
+      // selon le poste) — exploitable pour une fiche joueur / stats détaillées
+      // du match, en plus d'avoir servi de base à la note ci-dessus.
+      stats_match: performanceMatch?.stats ?? null,
     };
   });
 
@@ -1794,6 +1891,9 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
     nul: scoreDom === scoreExt,
     butsMarques: scoreDom,
     butsEncaisses: scoreExt,
+    // Résistance adverse pour simuler les actions individuelles (étape 9) :
+    // le camp d'en face (extérieur) vu par le prisme attaque/défense/milieu/aérien.
+    adversaire: { attaque: forceExt.noteAttaque, defense: forceExt.noteDefense, milieu: forceExt.noteMilieu, aerienne: qualiteAerienneFaceADom },
   });
   const notesExt = calculerNotesJoueurs({
     compositions: compoExt,
@@ -1806,6 +1906,7 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
     statsEquipe: { arrets: resultatDom.arrets },
     victoire: scoreExt > scoreDom,
     nul: scoreDom === scoreExt,
+    adversaire: { attaque: forceDom.noteAttaque, defense: forceDom.noteDefense, milieu: forceDom.noteMilieu, aerienne: qualiteAerienneFaceAExt },
     butsMarques: scoreExt,
     butsEncaisses: scoreDom,
   });
