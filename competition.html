@@ -266,8 +266,8 @@
      espacement, via --fm-row-py/--fm-row-font) est recalculee en JS pour
      que toutes les equipes tiennent, sans jamais faire defiler la page
      entiere. */
-  #cardStandings { flex: 3 1 0; }
-  #cardNextMatches { flex: 1 1 0; min-height: 100px; }
+  #cardStandings { flex: 1 1 0; min-height: 0; }
+  #cardNextMatches { flex: 0 0 clamp(120px, 20vh, 190px); min-height: 0; }
   #compStandings { overflow: hidden; }
 
   /* Fleches de navigation entre journees (carte "Resultats"), masquees par
@@ -1160,7 +1160,8 @@ async function loadHistorique(comp) {
 // Recalcule la densite des lignes du tableau de classement (police +
 // espacement vertical) pour que toutes les equipes tiennent exactement
 // dans la hauteur disponible de la carte, sans jamais faire apparaitre de
-// scroll interne ni faire defiler la page entiere.
+// scroll interne ni faire defiler la page entiere. Le clamp bas est tres
+// permissif : mieux vaut des lignes tres compactes que des lignes coupees.
 let fmLastStandingsRowCount = 0;
 function fitStandingsTable(rowCount) {
   if (rowCount) fmLastStandingsRowCount = rowCount;
@@ -1170,9 +1171,9 @@ function fitStandingsTable(rowCount) {
   if (!available) return;
   const totalRows = fmLastStandingsRowCount + 1; // + ligne d'en-tete
   let rowH = available / totalRows;
-  rowH = Math.max(14, Math.min(34, rowH));
-  const font = Math.max(9, Math.min(13, rowH * 0.4));
-  const py = Math.max(2, Math.min(9, (rowH - font * 1.35) / 2));
+  rowH = Math.max(9, Math.min(34, rowH));
+  const font = Math.max(7, Math.min(13, rowH * 0.42));
+  const py = Math.max(0.5, Math.min(9, (rowH - font * 1.25) / 2));
   box.style.setProperty("--fm-row-font", font.toFixed(1) + "px");
   box.style.setProperty("--fm-row-py", py.toFixed(1) + "px");
 }
@@ -1969,6 +1970,12 @@ async function loadCompetition() {
   });
 
   renderPlayerTab("buteurs");
+
+  // Calcul final de la densite des lignes du classement : fait en tout
+  // dernier, une fois que tous les elements pouvant modifier la hauteur
+  // disponible de la colonne (chips "meilleure attaque" etc., carte
+  // Resultats) sont bien en place dans le DOM.
+  requestAnimationFrame(() => fitStandingsTable());
 }
 
 loadCompetition();
