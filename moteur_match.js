@@ -505,13 +505,54 @@ function meilleurInstinctButeur(titulairesNotes) {
 }
 
 /**
+ * Qualité aérienne défensive d'une équipe (moyenne jeu de tête + puissance de
+ * ses défenseurs titulaires, D et AL) — sert à réduire spécifiquement la
+ * probabilité qu'un but de la tête (corner/coup de pied arrêté) soit inscrit
+ * par l'équipe adverse : une défense qui gagne bien ses duels aériens encaisse
+ * moins de buts de ce type précis, même si sa qualité défensive générale
+ * (qui fixe déjà le nombre total de buts encaissés) reste inchangée.
+ */
+function qualiteAerienneDefense(titulairesNotes) {
+  const defenseurs = titulairesNotes.filter((t) => t.categorie === 'defenseur');
+  if (!defenseurs.length) return 50;
+
+  const scores = defenseurs.map((t) => {
+    const jr = t.joueur;
+    if (!jr) return 50;
+    const jeuDeTete = jr.jeu_de_tete ?? 10;
+    const puissance = jr.puissance ?? 10;
+    return clamp((jeuDeTete * 0.7 + puissance * 0.3) * 5, 1, 100); // /20 -> /100
+  });
+
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
+}
+
+/**
  * Convertit les occasions franches en buts, occasion par occasion, selon la
  * qualité de finition de l'équipe (attaque collective ET meilleur finisseur
  * individuel) contre la défense adverse dans son ensemble (défenseurs +
  * gardien, pas juste le gardien).
  * Retourne { buts, arrets } pour l'équipe attaquante.
  */
-function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualiteDefenseAdverse, contexte) {
+/**
+ * Convertit les occasions franches en buts, occasion par occasion, selon la
+ * qualité de finition de l'équipe (attaque collective ET meilleur finisseur
+ * individuel) contre la défense adverse dans son ensemble (défenseurs +
+ * gardien, pas juste le gardien).
+ *
+ * `minuteExpulsionEquipe`/`minuteExpulsionAdverse` (optionnels) : si l'une
+ * des deux équipes a un joueur expulsé, chaque occasion est resituée sur les
+ * 90 minutes pour savoir si l'expulsion est déjà survenue à cet instant :
+ *  - sa propre expulsion réduit sa qualité de finition (animation collective
+ *    dégradée, options offensives en moins) pour le reste du match ;
+ *  - l'expulsion adverse réduit la qualité défensive adverse (plus d'espaces,
+ *    défense prise à 10) pour le reste du match.
+ * Ne modifie pas le NOMBRE d'occasions généré (fixé plus tôt, indépendamment
+ * des cartons) — seulement leur taux de conversion à partir de l'expulsion.
+ *
+ * Retourne { buts, arrets } pour l'équipe attaquante.
+ */
+function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualiteDefenseAdverse, contexte, minuteExpulsionEquipe = null, minuteExpulsionAdverse = null) {
   const nbOccasionsAConvertir = Math.max(statsEquipe.occasions_franches, Math.round(statsEquipe.tirs_cadres * 0.7));
   let buts = 0;
   let arrets = 0;
@@ -519,11 +560,24 @@ function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualit
   // Le meilleur finisseur tire la qualité de finition au-delà de la seule
   // moyenne d'équipe (45% de poids) : un grand avant-centre pèse lourd même
   // dans une attaque autrement moyenne.
-  const qualiteFinition = clamp((forceAttaque * 0.45 + meilleurFinisseur * 0.55) / 100, 0.1, 0.98);
-  const qualiteDefense = clamp(qualiteDefenseAdverse / 100, 0.1, 0.95);
+  const qualiteFinitionBase = clamp((forceAttaque * 0.45 + meilleurFinisseur * 0.55) / 100, 0.1, 0.98);
+  const qualiteDefenseBase = clamp(qualiteDefenseAdverse / 100, 0.1, 0.95);
   const facteurPression = 1 - (contexte?.enjeu ?? 0) * 0.05;
 
   for (let i = 0; i < nbOccasionsAConvertir; i++) {
+    // Répartit les occasions uniformément sur les 90 minutes pour situer
+    // chacune par rapport aux éventuelles expulsions.
+    const minuteOccasion = ((i + 0.5) / nbOccasionsAConvertir) * 90;
+
+    let qualiteFinition = qualiteFinitionBase;
+    let qualiteDefense = qualiteDefenseBase;
+    if (minuteExpulsionEquipe !== null && minuteOccasion >= minuteExpulsionEquipe) {
+      qualiteFinition *= 0.8;
+    }
+    if (minuteExpulsionAdverse !== null && minuteOccasion >= minuteExpulsionAdverse) {
+      qualiteDefense *= 0.78;
+    }
+
     // Écart de qualité élargi (×0.75 au lieu de ×0.45, plafond relevé à 0.9) :
     // une grande attaque face à une défense faible doit pouvoir largement
     // dépasser le taux de conversion "normal" (~28%).
@@ -579,7 +633,21 @@ function selectionnerBanc(compositions, joueurs, max = 5) {
  *     tôt ; un coach moins bon change plus tard, de façon moins optimale, et
  *     utilise parfois moins de ses fenêtres restantes.
  */
-function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabiliteCoach = 0.6, sortiesForcees = []) {
+/**
+ * Fatigue accumulée en cours de match pour un joueur donné à une minute
+ * donnée : dépend de sa forme d'avant-match (condition physique de départ)
+ * ET de son endurance (attribut, vitesse à laquelle il s'essouffle), le tout
+ * croissant avec la minute actuelle — un joueur en méforme et peu endurant
+ * doit sortir nettement plus volontiers en fin de match qu'un joueur increvable.
+ */
+function fatigueEnCoursDeMatch(jr, minute) {
+  const forme = clamp(jr?.forme ?? 100, 0, 100);
+  const endurance = clamp(jr?.endurance ?? 12, 1, 20);
+  const rythme = (1.6 - endurance / 20) * (1.3 - (forme / 100) * 0.6);
+  return 1 + clamp(minute / 90, 0, 1) * rythme * 1.8;
+}
+
+function genererRemplacements(compositions, banc, joueursParId, niveauCoach = 0.7, adaptabiliteCoach = 0.6, sortiesForcees = []) {
   const dejaSorti = new Set();
   const dejaEntre = new Set();
   const remplacements = [];
@@ -646,28 +714,26 @@ function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabilit
       // Remplacement cohérent : la distance de poste avec l'entrant reste un
       // critère, mais la priorité de sortie par poste domine — les changements
       // réels sont très majoritairement offensifs (attaquant/ailier fatigué,
-      // changement de plan de jeu) et rarement défensifs (milieu défensif,
-      // arrière latéral). À distance/priorité égales, c'est le moins bien
-      // noté (fatigue/prestation la plus faible) qui cède sa place.
-      const PRIORITE_SORTIE = { BT: 4, MO: 3.2, AL: 1.3, MD: 1 };
-      const axeEntrant = axePoste(entrant.role);
-      let sortant = candidatsSortants[0];
-      let meilleurScore = Infinity;
-      for (const c of candidatsSortants) {
-        const distancePoste = Math.abs(axePoste(c.role) - axeEntrant);
-        const priorite = PRIORITE_SORTIE[c.role] ?? 0.5;
-        const score = distancePoste * 1000 - priorite * 250 + (c.note ?? 50);
-        if (score < meilleurScore) {
-          meilleurScore = score;
-          sortant = c;
-        }
-      }
-      dejaSorti.add(sortant.player_id);
-      dejaEntre.add(entrant.joueur.id);
-
-      // Minute d'entrée : progresse au fil des changements ; un coach mieux préparé anticipe un peu plus tôt.
+      // changement de plan de jeu), assez souvent au milieu (MD compris),
+      // plus rarement chez les latéraux. Tirage pondéré (pas un simple
+      // argmin) pour éviter un ordre trop rigide/déterministe.
+      // Minute calculée AVANT le choix du sortant : sert aussi à évaluer la
+      // fatigue accumulée à cet instant précis du match.
       const minuteBase = 58 + i * 7 - qualitePlan * 8;
       const minute = clamp(Math.round(minuteBase + bruitGaussien(6)), 46, 90);
+
+      const PRIORITE_SORTIE = { BT: 4, MO: 3.2, MD: 2.6, AL: 1.3 };
+      const axeEntrant = axePoste(entrant.role);
+      const poidsSortie = candidatsSortants.map((c) => {
+        const priorite = PRIORITE_SORTIE[c.role] ?? 0.5;
+        const distancePoste = Math.abs(axePoste(c.role) - axeEntrant);
+        const bonusPosition = 1 + Math.max(0, 2 - distancePoste) * 0.25;
+        const facteurFatigue = fatigueEnCoursDeMatch(joueursParId.get(c.player_id), minute);
+        return { item: c, poids: priorite * bonusPosition * facteurFatigue };
+      });
+      const sortant = tirageAlPondere(poidsSortie) ?? candidatsSortants[0];
+      dejaSorti.add(sortant.player_id);
+      dejaEntre.add(entrant.joueur.id);
 
       remplacements.push({
         minute,
@@ -689,18 +755,29 @@ function genererRemplacements(compositions, banc, niveauCoach = 0.7, adaptabilit
  * Renvoie la composition "effective" sur le terrain à une minute donnée :
  * les titulaires déjà remplacés à cette minute sont substitués par leur entrant
  * (même slot/rôle — hypothèse simplificatrice : changement poste pour poste).
+ * `expulsions` (optionnel) : joueurs déjà exclus (carton rouge/2e jaune) à
+ * cette minute — retirés du onze, sans remplaçant (l'équipe joue à 10).
  */
-function compositionEffective(compositionsBase, remplacements, minute) {
-  if (!remplacements?.length) return compositionsBase;
-  const actifs = remplacements.filter((r) => r.minute <= minute);
-  if (!actifs.length) return compositionsBase;
+function compositionEffective(compositionsBase, remplacements, minute, expulsions = []) {
+  let base = compositionsBase;
 
-  const parSlot = new Map(actifs.map((r) => [r.slot_id, r]));
-  return compositionsBase.map((slot) => {
-    const rempl = parSlot.get(slot.slot_id);
-    if (!rempl) return slot;
-    return { ...slot, player_id: rempl.entrant_id, player_nom: rempl.entrant_nom };
-  });
+  if (remplacements?.length) {
+    const actifs = remplacements.filter((r) => r.minute <= minute);
+    if (actifs.length) {
+      const parSlot = new Map(actifs.map((r) => [r.slot_id, r]));
+      base = base.map((slot) => {
+        const rempl = parSlot.get(slot.slot_id);
+        return rempl ? { ...slot, player_id: rempl.entrant_id, player_nom: rempl.entrant_nom } : slot;
+      });
+    }
+  }
+
+  if (expulsions?.length) {
+    const dehors = new Set(expulsions.filter((e) => e.minute <= minute).map((e) => e.player_id));
+    if (dehors.size) base = base.filter((slot) => !dehors.has(slot.player_id));
+  }
+
+  return base;
 }
 
 // ============================================================
@@ -748,7 +825,7 @@ function instinctButeurParRole(categorie, jr) {
   }
 }
 
-function attribuerButeur(compositions, joueursParId, qualiteDefenseAdverse = 0.5) {
+function attribuerButeur(compositions, joueursParId, qualiteDefenseAdverse = 0.5, qualiteAerienneAdverse = 50) {
   return tirerJoueurPondere(compositions, joueursParId, (profil, note, jr) => {
     const instinctButeur = clamp(instinctButeurParRole(profil.categorie, jr), 0.1, 1);
 
@@ -760,7 +837,13 @@ function attribuerButeur(compositions, joueursParId, qualiteDefenseAdverse = 0.5
     const affiniteButeur = clamp((profil.poidsButeur - 0.6) / 2.6, 0, 1);
     const bonusDefenseFaible = 1 + clamp((0.5 - qualiteDefenseAdverse) * 4, -0.3, 2.2) * affiniteButeur;
 
-    return profil.poidsButeur * (0.3 + instinctButeur * 1.05) * (0.6 + note / 100) * bonusDefenseFaible;
+    // Spécifique aux buts de défenseur (têtes sur corner/coup de pied arrêté,
+    // cf. instinctButeurParRole) : une défense adverse aérienne solide (bons
+    // de la tête) réduit spécifiquement ce type de but, indépendamment de sa
+    // qualité défensive générale déjà prise en compte plus haut.
+    const facteurAerienAdverse = profil.categorie === 'defenseur' ? clamp(1.5 - qualiteAerienneAdverse / 100, 0.4, 1.3) : 1;
+
+    return profil.poidsButeur * (0.3 + instinctButeur * 1.05) * (0.6 + note / 100) * bonusDefenseFaible * facteurAerienAdverse;
   });
 }
 
@@ -803,15 +886,18 @@ function attribuerPasseur(compositions, joueursParId, slotButeur, typeButeur = n
   });
 }
 
-function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, remplacements = [], qualiteDefenseAdverse = 0.5) {
+function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, remplacements = [], qualiteDefenseAdverse = 0.5, qualiteAerienneAdverse = 50, expulsions = []) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const evenements = [];
 
   for (let i = 0; i < nbButs; i++) {
     const minute = minuteAleatoire();
-    const compoAuMoment = compositionEffective(compositions, remplacements, minute);
+    // expulsions : un joueur déjà expulsé à cette minute ne peut plus être
+    // buteur NI passeur — corrige le bug où un joueur pouvait marquer après
+    // son propre carton rouge (compositionEffective l'exclut du onze effectif).
+    const compoAuMoment = compositionEffective(compositions, remplacements, minute, expulsions);
 
-    const slotButeur = attribuerButeur(compoAuMoment, joueursParId, qualiteDefenseAdverse);
+    const slotButeur = attribuerButeur(compoAuMoment, joueursParId, qualiteDefenseAdverse, qualiteAerienneAdverse);
     if (!slotButeur) continue;
     const typeButeur = profilRole(slotButeur.role).categorie === 'defenseur' ? 'tete' : null;
     const slotPasseur = attribuerPasseur(compoAuMoment, joueursParId, slotButeur, typeButeur);
@@ -833,17 +919,26 @@ function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, rem
 // ÉTAPE 7 — CARTONS
 // ============================================================
 
+/**
+ * Génère les cartons d'une équipe. Traite les fautes dans l'ORDRE
+ * CHRONOLOGIQUE des minutes (pas dans l'ordre de tirage) : un joueur déjà
+ * expulsé (rouge direct ou 2e jaune) ne peut plus être crédité d'une faute
+ * ultérieure, ni donc d'un nouveau carton — il n'est plus sur le terrain.
+ */
 function genererCartonsEquipe(fautes, compositions, joueurs, gameClubId, remplacements = []) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const cartons = [];
   const dejaJaune = new Set();
+  const expulses = new Set();
 
-  for (let i = 0; i < fautes; i++) {
+  const minutesFautes = Array.from({ length: fautes }, () => minuteAleatoire()).sort((a, b) => a - b);
+
+  for (const minute of minutesFautes) {
     // ~18% des fautes donnent un carton jaune
     if (!proba(0.18)) continue;
 
-    const minute = minuteAleatoire();
-    const compoAuMoment = compositionEffective(compositions, remplacements, minute);
+    const expulsionsActuelles = [...expulses].map((id) => ({ player_id: id, minute: 0 }));
+    const compoAuMoment = compositionEffective(compositions, remplacements, minute, expulsionsActuelles);
 
     const slot = tirerJoueurPondere(compoAuMoment, joueursParId, (profil, note, jr) => {
       const agressivite = jr?.agressivite ?? 10;
@@ -854,17 +949,46 @@ function genererCartonsEquipe(fautes, compositions, joueurs, gameClubId, remplac
 
     if (dejaJaune.has(slot.player_id)) {
       cartons.push({ minute, game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'deuxieme_jaune' });
+      expulses.add(slot.player_id);
     } else {
       dejaJaune.add(slot.player_id);
       cartons.push({ minute, game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'jaune' });
       // petite chance de carton rouge direct indépendant (tacle très dangereux)
       if (proba(0.015)) {
         cartons.push({ minute: clamp(minute + 1, 1, 90), game_club_id: gameClubId, player_id: slot.player_id, player_nom: slot.player_nom, type: 'rouge_direct' });
+        expulses.add(slot.player_id);
       }
     }
   }
 
   return cartons.sort((a, b) => a.minute - b.minute);
+}
+
+/** Extrait, pour une liste de cartons, la minute d'expulsion de chaque joueur expulsé (rouge direct ou 2e jaune). */
+function extraireExpulsions(cartons) {
+  const parJoueur = new Map();
+  for (const c of cartons) {
+    if (c.type !== 'rouge_direct' && c.type !== 'deuxieme_jaune') continue;
+    if (!parJoueur.has(c.player_id)) parJoueur.set(c.player_id, c.minute);
+  }
+  return [...parJoueur.entries()].map(([player_id, minute]) => ({ player_id, minute }));
+}
+
+/**
+ * Un joueur expulsé ne peut évidemment plus être remplacé après coup (il n'y
+ * a pas de "remplaçant" à un carton rouge, l'équipe finit à 10) : purge tout
+ * changement tactique qui aurait été programmé pour son slot après sa
+ * propre expulsion — la sélection des remplacements (étape 4bis) est
+ * générée avant que les cartons ne soient connus, donc ce conflit est
+ * possible et doit être nettoyé après coup.
+ */
+function purgerRemplacementsApresExpulsion(remplacements, expulsions) {
+  if (!expulsions.length) return remplacements;
+  const minuteExpulsionParJoueur = new Map(expulsions.map((e) => [e.player_id, e.minute]));
+  return remplacements.filter((r) => {
+    const minuteExpulsion = minuteExpulsionParJoueur.get(r.sortant_id);
+    return minuteExpulsion === undefined || r.minute <= minuteExpulsion;
+  });
 }
 
 // ============================================================
@@ -1154,8 +1278,30 @@ function completerRemplacementsAvecBlessuresEntrants(remplacements, banc, blessu
 // ÉTAPE 9 — NOTES DES JOUEURS / HOMME DU MATCH
 // ============================================================
 
-function calculerNotesJoueurs({ compositions, joueurs = [], remplacements = [], gameClubId, buteurs, passeurs, cartons, statsEquipe, victoire, nul }) {
+/**
+ * Poids "défensif" d'un rôle pour la note (clean sheet / buts encaissés) :
+ * un défenseur/latéral porte l'essentiel de la responsabilité, un milieu un
+ * peu, un joueur offensif très peu (mais pas zéro : une équipe qui prend
+ * l'eau, c'est rarement la faute des seuls défenseurs).
+ */
+const POIDS_DEFENSIF_CATEGORIE = { defenseur: 1, milieu: 0.55, milieu_offensif: 0.2, attaquant: 0.08, gardien: 0 };
+
+function calculerNotesJoueurs({
+  compositions,
+  joueurs = [],
+  remplacements = [],
+  gameClubId,
+  buteurs,
+  passeurs,
+  cartons,
+  statsEquipe,
+  victoire,
+  nul,
+  butsMarques = 0,
+  butsEncaisses = 0,
+}) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
+  const BASE_NOTE = 6.5;
 
   // Participants = les 11 titulaires + les entrants qui sont réellement montés au jeu.
   const participants = [
@@ -1165,19 +1311,44 @@ function calculerNotesJoueurs({ compositions, joueurs = [], remplacements = [], 
 
   const notes = participants.map((slot) => {
     const jr = joueursParId.get(slot.player_id);
+    const role = slot.role || 'MD';
+    const profil = profilRole(role);
     const regularite = clamp(jr?.regularite ?? 11, 1, 20);
-    const ecartTypeNote = clamp(0.55 - regularite * 0.02, 0.15, 0.5); // joueur régulier = notes resserrées
+    // Le "jour de match" (aléa indépendant du talent) doit pouvoir vraiment
+    // faire basculer une note : un joueur peu régulier a de gros écarts d'un
+    // match à l'autre, un joueur très régulier reste plus stable — mais dans
+    // les deux cas cet aléa ne dépend PAS du CA, donc il ne favorise ni ne
+    // pénalise structurellement personne sur une saison complète.
+    const ecartTypeNote = clamp(0.65 - regularite * 0.022, 0.2, 0.6); // joueur régulier = notes resserrées
 
     // Un entrant a joué moins longtemps : note de base plus prudente, sauf s'il a pesé sur le match (but/passe)
-    const baseEntrant = slot.entrant ? 6.0 - clamp((slot.minuteEntree - 46) / 90, 0, 0.3) : 6.0;
+    const baseEntrant = slot.entrant ? BASE_NOTE - clamp((slot.minuteEntree - 46) / 90, 0, 0.3) : BASE_NOTE;
     let note = baseEntrant + bruitGaussien(ecartTypeNote);
+
+    // --- Talent / qualité de jeu intrinsèque : c'est ici que doit se jouer
+    // l'essentiel de la note d'un défenseur/milieu qui ne "state" pas
+    // forcément beaucoup mais qui est fort dans le jeu (duels, placement,
+    // relance...). Basé sur son CA + ses attributs clés du poste + forme/
+    // moral, avec son propre aléa de jour de match (régularité). Un joueur
+    // fort doit pouvoir se démarquer sur une saison MÊME si son équipe flop
+    // et qu'il est le seul bon élément — cette composante est donc
+    // volontairement le plus gros levier, avant même le résultat collectif.
+    if (jr) {
+      const qualiteMatch = noteJoueurMatch(jr, role); // 1-100, avec son propre aléa (régularité)
+      const deltaTalent = clamp((qualiteMatch - 55) * 0.022, -0.9, 0.9);
+      note += deltaTalent;
+    }
 
     const butsSlot = buteurs.filter((b) => b.game_club_id === gameClubId && b.buteur_id === slot.player_id).length;
     const passesSlot = passeurs.filter((p) => p.game_club_id === gameClubId && p.passeur_id === slot.player_id).length;
     const cartonsSlot = cartons.filter((c) => c.game_club_id === gameClubId && c.player_id === slot.player_id);
 
-    note += butsSlot * 1.1;
-    note += passesSlot * 0.6;
+    // Grosses stats individuelles (buts/passes) : le levier le plus direct
+    // pour qu'un joueur se démarque sur une saison, indépendamment de
+    // l'équipe — un attaquant/milieu qui empile les stats dans une équipe
+    // qui flop doit quand même finir avec une excellente moyenne.
+    note += butsSlot * 1.2;
+    note += passesSlot * 0.65;
     // Un but/une passe décisive d'un entrant "pèse" un peu plus dans le récit du match (impact banc)
     if (slot.entrant && (butsSlot > 0 || passesSlot > 0)) note += 0.3;
     for (const c of cartonsSlot) {
@@ -1185,13 +1356,33 @@ function calculerNotesJoueurs({ compositions, joueurs = [], remplacements = [], 
       if (c.type === 'deuxieme_jaune' || c.type === 'rouge_direct') note -= 1.2;
     }
 
+    // --- Contexte collectif : impact réel mais secondaire ------------------
+    // Une équipe qui marque/encaisse influence un peu la note (bonne relance,
+    // pressing qui récupère haut, ou inversement une défense qui craque), et
+    // pareil pour le résultat du match — mais ça reste un modulateur, pas le
+    // moteur principal : la performance individuelle (ci-dessus) doit rester
+    // prépondérante pour qu'un bon joueur dans une équipe faible s'en sorte.
+    const poidsAttaque = clamp((profil.poidsButeur + profil.poidsPasseur * 0.7) / 4, 0.05, 1);
+    note += butsMarques * 0.08 * poidsAttaque;
+
+    const poidsDefensif = POIDS_DEFENSIF_CATEGORIE[profil.categorie] ?? 0.3;
+    if (poidsDefensif > 0) {
+      if (butsEncaisses === 0) note += 0.35 * poidsDefensif; // clean sheet
+      else note -= 0.12 * butsEncaisses * poidsDefensif;
+    }
+
     if (slot.role === 'GB') {
       // bonus si clean sheet-ish (peu de buts encaissés côté adverse -> approx via arrets déjà comptés dans stats)
       note += (statsEquipe.arrets ?? 0) * 0.12;
+      if (butsEncaisses === 0) note += 0.35;
+      else note -= clamp(butsEncaisses - 1, 0, 4) * 0.18; // le 1er but encaissé est déjà couvert plus haut
     }
 
-    if (victoire) note += 0.25;
-    else if (!nul) note -= 0.15;
+    // Le résultat du match est le signal le plus lisible d'une "grosse
+    // saison" collective : on lui donne un poids réel (pas un simple bonus
+    // cosmétique de 0.25).
+    if (victoire) note += 0.18;
+    else if (!nul) note -= 0.12;
 
     return {
       player_id: slot.player_id,
@@ -1245,14 +1436,25 @@ function genererResume({ nomDom, nomExt, scoreDom, scoreExt, statsDom, buteurs }
  * son équipe : 90 si titulaire jamais remplacé, minute de sortie si remplacé,
  * (90 - minute d'entrée) si entrant, 0 s'il n'a pas du tout été utilisé.
  */
-function minutesJoueesParJoueur(playerId, compositions, remplacements) {
+/**
+ * Minutes jouées par un joueur sur CE match, déduites des remplacements de
+ * son équipe : 90 si titulaire jamais remplacé, minute de sortie si remplacé,
+ * (90 - minute d'entrée) si entrant, 0 s'il n'a pas du tout été utilisé.
+ * `expulsions` (optionnel) : si le joueur a été expulsé (rouge/2e jaune), ses
+ * minutes s'arrêtent à cette minute-là, quoi qu'il arrive par ailleurs.
+ */
+function minutesJoueesParJoueur(playerId, compositions, remplacements, expulsions = []) {
+  const expulsion = expulsions.find((e) => e.player_id === playerId);
+  const minutePlafond = expulsion ? expulsion.minute : 90;
+
   const slotTitulaire = compositions.find((c) => c.player_id === playerId);
   if (slotTitulaire) {
     const sortie = remplacements.find((r) => r.slot_id === slotTitulaire.slot_id);
-    return sortie ? sortie.minute : 90;
+    const minuteSortie = sortie ? sortie.minute : 90;
+    return Math.min(minuteSortie, minutePlafond);
   }
   const entree = remplacements.find((r) => r.entrant_id === playerId);
-  if (entree) return clamp(90 - entree.minute, 0, 90);
+  if (entree) return clamp(Math.min(90, minutePlafond) - entree.minute, 0, 90);
   return 0;
 }
 
@@ -1275,7 +1477,7 @@ function minutesJoueesParJoueur(playerId, compositions, remplacements) {
  * Fonction pure : ne modifie rien en base, renvoie la liste des nouvelles
  * valeurs à appliquer par l'appelant (edge function) sur `game_players`.
  */
-function calculerImpactPostMatch({ compositions, joueurs, remplacements = [] }) {
+function calculerImpactPostMatch({ compositions, joueurs, remplacements = [], expulsions = [] }) {
   // "Onze attendu" : les joueurs équipe_a au CA le plus élevé (autant que de
   // titulaires dans la compo, 11 normalement). Un joueur de ce groupe qui ne
   // joue pas du tout est légitimement frustré ; un joueur en dehors ne l'est pas.
@@ -1293,7 +1495,7 @@ function calculerImpactPostMatch({ compositions, joueurs, remplacements = [] }) 
   for (const r of remplacements) roleParId.set(r.entrant_id, r.role);
 
   return joueurs.map((jr) => {
-    const minutes = minutesJoueesParJoueur(jr.id, compositions, remplacements);
+    const minutes = minutesJoueesParJoueur(jr.id, compositions, remplacements, expulsions);
     const estTitulaire = compositions.some((c) => c.player_id === jr.id);
     const aJoue = minutes > 0;
     const estBlesse = (jr.blessure_jours ?? 0) > 0;
@@ -1485,23 +1687,6 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   // Étape 3
   const stats = genererStatistiques(domination, forceDom, forceExt);
 
-  // Étape 4 (les buts de chaque équipe dépendent de sa propre attaque, de son
-  // meilleur finisseur individuel, et de la défense adverse dans son ensemble
-  // — défenseurs + gardien, pas juste le gardien).
-  const meilleurFinisseurDom = meilleurInstinctButeur(forceDom.titulairesNotes);
-  const meilleurFinisseurExt = meilleurInstinctButeur(forceExt.titulairesNotes);
-  const qualiteDefenseFaceADom = forceExt.noteDefense * 0.65 + forceExt.noteGardien * 0.35; // défense subie par domicile
-  const qualiteDefenseFaceAExt = forceDom.noteDefense * 0.65 + forceDom.noteGardien * 0.35; // défense subie par extérieur
-
-  const resultatDom = calculerButsEquipe(stats.domicile, forceDom.noteAttaque, meilleurFinisseurDom, qualiteDefenseFaceADom, contexte);
-  const resultatExt = calculerButsEquipe(stats.exterieur, forceExt.noteAttaque, meilleurFinisseurExt, qualiteDefenseFaceAExt, contexte);
-  stats.domicile.arrets_gardien_adverse = resultatExt.arrets; // arrêts réalisés PAR le gardien adverse sur les tirs de dom
-  stats.exterieur.arrets_gardien_adverse = resultatDom.arrets;
-
-  // Cohérence : jamais plus de buts que de tirs cadrés
-  const scoreDom = Math.min(resultatDom.buts, stats.domicile.tirs_cadres);
-  const scoreExt = Math.min(resultatExt.buts, stats.exterieur.tirs_cadres);
-
   // Étape 4bis — banc, blessures des titulaires puis remplacements (5 max)
   // Ordre important : les blessures à sortie immédiate doivent être connues
   // AVANT de générer les remplacements, pour forcer la sortie du joueur
@@ -1511,6 +1696,8 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   const compoExtAvecNote = forceExt.titulairesNotes.map((t) => ({ ...t.slot, note: t.note }));
   const bancDom = selectionnerBanc(compoDom, domicile.joueurs);
   const bancExt = selectionnerBanc(compoExt, exterieur.joueurs);
+  const joueursParIdDom = new Map(domicile.joueurs.map((j) => [j.id, j]));
+  const joueursParIdExt = new Map(exterieur.joueurs.map((j) => [j.id, j]));
 
   const intensiteMatch = clamp((domination.danger.domicile + domination.danger.exterieur) / 140, 0.3, 1.3);
   const tacleSubiParDom = facteurDureteAdverse(compoExt, exterieur.joueurs); // dureté de l'adversaire (exterieur) subie par domicile
@@ -1521,32 +1708,77 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   const sortiesForceesDom = blessuresTitulairesDom.filter((b) => b.sortie_immediate).map((b) => ({ slot_id: b.slot_id, minute: b.minute }));
   const sortiesForceesExt = blessuresTitulairesExt.filter((b) => b.sortie_immediate).map((b) => ({ slot_id: b.slot_id, minute: b.minute }));
 
-  const remplacementsDom = genererRemplacements(compoDomAvecNote, bancDom, forceDom.niveauCoach, forceDom.adaptabiliteCoach, sortiesForceesDom).map((r) => ({ ...r, game_club_id: domicile.gameClubId }));
-  const remplacementsExt = genererRemplacements(compoExtAvecNote, bancExt, forceExt.niveauCoach, forceExt.adaptabiliteCoach, sortiesForceesExt).map((r) => ({ ...r, game_club_id: exterieur.gameClubId }));
+  const remplacementsDom = genererRemplacements(compoDomAvecNote, bancDom, joueursParIdDom, forceDom.niveauCoach, forceDom.adaptabiliteCoach, sortiesForceesDom).map((r) => ({ ...r, game_club_id: domicile.gameClubId }));
+  const remplacementsExt = genererRemplacements(compoExtAvecNote, bancExt, joueursParIdExt, forceExt.niveauCoach, forceExt.adaptabiliteCoach, sortiesForceesExt).map((r) => ({ ...r, game_club_id: exterieur.gameClubId }));
 
   const blessuresEntrantsDom = genererBlessuresEntrants(remplacementsDom, domicile.joueurs, domicile.gameClubId, intensiteMatch, tacleSubiParDom);
   const blessuresEntrantsExt = genererBlessuresEntrants(remplacementsExt, exterieur.joueurs, exterieur.gameClubId, intensiteMatch, tacleSubiParExt);
 
   // Un entrant blessé sévèrement doit à son tour sortir : complète les
-  // remplacements avec ce 2e niveau (sur le budget de 5 restant) AVANT de
-  // générer buts/cartons, pour que compositionEffective() reste cohérente.
-  const remplacementsFinauxDom = completerRemplacementsAvecBlessuresEntrants(remplacementsDom, bancDom, blessuresEntrantsDom, domicile.gameClubId);
-  const remplacementsFinauxExt = completerRemplacementsAvecBlessuresEntrants(remplacementsExt, bancExt, blessuresEntrantsExt, exterieur.gameClubId);
+  // remplacements avec ce 2e niveau (sur le budget de 5 restant).
+  let remplacementsFinauxDom = completerRemplacementsAvecBlessuresEntrants(remplacementsDom, bancDom, blessuresEntrantsDom, domicile.gameClubId);
+  let remplacementsFinauxExt = completerRemplacementsAvecBlessuresEntrants(remplacementsExt, bancExt, blessuresEntrantsExt, exterieur.gameClubId);
 
-  const toutesLesBlessures = [...blessuresTitulairesDom, ...blessuresTitulairesExt, ...blessuresEntrantsDom, ...blessuresEntrantsExt].sort((a, b) => a.minute - b.minute);
-
-  // Étapes 5 & 6 (les remplaçants entrés en jeu peuvent être buteur/passeur)
-  // qualiteDefenseFaceA*/100 : même défense adverse que celle utilisée pour
-  // fixer le nombre de buts (étape 4), pour que le finisseur naturel capte
-  // une part plus grande des buts justement quand l'équipe en marque déjà plus.
-  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom, qualiteDefenseFaceADom / 100);
-  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt, qualiteDefenseFaceAExt / 100);
-  const tousLesButs = [...buteursDom, ...buteursExt].sort((a, b) => a.minute - b.minute);
-
-  // Étape 7
+  // Étape 7 — cartons, calculés ICI (avant les buts et avant les notes) : un
+  // carton rouge doit pouvoir (a) réduire les chances converties par
+  // l'équipe qui joue à 10 / augmenter celles de l'adversaire pour le reste
+  // du match (étape 4, plus bas), et (b) exclure le joueur expulsé de toute
+  // attribution de but/passe postérieure à son expulsion — sans ce
+  // réordonnancement, un joueur pouvait marquer après son propre carton rouge.
   const cartonsDom = genererCartonsEquipe(stats.domicile.fautes, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom);
   const cartonsExt = genererCartonsEquipe(stats.exterieur.fautes, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt);
   const tousLesCartons = [...cartonsDom, ...cartonsExt].sort((a, b) => a.minute - b.minute);
+
+  const expulsionsDom = extraireExpulsions(cartonsDom);
+  const expulsionsExt = extraireExpulsions(cartonsExt);
+  const minuteExpulsionDom = expulsionsDom.length ? Math.min(...expulsionsDom.map((e) => e.minute)) : null;
+  const minuteExpulsionExt = expulsionsExt.length ? Math.min(...expulsionsExt.map((e) => e.minute)) : null;
+
+  // Un joueur expulsé ne peut pas avoir été substitué après coup (impossible
+  // en réalité) : les remplacements générés plus haut ignoraient encore les
+  // cartons, on purge donc tout changement tactique programmé pour son slot
+  // après sa propre expulsion.
+  remplacementsFinauxDom = purgerRemplacementsApresExpulsion(remplacementsFinauxDom, expulsionsDom);
+  remplacementsFinauxExt = purgerRemplacementsApresExpulsion(remplacementsFinauxExt, expulsionsExt);
+
+  // Cas extrêmement rare mais possible : une blessure de titulaire (calculée
+  // plus haut, indépendamment des cartons) tombait après sa propre expulsion
+  // — incohérent (déjà hors du terrain), on l'écarte.
+  const toutesLesBlessures = [...blessuresTitulairesDom, ...blessuresTitulairesExt, ...blessuresEntrantsDom, ...blessuresEntrantsExt]
+    .filter((b) => {
+      const expulsion = [...expulsionsDom, ...expulsionsExt].find((e) => e.player_id === b.player_id);
+      return !expulsion || b.minute <= expulsion.minute;
+    })
+    .sort((a, b) => a.minute - b.minute);
+
+  // Étape 4 (les buts de chaque équipe dépendent de sa propre attaque, de son
+  // meilleur finisseur individuel, de la défense adverse dans son ensemble
+  // — défenseurs + gardien, pas juste le gardien —, et désormais des
+  // éventuelles expulsions déjà survenues à cet instant du match).
+  const meilleurFinisseurDom = meilleurInstinctButeur(forceDom.titulairesNotes);
+  const meilleurFinisseurExt = meilleurInstinctButeur(forceExt.titulairesNotes);
+  const qualiteDefenseFaceADom = forceExt.noteDefense * 0.65 + forceExt.noteGardien * 0.35; // défense subie par domicile
+  const qualiteDefenseFaceAExt = forceDom.noteDefense * 0.65 + forceDom.noteGardien * 0.35; // défense subie par extérieur
+  const qualiteAerienneFaceADom = qualiteAerienneDefense(forceExt.titulairesNotes); // aérien adverse subi par domicile
+  const qualiteAerienneFaceAExt = qualiteAerienneDefense(forceDom.titulairesNotes); // aérien adverse subi par extérieur
+
+  const resultatDom = calculerButsEquipe(stats.domicile, forceDom.noteAttaque, meilleurFinisseurDom, qualiteDefenseFaceADom, contexte, minuteExpulsionDom, minuteExpulsionExt);
+  const resultatExt = calculerButsEquipe(stats.exterieur, forceExt.noteAttaque, meilleurFinisseurExt, qualiteDefenseFaceAExt, contexte, minuteExpulsionExt, minuteExpulsionDom);
+  stats.domicile.arrets_gardien_adverse = resultatExt.arrets; // arrêts réalisés PAR le gardien adverse sur les tirs de dom
+  stats.exterieur.arrets_gardien_adverse = resultatDom.arrets;
+
+  // Cohérence : jamais plus de buts que de tirs cadrés
+  const scoreDom = Math.min(resultatDom.buts, stats.domicile.tirs_cadres);
+  const scoreExt = Math.min(resultatExt.buts, stats.exterieur.tirs_cadres);
+
+  // Étapes 5 & 6 (les remplaçants entrés en jeu peuvent être buteur/passeur ;
+  // expulsionsDom/Ext exclut tout joueur déjà expulsé à la minute du but).
+  // qualiteDefenseFaceA*/100 : même défense adverse que celle utilisée pour
+  // fixer le nombre de buts (étape 4), pour que le finisseur naturel capte
+  // une part plus grande des buts justement quand l'équipe en marque déjà plus.
+  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom, qualiteDefenseFaceADom / 100, qualiteAerienneFaceADom, expulsionsDom);
+  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt, qualiteDefenseFaceAExt / 100, qualiteAerienneFaceAExt, expulsionsExt);
+  const tousLesButs = [...buteursDom, ...buteursExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 9 (notes incluant les entrants, variance selon la régularité de chaque joueur)
   const notesDom = calculerNotesJoueurs({
@@ -1560,6 +1792,8 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
     statsEquipe: { arrets: resultatExt.arrets },
     victoire: scoreDom > scoreExt,
     nul: scoreDom === scoreExt,
+    butsMarques: scoreDom,
+    butsEncaisses: scoreExt,
   });
   const notesExt = calculerNotesJoueurs({
     compositions: compoExt,
@@ -1572,6 +1806,8 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
     statsEquipe: { arrets: resultatDom.arrets },
     victoire: scoreExt > scoreDom,
     nul: scoreDom === scoreExt,
+    butsMarques: scoreExt,
+    butsEncaisses: scoreDom,
   });
   const hommeDuMatch = determinerHommeDuMatch(notesDom, notesExt);
 
@@ -1588,8 +1824,8 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
   // Étape 11 — impact du match sur la condition physique et le moral de TOUT
   // l'effectif équipe_a (pas que les 11 + le banc utilisé), à appliquer par
   // l'appelant sur `game_players.forme` / `game_players.moral`.
-  const impactDom = calculerImpactPostMatch({ compositions: compoDom, joueurs: domicile.joueurs, remplacements: remplacementsFinauxDom });
-  const impactExt = calculerImpactPostMatch({ compositions: compoExt, joueurs: exterieur.joueurs, remplacements: remplacementsFinauxExt });
+  const impactDom = calculerImpactPostMatch({ compositions: compoDom, joueurs: domicile.joueurs, remplacements: remplacementsFinauxDom, expulsions: expulsionsDom });
+  const impactExt = calculerImpactPostMatch({ compositions: compoExt, joueurs: exterieur.joueurs, remplacements: remplacementsFinauxExt, expulsions: expulsionsExt });
 
   return {
     score_domicile: scoreDom,
@@ -1639,8 +1875,11 @@ const MOTEUR_MATCH_EXPORTS = {
   genererStatistiques,
   calculerButsEquipe,
   meilleurInstinctButeur,
+  qualiteAerienneDefense,
   genererButeursEtPasseurs,
   genererCartonsEquipe,
+  extraireExpulsions,
+  purgerRemplacementsApresExpulsion,
   genererBlessuresTitulaires,
   genererBlessuresEntrants,
   completerRemplacementsAvecBlessuresEntrants,
