@@ -705,9 +705,12 @@ function genererRemplacements(compositions, banc, joueursParId, niveauCoach = 0.
       // en match réel, un central ne sort que sur blessure/rouge, jamais en
       // changement de routine. Repli sur D uniquement si aucun autre profil
       // n'est dispo (cas extrême, fin de banc/beaucoup de sorties déjà faites).
-      let candidatsSortants = compositions.filter((c) => c.role !== 'GB' && c.role !== 'D' && !dejaSorti.has(c.player_id));
+      // Un slot "non pourvu" (player_id null) ne correspond à personne sur le
+      // terrain : jamais éligible comme sortant d'un changement tactique (bug
+      // de même famille que pour les buteurs/passeurs/cartons, cf. compositionEffective).
+      let candidatsSortants = compositions.filter((c) => c.player_id != null && c.role !== 'GB' && c.role !== 'D' && !dejaSorti.has(c.player_id));
       if (!candidatsSortants.length) {
-        candidatsSortants = compositions.filter((c) => c.role !== 'GB' && !dejaSorti.has(c.player_id));
+        candidatsSortants = compositions.filter((c) => c.player_id != null && c.role !== 'GB' && !dejaSorti.has(c.player_id));
       }
       if (!candidatsSortants.length) break;
 
@@ -777,7 +780,14 @@ function compositionEffective(compositionsBase, remplacements, minute, expulsion
     if (dehors.size) base = base.filter((slot) => !dehors.has(slot.player_id));
   }
 
-  return base;
+  // Un slot "non pourvu" (player_id null, cf. choisirCompositionDuJour /
+  // assurerCompositionSansDoublon quand aucun candidat compatible n'était
+  // disponible pour ce poste) ne correspond à personne sur le terrain : il ne
+  // doit jamais pouvoir être tiré comme buteur, passeur ou fautif (bug observé :
+  // "Poste non pourvu" crédité d'un but/une passe). compositionEffective est le
+  // seul point d'entrée utilisé pour ces tirages (buts, passes, cartons) — le
+  // filtrer ici les corrige tous en une fois.
+  return base.filter((slot) => slot.player_id != null);
 }
 
 // ============================================================
@@ -1560,16 +1570,26 @@ function minutesJoueesParJoueur(playerId, compositions, remplacements, expulsion
  * l'effectif équipe_a d'un club (pas seulement les 11 + le banc utilisé) :
  *
  *  - Condition physique : baisse dégressive selon les minutes réellement
- *    jouées (-15 pour 90 minutes complètes, proportionnellement moins pour un
- *    match écourté ou une entrée tardive), aucune perte pour un joueur non
- *    utilisé (il récupère plutôt que de fatiguer).
+ *    jouées (ratio de base abaissé à -10 pour 90 minutes complètes, contre
+ *    -15 auparavant — le rythme de saison était trop punitif), proportionnellement
+ *    moins pour un match écourté ou une entrée tardive, aucune perte pour un
+ *    joueur non utilisé (il récupère plutôt que de fatiguer). Ce ratio de
+ *    base est en plus modulé par `endurance` ET `qualite_physique_naturelle`
+ *    (attributs 1-20) : un joueur très endurant/physiquement solide perd
+ *    nettement moins de forme qu'un joueur fragile à minutes égales.
  *  - Moral : +5 pour un titulaire (a débuté la rencontre, quel que soit son
- *    temps de jeu ensuite). Pour un joueur qui n'a PAS joué DU TOUT, on
- *    compare son niveau (CA / `niveau_actuel`) à celui de ses coéquipiers
- *    équipe_a pour savoir s'il fait partie du "onze attendu" : si oui (il
- *    aurait dû jouer et ne l'a pas fait) il perd 10 de moral ; si c'est un
- *    joueur de rotation/réserve pour qui ne pas jouer est normal, son moral
- *    ne bouge pas. Un joueur blessé qui n'a pas joué n'est jamais pénalisé.
+ *    temps de jeu ensuite) ; un entrant (rentré en cours de match sans être
+ *    titulaire) regagne lui aussi un peu de moral, dans une moindre mesure,
+ *    proportionnellement à son temps de jeu — être appelé depuis le banc
+ *    reste valorisant. Pour un joueur qui n'a PAS joué DU TOUT, on compare
+ *    son niveau (CA / `niveau_actuel`) à celui de ses coéquipiers équipe_a
+ *    pour savoir s'il fait partie du "onze attendu" : si oui (il aurait dû
+ *    jouer et ne l'a pas fait) il perd du moral, sur une base adoucie
+ *    (-6 au lieu de -10) pour ne pas tomber à 0 en à peine 5 matchs sans
+ *    temps de jeu ; si c'est un joueur de rotation/réserve pour qui ne pas
+ *    jouer est normal, son moral ne bouge pas. Un joueur blessé qui n'a pas
+ *    joué n'est jamais pénalisé. Le moral reste borné à 100 au maximum
+ *    (contrairement à la forme, qui peut dépasser 100 en bonus de fraîcheur).
  *
  * Fonction pure : ne modifie rien en base, renvoie la liste des nouvelles
  * valeurs à appliquer par l'appelant (edge function) sur `game_players`.
@@ -1601,21 +1621,50 @@ function calculerImpactPostMatch({ compositions, joueurs, remplacements = [], ex
     // Un gardien s'épuise très peu comparé à un joueur de champ (peu de
     // courses sur 90 minutes) : perte de forme réduite à 20% de la normale.
     const facteurFatigue = estGardien ? 0.2 : 1;
-    const perteForme = aJoue ? Math.round((15 * clamp(minutes, 0, 90) * facteurFatigue) / 90) : 0;
+
+    // Endurance (résistance à l'effort dans le match) ET qualité physique
+    // naturelle (constitution générale) atténuent/aggravent la perte de
+    // forme : un joueur solide sur les deux plans (proche de 20/20) perd
+    // nettement moins de condition qu'un joueur fragile (proche de 1/20) à
+    // minutes égales. Moyenne des deux attributs (échelle 1-20, ~11-12 de
+    // moyenne en base), convertie en facteur centré autour de 1.
+    const endurance = clamp(jr.endurance ?? 12, 1, 20);
+    const qualitePhysique = clamp(jr.qualite_physique_naturelle ?? 12, 1, 20);
+    const moyennePhysique = (endurance + qualitePhysique) / 2;
+    const facteurEndurance = clamp(1.35 - (moyennePhysique / 20) * 0.7, 0.65, 1.35);
+
+    // Ratio de base abaissé (10 au lieu de 15 pour 90 minutes) : le rythme
+    // de perte de forme sur une saison complète était trop punitif en général.
+    const BASE_PERTE_FORME = 10;
+    const perteForme = aJoue
+      ? Math.round((BASE_PERTE_FORME * clamp(minutes, 0, 90) * facteurFatigue * facteurEndurance) / 90)
+      : 0;
 
     let deltaMoral = 0;
-    if (estTitulaire) deltaMoral = 5;
-    else if (!aJoue && !estBlesse && idsOnzeAttendu.has(jr.id)) deltaMoral = -10;
+    if (estTitulaire) {
+      deltaMoral = 5;
+    } else if (aJoue) {
+      // Entrant (pas titulaire mais utilisé) : léger regain de moral, dilué
+      // selon le temps de jeu réel plutôt qu'un forfait fixe.
+      deltaMoral = clamp(Math.round(2 + (clamp(minutes, 0, 90) / 90) * 3), 2, 5);
+    } else if (!estBlesse && idsOnzeAttendu.has(jr.id)) {
+      // Non-utilisé alors qu'attendu dans le onze : frustration, mais base
+      // adoucie (-6 au lieu de -10) pour ne pas tomber à 0 en ~5 matchs.
+      deltaMoral = -6;
+    }
 
     const formeActuelle = clamp(jr.forme ?? 100, 0, 150);
-    const moralActuel = clamp(jr.moral ?? 100, 0, 150);
+    // Le moral est plafonné à 100 (contrairement à la forme, qui peut monter
+    // en bonus de fraîcheur jusqu'à 150) : on écrête aussi bien la valeur de
+    // départ (au cas où une donnée existante dépasserait déjà 100) que le résultat.
+    const moralActuel = clamp(jr.moral ?? 100, 0, 100);
 
     return {
       player_id: jr.id,
       minutes_jouees: minutes,
       titulaire: estTitulaire,
       forme: clamp(formeActuelle - perteForme, 0, 150),
-      moral: clamp(moralActuel + deltaMoral, 0, 150),
+      moral: clamp(moralActuel + deltaMoral, 0, 100),
     };
   });
 }
@@ -1646,11 +1695,25 @@ function scoreSelectionJoueur(joueurRow, role) {
  * poste pour poste (le slot/rôle de chaque titulaire ne change pas, seul le
  * joueur qui l'occupe peut changer) :
  *  - un titulaire blessé (blessure_jours > 0) est TOUJOURS sorti, remplacé
- *    par le meilleur joueur dispo et compatible avec le même rôle ;
- *  - un titulaire non blessé est conservé sauf si un autre joueur dispo au
- *    même rôle a un score de sélection nettement supérieur (marge
- *    `seuilPromotion`, par défaut 4 points/100) — évite les changements sur
- *    un simple bruit statistique d'un match à l'autre.
+ *    par le meilleur joueur dispo et compatible avec le même rôle
+ *    (raison: 'blessure') ;
+ *  - un titulaire dont la forme est SOUS `seuilFatigueForcee` (défaut 55/100)
+ *    est également TOUJOURS sorti d'office — trop cuit pour être aligné,
+ *    indépendamment de son niveau intrinsèque (raison: 'fatigue'). Un joueur
+ *    fatigué peut néanmoins encore servir de dernier recours si aucun autre
+ *    joueur compatible n'est disponible pour le poste (effectif trop juste) ;
+ *  - un titulaire ni blessé ni trop fatigué est conservé sauf si un autre
+ *    joueur dispo au même rôle a un score de sélection nettement supérieur
+ *    (marge `seuilPromotion`, par défaut 4 points/100) — évite les
+ *    changements sur un simple bruit statistique d'un match à l'autre
+ *    (raison: 'meilleure_option', qui peut déjà elle-même refléter un écart
+ *    de forme entre les deux joueurs sans que le titulaire soit hors service).
+ *
+ * Cette fonction représente le choix par défaut du STAFF (IA) : si le coach
+ * humain a lui-même déjà désigné un remplaçant pour un titulaire fatigué
+ * dans l'éditeur de tactique, `compositionsBase` doit déjà refléter ce choix
+ * manuel — cette fonction ne fait alors qu'une passe de sécurité (elle ne
+ * peut pas sortir un joueur dont la forme est au-dessus du seuil).
  *
  * N'ordonne PAS un poste par CA/qualité absolue : ne considère, pour chaque
  * slot, que le titulaire désigné par la tactique + les joueurs compatibles
@@ -1658,9 +1721,45 @@ function scoreSelectionJoueur(joueurRow, role) {
  *
  * @param {Array} compositionsBase - tactique.compositions (slot_id, role, player_id, player_nom, ...)
  * @param {Array} joueurs - TOUT l'effectif équipe_a du club (game_players)
- * @returns {{ compositions: Array, changements: Array }}
+ * @param {object} [options]
+ * @param {number} [options.seuilPromotion=4] - marge de score (0-100) au-delà de laquelle un joueur en meilleure forme du jour prend la place d'un titulaire sain
+ * @param {number} [options.seuilFatigueForcee=55] - forme (0-100+) en dessous de laquelle un titulaire est sorti d'office, comme pour une blessure
+ * @returns {{ compositions: Array, changements: Array }} changements[].raison ∈ {'blessure','fatigue','doublon','meilleure_option'}
  */
-function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 4 } = {}) {
+/**
+ * Un joueur est-il trop fatigué pour être aligné titulaire sans avertissement ?
+ * Même seuil par défaut que `choisirCompositionDuJour`, à réutiliser côté UI
+ * (éditeur de tactique) pour afficher un badge/avertissement quand le coach
+ * essaie de désigner ce joueur comme titulaire, SANS forcer automatiquement
+ * un changement — le coach reste libre de l'aligner quand même (fatigue,
+ * contrairement à la blessure, n'est jamais un empêchement absolu).
+ */
+function joueurTropFatigue(joueurRow, seuilFatigueForcee = 55) {
+  if (!joueurRow) return false;
+  return clamp(joueurRow.forme ?? 100, 0, 150) < seuilFatigueForcee;
+}
+
+/**
+ * Liste, pour un poste (rôle PROFILS_ROLE) donné, les joueurs de l'effectif
+ * éligibles à ce rôle et non blessés — triés par score de sélection du jour
+ * décroissant (cf. scoreSelectionJoueur) — pour permettre à l'éditeur de
+ * tactique de proposer au coach une liste d'alternatives quand le titulaire
+ * voulu est trop fatigué (ou pour tout autre motif de son choix).
+ *
+ * @param {string} role - clé PROFILS_ROLE (ex. 'BT', 'MO'...)
+ * @param {Array} joueurs - effectif équipe_a du club (game_players)
+ * @param {Array<string|number>} [idsExclus] - joueurs déjà utilisés ailleurs dans le onze (à exclure)
+ * @returns {Array<{ joueur, score, tropFatigue }>}
+ */
+function alternativesPourPoste(role, joueurs, idsExclus = []) {
+  const exclus = new Set(idsExclus);
+  return joueurs
+    .filter((j) => !exclus.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
+    .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role), tropFatigue: joueurTropFatigue(j) }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 4, seuilFatigueForcee = 55 } = {}) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
   const dejaUtilises = new Set();
   const changements = [];
@@ -1668,17 +1767,28 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
   const compositions = (compositionsBase || []).map((slot) => {
     const designe = joueursParId.get(slot.player_id);
     const role = slot.role;
-    // Le titulaire désigné est indisponible pour ce slot s'il est blessé OU
-    // s'il est déjà utilisé sur un autre slot (tactique source corrompue avec
-    // le même player_id sur 2 postes, ou tout autre cas où il a déjà été
-    // placé ailleurs) : dans les deux cas on DOIT chercher un remplaçant,
-    // jamais retomber sur lui — sinon il se retrouve dupliqué dans le onze.
-    const designeIndisponible = !designe || (designe.blessure_jours ?? 0) > 0 || dejaUtilises.has(designe.id);
+    // Le titulaire désigné est indisponible pour ce slot s'il est blessé, s'il
+    // est TROP fatigué (forme sous seuilFatigueForcee — un joueur cuit ne doit
+    // pas être laissé titulaire par défaut, le staff le sort d'office comme
+    // pour une blessure), OU s'il est déjà utilisé sur un autre slot (tactique
+    // source corrompue avec le même player_id sur 2 postes, ou tout autre cas
+    // où il a déjà été placé ailleurs) : dans tous ces cas on DOIT chercher un
+    // remplaçant, jamais retomber sur lui — sinon il se retrouve dupliqué dans
+    // le onze ou titulaire alors qu'il ne devrait pas l'être.
+    const designeBlesse = !designe || (designe.blessure_jours ?? 0) > 0;
+    const designeTropFatigue = !!designe && joueurTropFatigue(designe, seuilFatigueForcee);
+    const designeIndisponible = designeBlesse || designeTropFatigue || dejaUtilises.has(designe?.id);
 
+    // Un joueur trop fatigué reste éligible comme candidat de repli si vraiment
+    // aucune autre option compatible n'existe pour ce poste (effectif juste) —
+    // seul un joueur blessé est totalement exclu des candidats.
     const candidats = joueurs
       .filter((j) => !dejaUtilises.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
-      .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role) }))
-      .sort((a, b) => b.score - a.score);
+      .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role), tropFatigue: joueurTropFatigue(j, seuilFatigueForcee) }))
+      .sort((a, b) => {
+        if (a.tropFatigue !== b.tropFatigue) return a.tropFatigue ? 1 : -1; // les non-fatigués passent devant
+        return b.score - a.score;
+      });
 
     let choisi;
     if (designeIndisponible) {
@@ -1687,11 +1797,13 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
         changements.push({
           slot_id: slot.slot_id,
           role,
-          raison: dejaUtilises.has(designe.id) ? 'doublon' : 'blessure',
+          raison: dejaUtilises.has(designe.id) ? 'doublon' : designeBlesse ? 'blessure' : 'fatigue',
           sortant_id: designe.id,
           sortant_nom: designe.nom,
+          sortant_forme: designe.forme ?? null,
           entrant_id: choisi.id,
           entrant_nom: choisi.nom,
+          entrant_forme: choisi.forme ?? null,
         });
       }
     } else {
@@ -1702,11 +1814,13 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
         changements.push({
           slot_id: slot.slot_id,
           role,
-          raison: 'forme',
+          raison: 'meilleure_option', // score du jour nettement supérieur (forme/moral/regularité cumulés), sans que le titulaire soit hors service
           sortant_id: designe.id,
           sortant_nom: designe.nom,
+          sortant_forme: designe.forme ?? null,
           entrant_id: choisi.id,
           entrant_nom: choisi.nom,
+          entrant_forme: choisi.forme ?? null,
           ecart: Math.round(meilleureAlternative.score - scoreDesigne),
         });
       } else {
@@ -1731,6 +1845,66 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
   return { compositions, changements };
 }
 
+/**
+ * Filet de sécurité anti-doublon, TOUJOURS exécuté par `simulerMatch` juste
+ * avant tout calcul — y compris quand `appliquerCompositionDuJour: false`
+ * (l'appelant prétend avoir déjà résolu sa compo du jour). `simulerMatch` ne
+ * doit jamais faire une confiance aveugle à son appelant sur ce point : une
+ * tactique corrompue, un bug côté éditeur, ou un simple oubli peut assigner
+ * le même `player_id` à deux slots (ex. Greenwood en ailier droit ET ailier
+ * gauche à la fois).
+ *
+ * Contrairement à `choisirCompositionDuJour` (qui gère aussi blessure/fatigue
+ * et n'est appliquée que si `appliquerCompositionDuJour=true`), cette passe
+ * ne traite QUE les doublons et tourne dans tous les cas : le premier slot où
+ * le joueur apparaît (ordre du tableau) le garde, les slots suivants sont
+ * réattribués au meilleur candidat compatible et disponible pour le rôle, ou
+ * laissés explicitement non pourvus si l'effectif est trop juste — jamais
+ * laissés dupliqués.
+ *
+ * @param {Array} compositions - compo à vérifier (déjà passée ou non par choisirCompositionDuJour)
+ * @param {Array} joueurs - effectif équipe_a du club (game_players)
+ * @returns {{ compositions: Array, changements: Array }} changements[].raison === 'doublon'
+ */
+function assurerCompositionSansDoublon(compositions, joueurs) {
+  const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
+  const dejaUtilises = new Set();
+  const changements = [];
+
+  const resultat = (compositions || []).map((slot) => {
+    if (slot.player_id == null || !dejaUtilises.has(slot.player_id)) {
+      if (slot.player_id != null) dejaUtilises.add(slot.player_id);
+      return slot;
+    }
+
+    // Doublon détecté : ce player_id occupe déjà un autre slot plus tôt dans
+    // la compo — on cherche le meilleur remplaçant compatible et libre.
+    const designe = joueursParId.get(slot.player_id);
+    const role = slot.role;
+    const candidats = joueurs
+      .filter((j) => !dejaUtilises.has(j.id) && (j.blessure_jours ?? 0) === 0 && joueurPeutJouerRole(j, role))
+      .map((j) => ({ joueur: j, score: scoreSelectionJoueur(j, role) }))
+      .sort((a, b) => b.score - a.score);
+    const choisi = candidats[0]?.joueur ?? null;
+
+    changements.push({
+      slot_id: slot.slot_id,
+      role,
+      raison: 'doublon',
+      sortant_id: designe?.id ?? slot.player_id,
+      sortant_nom: designe?.nom ?? slot.player_nom ?? null,
+      entrant_id: choisi?.id ?? null,
+      entrant_nom: choisi?.nom ?? null,
+    });
+
+    if (!choisi) return { ...slot, player_id: null, player_nom: 'Poste non pourvu' };
+    dejaUtilises.add(choisi.id);
+    return { ...slot, player_id: choisi.id, player_nom: choisi.nom };
+  });
+
+  return { compositions: resultat, changements };
+}
+
 // ============================================================
 // ORCHESTRATEUR
 // ============================================================
@@ -1746,11 +1920,45 @@ function choisirCompositionDuJour(compositionsBase, joueurs, { seuilPromotion = 
  *   - groupe : ligne `dynamique_groupe` du club (optionnelle)
  * @param {object} p.exterieur - même forme que p.domicile
  * @param {object} [p.contexte] - { enjeu: 0-1, meteo: 'normale'|... }
+ * @param {boolean} [p.appliquerCompositionDuJour=true] - passe la compo de chaque équipe
+ *   par `choisirCompositionDuJour` avant simulation (sort d'office un titulaire blessé ou
+ *   trop fatigué). À laisser à `true` dans le cas général ; ne passer `false` que si
+ *   l'appelant a déjà lui-même résolu la compo du jour (ex. l'éditeur de tactique a déjà
+ *   proposé/validé un remplacement et écrit le résultat dans tactique.compositions) et
+ *   veut simuler EXACTEMENT cette compo sans repasse automatique. Dans les deux cas,
+ *   `assurerCompositionSansDoublon` tourne quand même en filet de sécurité juste après :
+ *   même à `false`, un même joueur ne peut jamais se retrouver sur deux slots à la fois.
  * @returns {object} prêt à écrire dans `calendrier` (score_domicile, score_exterieur, stats)
  */
-function simulerMatch({ domicile, exterieur, contexte = {} }) {
-  const compoDom = domicile.tactique.compositions;
-  const compoExt = exterieur.tactique.compositions;
+function simulerMatch({ domicile, exterieur, contexte = {}, appliquerCompositionDuJour = true }) {
+  // Étape 0bis — compo du jour : un titulaire blessé OU trop fatigué (forme
+  // sous le seuil) est sorti d'office et remplacé par le meilleur profil
+  // compatible dispo, AVANT tout calcul de force — la fatigue doit peser sur
+  // le choix du onze, pas seulement sur la note une fois aligné.
+  let compoDom = domicile.tactique.compositions;
+  let compoExt = exterieur.tactique.compositions;
+  let ajustementsCompoDom = [];
+  let ajustementsCompoExt = [];
+  if (appliquerCompositionDuJour) {
+    const resultatCompoDom = choisirCompositionDuJour(compoDom, domicile.joueurs);
+    const resultatCompoExt = choisirCompositionDuJour(compoExt, exterieur.joueurs);
+    compoDom = resultatCompoDom.compositions;
+    compoExt = resultatCompoExt.compositions;
+    ajustementsCompoDom = resultatCompoDom.changements;
+    ajustementsCompoExt = resultatCompoExt.changements;
+  }
+
+  // Filet de sécurité : indépendant du flag ci-dessus, et donc actif même
+  // quand appliquerCompositionDuJour=false — on ne fait JAMAIS confiance
+  // aveuglément à l'appelant sur l'absence de doublon dans compoDom/compoExt
+  // (choisirCompositionDuJour gère déjà ce cas, mais seulement quand on
+  // l'appelle ; ici on le garantit dans tous les cas, sans exception).
+  const antiDoublonDom = assurerCompositionSansDoublon(compoDom, domicile.joueurs);
+  const antiDoublonExt = assurerCompositionSansDoublon(compoExt, exterieur.joueurs);
+  compoDom = antiDoublonDom.compositions;
+  compoExt = antiDoublonExt.compositions;
+  ajustementsCompoDom = [...ajustementsCompoDom, ...antiDoublonDom.changements];
+  ajustementsCompoExt = [...ajustementsCompoExt, ...antiDoublonExt.changements];
 
   // Étape 1 — force de chaque équipe (intègre déjà cohésion, dynamique de groupe, avantage du terrain)
   const forceDom = calculerForceEquipe({
@@ -1961,6 +2169,10 @@ function simulerMatch({ domicile, exterieur, contexte = {} }) {
       // appliquer_stats_joueurs_apres_match, seule capable d'écrire dans
       // game_players (RLS interdit l'update direct côté client).
       forme_moral: { domicile: impactDom, exterieur: impactExt },
+      // Étape 0bis — titulaires sortis d'office avant le coup d'envoi (blessure
+      // ou fatigue excessive) et par qui ils ont été remplacés. Permet à
+      // l'interface d'afficher "X aligné à la place de Y (trop fatigué)".
+      ajustements_compo: { domicile: ajustementsCompoDom, exterieur: ajustementsCompoExt },
     },
   };
 }
@@ -1995,8 +2207,11 @@ const MOTEUR_MATCH_EXPORTS = {
   minutesJoueesParJoueur,
   // composition du jour (coach ajuste selon blessure/forme/note récente)
   choisirCompositionDuJour,
+  assurerCompositionSansDoublon,
   scoreSelectionJoueur,
   joueurPeutJouerRole,
+  joueurTropFatigue,
+  alternativesPourPoste,
   // impact tactique
   profilTactique,
   calculerMismatchTactique,
