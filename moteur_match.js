@@ -412,14 +412,32 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, gro
  *
  * @param {object} [mismatchDom] - { bonusDanger, malusExposition } du point de vue du domicile (cf. calculerMismatchTactique)
  * @param {object} [mismatchExt] - idem côté extérieur
+ * @param {object} [profilDom] - profilTactique(domicile.tactique), pour l'axe possession du style
+ * @param {object} [profilExt] - profilTactique(exterieur.tactique), idem extérieur
  */
-function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt = null) {
+function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt = null, profilDom = null, profilExt = null) {
   const diff = forceDom.noteGlobale - forceExt.noteGlobale; // typiquement -60..+60
   const bruit = bruitGaussien(6); // variabilité match à match
   const diffAjuste = diff + bruit;
 
-  // Logistique centrée : possession moyenne 50%, s'écarte selon l'écart de force
-  const possessionDom = clamp(50 + diffAjuste * 0.5, 22, 78);
+  // Possession "de force" : l'équipe la plus forte tend à avoir plus le ballon.
+  const possessionForceDom = 50 + diffAjuste * 0.58;
+
+  // Possession "de style" : jusqu'ici le style tactique (Tiki-Taka, Longs
+  // ballons devant, Contre-attaques directes...) ne pesait QUE sur le danger
+  // via calculerMismatchTactique, jamais sur la possession elle-même — deux
+  // équipes de force égale mais de philosophie opposée finissaient donc
+  // systématiquement autour de 50-50, ce qui n'a pas de sens (une équipe en
+  // "Longs ballons devant" cherche activement MOINS le ballon).
+  const ecartStylePossession = (profilDom?.possession ?? 0.5) - (profilExt?.possession ?? 0.5); // ~-0.75..0.75 en pratique
+  const possessionStyleDom = 50 + ecartStylePossession * 40;
+
+  // Le style pèse un peu moins que la force pure, mais reste un contributeur
+  // net (avant : poids nul). Bornes élargies (14-86 au lieu de 22-78) pour
+  // permettre aux vrais mismatchs (force ET style alignés) de sortir des
+  // possessions très déséquilibrées, comme en vrai.
+  const possessionBrute = possessionForceDom * 0.62 + possessionStyleDom * 0.38;
+  const possessionDom = clamp(possessionBrute, 14, 86);
   const possessionExt = 100 - possessionDom;
 
   // Pression/occasions dépendent surtout de l'attaque adverse vs milieu/défense, ajustées par
@@ -462,10 +480,14 @@ function genererStatsEquipe(possessionPct, dangerScore, forceAttaque, forceDefen
   const tirsBonus = tiragePoisson(clamp(dangerScore / 22, 0.3, 5));
   const tirs = occasionsFranches + tirsBonus;
 
-  // Tirs cadrés : dépend de la qualité technique de l'attaque (pas juste du volume)
+  // Tirs cadrés : dépend de la qualité technique de l'attaque (pas juste du
+  // volume). Base et multiplicateur relevés (0.25->0.32, 0.35->0.4) pour que
+  // le volume moyen de tirs cadrés colle à un match réel (~4-5/équipe) —
+  // sans ce relevage, le taux de conversion resserré (cf calculerButsEquipe)
+  // faisait chuter la moyenne de buts sous les standards du foot réel.
   const precisionAttaque = clamp(forceAttaque / 100, 0.2, 0.95);
   let tirsCadres = 0;
-  for (let i = 0; i < tirs; i++) if (proba(0.25 + precisionAttaque * 0.35)) tirsCadres++;
+  for (let i = 0; i < tirs; i++) if (proba(0.32 + precisionAttaque * 0.4)) tirsCadres++;
   tirsCadres = Math.min(tirsCadres, tirs);
 
   const corners = clamp(Math.round(dangerScore / 16 + bruitGaussien(1)), 0, 12);
@@ -495,6 +517,81 @@ function genererStatistiques(domination, forceDom, forceExt) {
   const statsDom = genererStatsEquipe(domination.possession.domicile, domination.danger.domicile, forceDom.noteAttaque, forceExt.noteDefense);
   const statsExt = genererStatsEquipe(domination.possession.exterieur, domination.danger.exterieur, forceExt.noteAttaque, forceDom.noteDefense);
   return { domicile: statsDom, exterieur: statsExt };
+}
+
+/**
+ * Recale les stats d'équipe (générées à l'étape 3, donc AVANT que les buts ne
+ * soient connus à l'étape 4) sur la physionomie du score final. Sans ce
+ * correctif, le score et les stats sont deux tirages quasi indépendants : un
+ * 4-0 pouvait afficher une possession 52-48, ce qui n'arrive jamais dans un
+ * vrai match — un tel écart de buts laisse presque toujours une trace nette
+ * sur la possession, le volume de tirs, etc.
+ *
+ * La correction est bornée et partiellement aléatoire (pas un simple
+ * "forçage" déterministe) pour laisser passer les scénarios plausibles mais
+ * atypiques : une victoire clinique à contre-courant du jeu (peu de
+ * possession, décisif sur ses seules occasions) doit rester possible, juste
+ * beaucoup plus rare qu'avant.
+ */
+function recalibrerStatsSelonScore(stats, scoreDom, scoreExt) {
+  const margeButs = scoreDom - scoreExt;
+  if (margeButs === 0) return; // match nul : rien à recaler
+
+  const gagnant = margeButs > 0 ? 'domicile' : 'exterieur';
+  const perdant = gagnant === 'domicile' ? 'exterieur' : 'domicile';
+  const butsGagnant = gagnant === 'domicile' ? scoreDom : scoreExt;
+  const marge = Math.abs(margeButs);
+
+  // Amplitude plafonnée et amortie (racine) : un 5-0 n'est pas 2.5x plus
+  // "lopsided" qu'un 2-0 en termes de possession — la différence marginale
+  // se réduit avec l'écart de buts, comme dans la réalité.
+  const ampleurBase = clamp(Math.sqrt(marge) * 6, 0, 16);
+  // Facteur aléatoire : laisse ~20-30% des gros écarts se dérouler sans
+  // correction extrême (le fameux "score flatteur" ou la victoire clinique).
+  const facteurAlea = clamp(0.5 + Math.random() * 0.7, 0.5, 1.2);
+  const skewPossession = ampleurBase * facteurAlea;
+
+  const nouvellePossGagnant = clamp(stats[gagnant].possession + skewPossession, 16, 84);
+  stats[gagnant].possession = Math.round(nouvellePossGagnant);
+  stats[perdant].possession = Math.round(100 - stats[gagnant].possession);
+
+  // Munitions offensives du vainqueur : un taux de conversion sur tirs
+  // cadrés crédible tourne autour de 40-55%, jamais un quasi 1-pour-1comme
+  // pouvaient le laisser passer les anciens tirages indépendants (ex. "5
+  // tirs cadrés, 4 buts"). On garantit donc un minimum de tirs cadrés (et de
+  // tirs tout court) cohérent avec le nombre de buts marqués.
+  const tauxConversionPlancher = 0.42 + Math.random() * 0.15;
+  const cadresMin = Math.ceil(butsGagnant / tauxConversionPlancher);
+  if (stats[gagnant].tirs_cadres < cadresMin) {
+    const ajoutCadres = cadresMin - stats[gagnant].tirs_cadres;
+    stats[gagnant].tirs_cadres = cadresMin;
+    stats[gagnant].tirs += ajoutCadres + tiragePoisson(1.2); // + quelques tirs non cadrés en plus
+  }
+  stats[gagnant].occasions_franches = clamp(
+    Math.max(stats[gagnant].occasions_franches, Math.ceil(butsGagnant * 0.7)),
+    0,
+    stats[gagnant].tirs_cadres
+  );
+
+  // Le perdant d'une correction lourde (3 buts d'écart ou plus) a
+  // statistiquement moins pesé offensivement : léger tassement de son volume
+  // de tirs, jamais jusqu'à zéro (garde une trame de match plausible — même
+  // une équipe qui prend 4 n'est pas restée sans se procurer une occasion).
+  if (marge >= 3) {
+    const tassement = clamp(1 - (marge - 2) * 0.08, 0.6, 1);
+    stats[perdant].tirs = Math.max(1, Math.round(stats[perdant].tirs * tassement));
+    stats[perdant].tirs_cadres = Math.min(stats[perdant].tirs_cadres, stats[perdant].tirs);
+    stats[perdant].occasions_franches = Math.min(stats[perdant].occasions_franches, stats[perdant].tirs);
+  }
+
+  // Les passes réussies suivent la possession recalibrée (même logique que
+  // dans genererStatsEquipe : ~4.2 passes par point de possession).
+  stats[gagnant].passes_reussies = clamp(Math.round(stats[gagnant].passes_reussies + skewPossession * 4), 120, 750);
+  stats[perdant].passes_reussies = clamp(Math.round(stats[perdant].passes_reussies - skewPossession * 3), 120, 750);
+
+  // Garde-fou final : tirs >= tirs cadrés doit toujours tenir après ces ajustements.
+  stats.domicile.tirs = Math.max(stats.domicile.tirs, stats.domicile.tirs_cadres);
+  stats.exterieur.tirs = Math.max(stats.exterieur.tirs, stats.exterieur.tirs_cadres);
 }
 
 // ============================================================
@@ -576,7 +673,21 @@ function qualiteAerienneDefense(titulairesNotes) {
  * Retourne { buts, arrets } pour l'équipe attaquante.
  */
 function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualiteDefenseAdverse, contexte, minuteExpulsionEquipe = null, minuteExpulsionAdverse = null) {
-  const nbOccasionsAConvertir = Math.max(statsEquipe.occasions_franches, Math.round(statsEquipe.tirs_cadres * 0.7));
+  // Seul un tir CADRÉ peut finir au fond des filets : c'est lui qui borne le
+  // nombre d'occasions à convertir, jamais les occasions franches prises
+  // isolément (une occasion franche peut très bien finir non cadrée).
+  // Avant ce correctif, nbOccasionsAConvertir pouvait dépasser tirs_cadres
+  // (il prenait le plus grand des deux), et le score final était ensuite
+  // tronqué en aval par un simple Math.min(buts, tirs_cadres) — ce troncage
+  // gonflait artificiellement le taux de conversion affiché et produisait des
+  // lignes de stats irréalistes du type "5 tirs cadrés, 4 buts".
+  const nbTirsCadres = Math.max(0, Math.round(statsEquipe.tirs_cadres));
+  // Parmi ces tirs cadrés, certains sont des occasions franches (plus
+  // faciles à convertir) ; le reste, des tentatives cadrées plus disputées
+  // (finition à distance, angle fermé...) — la finition de match doit
+  // distinguer les deux plutôt que traiter chaque tir cadré à égalité.
+  const nbFranchesCadrees = clamp(Math.round(statsEquipe.occasions_franches), 0, nbTirsCadres);
+
   let buts = 0;
   let arrets = 0;
 
@@ -587,10 +698,12 @@ function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualit
   const qualiteDefenseBase = clamp(qualiteDefenseAdverse / 100, 0.1, 0.95);
   const facteurPression = 1 - (contexte?.enjeu ?? 0) * 0.05;
 
-  for (let i = 0; i < nbOccasionsAConvertir; i++) {
-    // Répartit les occasions uniformément sur les 90 minutes pour situer
+  for (let i = 0; i < nbTirsCadres; i++) {
+    const estOccasionFranche = i < nbFranchesCadrees;
+
+    // Répartit les tentatives uniformément sur les 90 minutes pour situer
     // chacune par rapport aux éventuelles expulsions.
-    const minuteOccasion = ((i + 0.5) / nbOccasionsAConvertir) * 90;
+    const minuteOccasion = ((i + 0.5) / nbTirsCadres) * 90;
 
     let qualiteFinition = qualiteFinitionBase;
     let qualiteDefense = qualiteDefenseBase;
@@ -601,16 +714,18 @@ function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualit
       qualiteDefense *= 0.78;
     }
 
-    // Écart de qualité élargi (×0.75 au lieu de ×0.45, plafond relevé à 0.9) :
-    // une grande attaque face à une défense faible doit pouvoir largement
-    // dépasser le taux de conversion "normal" (~28%).
-    const probaBut = clamp(0.26 + (qualiteFinition - qualiteDefense) * 0.75, 0.04, 0.9) * facteurPression;
+    // Base différenciée : une occasion franche cadrée (0.27) se transforme
+    // nettement plus souvent qu'un tir cadré "disputé" (0.16). Plafond à
+    // 0.56 dans tous les cas — un taux de conversion réel dépasse très
+    // rarement 55% même pour le plus gros des mismatchs.
+    const base = estOccasionFranche ? 0.31 : 0.17;
+    const probaBut = clamp(base + (qualiteFinition - qualiteDefense) * 0.5, 0.05, 0.58) * facteurPression;
     if (proba(probaBut)) {
       buts++;
     } else if (proba(0.55)) {
-      arrets++; // occasion cadrée mais arrêtée
+      arrets++; // tir cadré mais arrêté
     }
-    // sinon : tir hors cadre / contré, ni but ni arrêt
+    // sinon : tir contré / repoussé, ni but ni arrêt
   }
 
   return { buts, arrets };
@@ -919,8 +1034,38 @@ function attribuerPasseur(compositions, joueursParId, slotButeur, typeButeur = n
   });
 }
 
-function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, remplacements = [], qualiteDefenseAdverse = 0.5, qualiteAerienneAdverse = 50, expulsions = []) {
+/**
+ * Désigne l'auteur d'un but contre son camp côté équipe ADVERSE (celle qui va
+ * "encaisser" le point au tableau d'affichage malgré elle). En réalité, un
+ * CSC vient quasi toujours d'un défenseur ou d'un latéral qui dévie
+ * malencontreusement un centre/tir dans ses propres filets (dégagement raté,
+ * déviation sous pression) — jamais un gardien (qui a sa propre logique
+ * d'erreurs, gérée ailleurs) et très rarement un attaquant.
+ */
+function attribuerAuteurCSC(compositionsAdverse, joueursParIdAdverse) {
+  const candidatsDefense = compositionsAdverse.filter((c) => {
+    const cat = profilRole(c.role).categorie;
+    return cat === 'defenseur' || cat === 'milieu';
+  });
+  const pool = candidatsDefense.length
+    ? candidatsDefense
+    : compositionsAdverse.filter((c) => profilRole(c.role).categorie !== 'gardien');
+  if (!pool.length) return null;
+
+  return tirerJoueurPondere(pool, joueursParIdAdverse, (profil, note) => {
+    // Nettement plus fréquent chez un défenseur/latéral (plus exposé aux
+    // dégagements et déviations dans sa propre surface) qu'un milieu.
+    const facteurPoste = profil.categorie === 'defenseur' ? 1.4 : 1;
+    // Un joueur en méforme ce jour-là (note plus basse) commet un peu plus
+    // d'erreurs de ce type — effet volontairement discret, pas déterminant.
+    const facteurForme = clamp(1.25 - note / 130, 0.6, 1.25);
+    return facteurPoste * facteurForme;
+  });
+}
+
+function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, remplacements = [], qualiteDefenseAdverse = 0.5, qualiteAerienneAdverse = 50, expulsions = [], adverse = null) {
   const joueursParId = new Map(joueurs.map((j) => [j.id, j]));
+  const joueursParIdAdverse = adverse ? new Map(adverse.joueurs.map((j) => [j.id, j])) : null;
   const evenements = [];
 
   for (let i = 0; i < nbButs; i++) {
@@ -930,6 +1075,38 @@ function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, rem
     // son propre carton rouge (compositionEffective l'exclut du onze effectif).
     const compoAuMoment = compositionEffective(compositions, remplacements, minute, expulsions);
 
+    // Petite chance de but contre son camp : un joueur de l'équipe ADVERSE
+    // dévie malencontreusement dans ses propres filets. Taux réaliste (les
+    // CSC représentent grosso modo 2 à 3% des buts marqués en football pro) ;
+    // légèrement plus fréquent quand la défense concernée est déjà fébrile
+    // (qualiteDefenseAdverse basse, subie par CETTE équipe qui attaque —
+    // une défense en difficulté commet aussi plus d'erreurs de ce type).
+    const probaCSC = clamp(0.018 + (0.5 - qualiteDefenseAdverse) * 0.03, 0.008, 0.045);
+    if (adverse && joueursParIdAdverse && proba(probaCSC)) {
+      const compoAdverseAuMoment = compositionEffective(
+        adverse.compositions,
+        adverse.remplacements ?? [],
+        minute,
+        adverse.expulsions ?? []
+      );
+      const slotCSC = attribuerAuteurCSC(compoAdverseAuMoment, joueursParIdAdverse);
+      if (slotCSC) {
+        evenements.push({
+          minute,
+          game_club_id: adverse.gameClubId, // club du joueur auteur du CSC (celui qui encaisse)
+          equipe_creditee_game_club_id: gameClubId, // club dont le score est crédité par ce but
+          buteur_id: slotCSC.player_id,
+          buteur_nom: slotCSC.player_nom,
+          passeur_id: null,
+          passeur_nom: null,
+          est_csc: true,
+        });
+        continue; // ce but est comptabilisé, passe au suivant
+      }
+      // pas de candidat valable côté adverse (effectif vide) : on retombe
+      // sur un but "normal" ci-dessous plutôt que de perdre le but.
+    }
+
     const slotButeur = attribuerButeur(compoAuMoment, joueursParId, qualiteDefenseAdverse, qualiteAerienneAdverse);
     if (!slotButeur) continue;
     const typeButeur = profilRole(slotButeur.role).categorie === 'defenseur' ? 'tete' : null;
@@ -938,10 +1115,12 @@ function genererButeursEtPasseurs(nbButs, compositions, joueurs, gameClubId, rem
     evenements.push({
       minute,
       game_club_id: gameClubId,
+      equipe_creditee_game_club_id: gameClubId,
       buteur_id: slotButeur.player_id,
       buteur_nom: slotButeur.player_nom,
       passeur_id: slotPasseur ? slotPasseur.player_id : null,
       passeur_nom: slotPasseur ? slotPasseur.player_nom : null,
+      est_csc: false,
     });
   }
 
@@ -1465,7 +1644,8 @@ function calculerNotesJoueurs({
       if (performanceMatch) note += performanceMatch.noteDelta;
     }
 
-    const butsSlot = buteurs.filter((b) => b.game_club_id === gameClubId && b.buteur_id === slot.player_id).length;
+    const butsSlot = buteurs.filter((b) => b.game_club_id === gameClubId && b.buteur_id === slot.player_id && !b.est_csc).length;
+    const cscSlot = buteurs.filter((b) => b.game_club_id === gameClubId && b.buteur_id === slot.player_id && b.est_csc).length;
     const passesSlot = passeurs.filter((p) => p.game_club_id === gameClubId && p.passeur_id === slot.player_id).length;
     const cartonsSlot = cartons.filter((c) => c.game_club_id === gameClubId && c.player_id === slot.player_id);
 
@@ -1475,6 +1655,10 @@ function calculerNotesJoueurs({
     // qui flop doit quand même finir avec une excellente moyenne.
     note += butsSlot * 1.2;
     note += passesSlot * 0.65;
+    // Un but contre son camp est l'inverse d'un but marqué pour la note
+    // individuelle : ça pèse sur la performance, sans pour autant être aussi
+    // sévère qu'un carton rouge (ça reste un accident, pas une faute lourde).
+    note -= cscSlot * 1.0;
     // Un but/une passe décisive d'un entrant "pèse" un peu plus dans le récit du match (impact banc)
     if (slot.entrant && (butsSlot > 0 || passesSlot > 0)) note += 0.3;
     for (const c of cartonsSlot) {
@@ -1546,8 +1730,7 @@ function genererResume({ nomDom, nomExt, scoreDom, scoreExt, statsDom, buteurs }
 
   const butsTries = [...buteurs].sort((a, b) => a.minute - b.minute);
   const phrasesButs = butsTries.map((b) => {
-    const equipe = b.game_club_id === buteurs[0]?.game_club_id ? '' : '';
-    return `${b.buteur_nom} (${b.minute}e)`;
+    return b.est_csc ? `${b.buteur_nom} (${b.minute}e, csc)` : `${b.buteur_nom} (${b.minute}e)`;
   });
 
   const phraseButs = phrasesButs.length
@@ -2009,8 +2192,8 @@ function simulerMatch({ domicile, exterieur, contexte = {}, appliquerComposition
   const mismatchDom = calculerMismatchTactique(profilDom, profilExt, forceDom.niveauCoach, forceExt.niveauCoach);
   const mismatchExt = calculerMismatchTactique(profilExt, profilDom, forceExt.niveauCoach, forceDom.niveauCoach);
 
-  // Étape 2 (domination ajustée par le mismatch tactique)
-  const domination = calculerDomination(forceDom, forceExt, mismatchDom, mismatchExt);
+  // Étape 2 (domination ajustée par le mismatch tactique ET par le style de jeu de chaque équipe)
+  const domination = calculerDomination(forceDom, forceExt, mismatchDom, mismatchExt, profilDom, profilExt);
 
   // Étape 3
   const stats = genererStatistiques(domination, forceDom, forceExt);
@@ -2099,13 +2282,28 @@ function simulerMatch({ domicile, exterieur, contexte = {}, appliquerComposition
   const scoreDom = Math.min(resultatDom.buts, stats.domicile.tirs_cadres);
   const scoreExt = Math.min(resultatExt.buts, stats.exterieur.tirs_cadres);
 
+  // Étape 4ter — les stats (générées à l'étape 3, AVANT que le score ne soit
+  // connu) sont recalées sur la physionomie réelle du match : un score large
+  // doit se retrouver dans la possession et le volume de tirs affichés.
+  recalibrerStatsSelonScore(stats, scoreDom, scoreExt);
+
   // Étapes 5 & 6 (les remplaçants entrés en jeu peuvent être buteur/passeur ;
   // expulsionsDom/Ext exclut tout joueur déjà expulsé à la minute du but).
   // qualiteDefenseFaceA*/100 : même défense adverse que celle utilisée pour
   // fixer le nombre de buts (étape 4), pour que le finisseur naturel capte
   // une part plus grande des buts justement quand l'équipe en marque déjà plus.
-  const buteursDom = genererButeursEtPasseurs(scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom, qualiteDefenseFaceADom / 100, qualiteAerienneFaceADom, expulsionsDom);
-  const buteursExt = genererButeursEtPasseurs(scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt, qualiteDefenseFaceAExt / 100, qualiteAerienneFaceAExt, expulsionsExt);
+  // `adverse` (5e/8e paramètre) : nécessaire pour pouvoir occasionnellement
+  // désigner un but contre son camp côté équipe qui encaisse (cf. proba CSC).
+  const buteursDom = genererButeursEtPasseurs(
+    scoreDom, compoDom, domicile.joueurs, domicile.gameClubId, remplacementsFinauxDom,
+    qualiteDefenseFaceADom / 100, qualiteAerienneFaceADom, expulsionsDom,
+    { compositions: compoExt, joueurs: exterieur.joueurs, gameClubId: exterieur.gameClubId, remplacements: remplacementsFinauxExt, expulsions: expulsionsExt }
+  );
+  const buteursExt = genererButeursEtPasseurs(
+    scoreExt, compoExt, exterieur.joueurs, exterieur.gameClubId, remplacementsFinauxExt,
+    qualiteDefenseFaceAExt / 100, qualiteAerienneFaceAExt, expulsionsExt,
+    { compositions: compoDom, joueurs: domicile.joueurs, gameClubId: domicile.gameClubId, remplacements: remplacementsFinauxDom, expulsions: expulsionsDom }
+  );
   const tousLesButs = [...buteursDom, ...buteursExt].sort((a, b) => a.minute - b.minute);
 
   // Étape 9 (notes incluant les entrants, variance selon la régularité de chaque joueur)
@@ -2200,7 +2398,14 @@ function simulerMatch({ domicile, exterieur, contexte = {}, appliquerComposition
       centres: { domicile: stats.domicile.centres, exterieur: stats.exterieur.centres },
       fautes: { domicile: stats.domicile.fautes, exterieur: stats.exterieur.fautes },
       arrets: { domicile: stats.domicile.arrets_gardien_adverse, exterieur: stats.exterieur.arrets_gardien_adverse },
-      buteurs: tousLesButs.map(({ minute, game_club_id, buteur_id, buteur_nom }) => ({ minute, game_club_id, player_id: buteur_id, player_nom: buteur_nom })),
+      buteurs: tousLesButs.map(({ minute, game_club_id, equipe_creditee_game_club_id, buteur_id, buteur_nom, est_csc }) => ({
+        minute,
+        game_club_id,
+        equipe_creditee_game_club_id,
+        player_id: buteur_id,
+        player_nom: buteur_nom,
+        est_csc: est_csc ?? false,
+      })),
       passeurs: tousLesButs.filter((b) => b.passeur_id).map((b) => ({ minute: b.minute, game_club_id: b.game_club_id, player_id: b.passeur_id, player_nom: b.passeur_nom, but_de: b.buteur_id })),
       cartons: tousLesCartons,
       blessures: toutesLesBlessures,
@@ -2232,10 +2437,12 @@ const MOTEUR_MATCH_EXPORTS = {
   calculerForceEquipe,
   calculerDomination,
   genererStatistiques,
+  recalibrerStatsSelonScore,
   calculerButsEquipe,
   meilleurInstinctButeur,
   qualiteAerienneDefense,
   genererButeursEtPasseurs,
+  attribuerAuteurCSC,
   genererCartonsEquipe,
   extraireExpulsions,
   purgerRemplacementsApresExpulsion,
