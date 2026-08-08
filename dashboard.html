@@ -1491,10 +1491,16 @@
      le nom/classement de chaque equipe dans l'en-tete avant-match — distinct
      des confrontations directes (qui restent dans le bloc de gauche). */
   .fm-msg-form-row { display: flex; gap: 4px; justify-content: center; margin-top: 6px; }
+  .fm-msg-form-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
   .fm-msg-form-badge {
     position: relative; width: 18px; height: 18px; border-radius: 50%; display: flex;
     align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; cursor: default;
   }
+  /* Logo du club affronte, affiche sous chaque chip V/N/D de la forme
+     generale (avant-match uniquement — le module "Prochaine rencontre"
+     reste sans logos, juste les chips). */
+  .fm-msg-form-opp-logo { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; opacity: 0.85; }
+  .fm-msg-form-opp-logo img.mdet-club-logo { width: 14px !important; height: 14px !important; object-fit: contain; }
   .fm-msg-form-badge.victoire { background: rgba(74,222,128,0.15); color: var(--accent); }
   .fm-msg-form-badge.defaite { background: rgba(239,68,68,0.15); color: var(--danger); }
   .fm-msg-form-badge.nul { background: rgba(255,255,255,0.08); color: var(--text-dim); }
@@ -9079,9 +9085,15 @@ function renderCompoPitchHtml(compo, getSlotMeta) {
 // (le plus recent en premier) ; affiche dans cet ordre, le dernier match a
 // gauche. Infobulle personnalisee (data-tip + CSS) au survol de chaque
 // badge avec la date, le lieu et le score du match concerne.
-function fmFormBadgesHtml(recentList, clubId) {
+// `opts.logos` (map clubId -> logo_url) + `opts.showOppLogo` permettent
+// d'afficher, sous chaque chip, le logo du club affronte lors de ce match
+// (utilise sur la carte avant-match). Sans ces options, on retombe sur les
+// chips seules (utilise sur le module "Prochaine rencontre").
+function fmFormBadgesHtml(recentList, clubId, opts = {}) {
   const list = recentList || [];
   if (!list.length) return "";
+  const logos = opts.logos || {};
+  const showOppLogo = !!opts.showOppLogo;
   const badges = list.map(m => {
     const isHome = String(m.club_domicile_id) === String(clubId);
     const myScore = isHome ? m.score_domicile : m.score_exterieur;
@@ -9091,12 +9103,21 @@ function fmFormBadgesHtml(recentList, clubId) {
       if (myScore > advScore) { tag = "V"; cls = "victoire"; }
       else if (myScore < advScore) { tag = "D"; cls = "defaite"; }
     }
-    const advNom = isHome ? m.ext_nom : m.dom_nom;
+    const oppId = isHome ? m.club_exterieur_id : m.club_domicile_id;
+    const advNom = (isHome ? m.ext_nom : m.dom_nom) ?? m.oppName;
     const scoreLabel = `${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}`;
     const d = m.date_match ? new Date(m.date_match) : null;
     const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : "";
     const tip = `${dateLabel ? dateLabel + " · " : ""}${isHome ? "Dom" : "Ext"} · ${scoreLabel} vs ${advNom || "?"}`;
-    return `<span class="fm-msg-form-badge ${cls}" data-tip="${escapeHtml(tip)}">${tag}</span>`;
+    const oppLogoHtml = showOppLogo
+      ? `<span class="fm-msg-form-opp-logo">${mdetLogoHtml(logos[oppId], advNom, 14)}</span>`
+      : "";
+    return `
+      <span class="fm-msg-form-item">
+        <span class="fm-msg-form-badge ${cls}" data-tip="${escapeHtml(tip)}">${tag}</span>
+        ${oppLogoHtml}
+      </span>
+    `;
   }).join("");
   return `<div class="fm-msg-form-row">${badges}</div>`;
 }
@@ -9147,7 +9168,7 @@ function renderConfrontationsHtml(r) {
 }
 
 async function renderAvantMatchCard(r) {
-  const logos = await mdetFetchClubLogos([r.dom_id, r.ext_id]);
+  let logos = await mdetFetchClubLogos([r.dom_id, r.ext_id]);
   const compoSlots = r.compo?.slots || [];
   const topPlayers = [r.meilleur_joueur, r.meilleur_buteur, r.meilleur_passeur].filter(Boolean);
   const idIds = [...compoSlots.map(s => s.player_id), ...topPlayers.map(p => p.id)].filter(Boolean);
@@ -9199,6 +9220,18 @@ async function renderAvantMatchCard(r) {
   const domRecent = String(r.dom_id) === String(r.mon_id) ? r.mon_recent : r.adv_recent;
   const extRecent = String(r.ext_id) === String(r.mon_id) ? r.mon_recent : r.adv_recent;
 
+  // Logos des clubs affrontes lors des 5 derniers matchs de chaque equipe
+  // (affiches sous chaque chip V/N/D) — recuperes en plus des logos dom/ext
+  // deja charges plus haut.
+  const oppIdFor = (list, clubId) => (list || []).map(m =>
+    String(m.club_domicile_id) === String(clubId) ? m.club_exterieur_id : m.club_domicile_id
+  );
+  const recentOppIds = [...oppIdFor(domRecent, r.dom_id), ...oppIdFor(extRecent, r.ext_id)];
+  if (recentOppIds.length) {
+    const extraLogos = await mdetFetchClubLogos(recentOppIds);
+    logos = { ...logos, ...extraLogos };
+  }
+
   return `
     <div class="fm-nf-feature fm-msg-feature">
       <div class="fm-nf-feature-top">
@@ -9210,7 +9243,7 @@ async function renderAvantMatchCard(r) {
           ${mdetLogoHtml(logos[r.dom_id], r.dom_nom, 92)}
           <div class="fm-nf-team-name">${escapeHtml(r.dom_nom)}</div>
           <div class="fm-nf-team-rank">${fmRankLabel(r.dom_classement)}</div>
-          ${fmFormBadgesHtml(domRecent, r.dom_id)}
+          ${fmFormBadgesHtml(domRecent, r.dom_id, { logos, showOppLogo: true })}
         </div>
         <div class="fm-nf-vs">
           <span class="fm-nf-vs-txt">VS</span>
@@ -9220,7 +9253,7 @@ async function renderAvantMatchCard(r) {
           ${mdetLogoHtml(logos[r.ext_id], r.ext_nom, 92)}
           <div class="fm-nf-team-name">${escapeHtml(r.ext_nom)}</div>
           <div class="fm-nf-team-rank">${fmRankLabel(r.ext_classement)}</div>
-          ${fmFormBadgesHtml(extRecent, r.ext_id)}
+          ${fmFormBadgesHtml(extRecent, r.ext_id, { logos, showOppLogo: true })}
         </div>
       </div>
     </div>
@@ -9273,8 +9306,18 @@ async function renderApresMatchCard(r, matchId) {
     return null;
   };
 
+  // Pour un csc, le but doit s'afficher du cote de l'equipe ADVERSE a celle
+  // du buteur (b.game_club_id) — c'est elle qui marque au tableau de score —
+  // et non du cote de sa propre equipe. On ignore donc
+  // equipe_creditee_game_club_id pour les csc et on force le cote oppose.
+  const creditedClubFor = (b) => {
+    if (b.est_csc) {
+      return String(b.game_club_id) === String(r.dom_id) ? r.ext_id : r.dom_id;
+    }
+    return b.equipe_creditee_game_club_id ?? b.game_club_id;
+  };
   const scorersFor = (clubId) => buteurs
-    .filter(b => String(b.equipe_creditee_game_club_id ?? b.game_club_id) === String(clubId))
+    .filter(b => String(creditedClubFor(b)) === String(clubId))
     .map(b => {
       const m = resolvePlayer(b.id, b.nom, b.game_club_id);
       const clickAttr = m && m.id
@@ -10432,6 +10475,20 @@ async function renderNextMatch() {
   const extId = featured.isHome ? featured.oppId : myGameClubId;
   const extName = featured.isHome ? featured.oppName : myClubNom;
 
+  // Chips V/N/D des 5 derniers matchs de chaque equipe (meme motif que la
+  // carte avant-match de la boite de reception, mais sans les logos des
+  // clubs affrontes — juste les chips).
+  const [domMatches, extMatches] = await Promise.all([
+    domId === myGameClubId ? Promise.resolve(champMatches) : getClubMatches(domId),
+    extId === myGameClubId ? Promise.resolve(champMatches) : getClubMatches(extId),
+  ]);
+  const recentPlayed = (list) => (list || [])
+    .filter(m => m.played)
+    .sort((a, b) => new Date(b.date_match) - new Date(a.date_match))
+    .slice(0, 5);
+  const domRecent = recentPlayed(domMatches);
+  const extRecent = recentPlayed(extMatches);
+
   const d = featured.date_match ? new Date(featured.date_match) : null;
   const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
   const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "long" }) : "";
@@ -10448,6 +10505,7 @@ async function renderNextMatch() {
             ${mdetLogoHtml(logos[domId], domName, 116)}
             <div class="fm-nf-team-name">${escapeHtml(domName)}</div>
             <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[domId])}</div>
+            ${fmFormBadgesHtml(domRecent, domId)}
           </div>
           <div class="fm-nf-vs">
             <span class="fm-nf-vs-txt">VS</span>
@@ -10457,6 +10515,7 @@ async function renderNextMatch() {
             ${mdetLogoHtml(logos[extId], extName, 116)}
             <div class="fm-nf-team-name">${escapeHtml(extName)}</div>
             <div class="fm-nf-team-rank">${fmRankLabel(standingsMap[extId])}</div>
+            ${fmFormBadgesHtml(extRecent, extId)}
           </div>
         </div>
         <div class="fm-nf-footer">${escapeHtml(roundLabel)} · ${escapeHtml(compLabel)}</div>
