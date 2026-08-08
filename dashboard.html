@@ -1498,9 +1498,17 @@
   }
   /* Logo du club affronte, affiche sous chaque chip V/N/D de la forme
      generale (avant-match uniquement — le module "Prochaine rencontre"
-     reste sans logos, juste les chips). */
-  .fm-msg-form-opp-logo { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; opacity: 0.85; }
-  .fm-msg-form-opp-logo img.mdet-club-logo { width: 14px !important; height: 14px !important; object-fit: contain; }
+     reste sans logos, juste les chips). Volontairement tout petit
+     (~taille d'une chip) pour ne pas empieter sur le reste de la carte. */
+  .fm-msg-form-opp-logo { width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; opacity: 0.85; }
+  .fm-msg-form-opp-logo img.mdet-club-logo { width: 12px !important; height: 12px !important; object-fit: contain; }
+  .fm-msg-form-opp-logo .mdet-club-logo-fallback { width: 12px !important; height: 12px !important; font-size: 6px !important; }
+  /* La regle .fm-msg-feature .fm-nf-team .mdet-club-logo (blason principal,
+     76px) est plus specifique que .fm-msg-form-opp-logo seule : on la
+     re-surclasse ici explicitement pour que le mini-logo sous les chips
+     reste petit meme dans ce contexte. */
+  .fm-msg-feature .fm-nf-team .fm-msg-form-opp-logo .mdet-club-logo,
+  .fm-msg-feature .fm-nf-team .fm-msg-form-opp-logo .mdet-club-logo-fallback { width: 12px !important; height: 12px !important; }
   .fm-msg-form-badge.victoire { background: rgba(74,222,128,0.15); color: var(--accent); }
   .fm-msg-form-badge.defaite { background: rgba(239,68,68,0.15); color: var(--danger); }
   .fm-msg-form-badge.nul { background: rgba(255,255,255,0.08); color: var(--text-dim); }
