@@ -214,6 +214,37 @@
   .stat-row .label { color: var(--text-dim); }
   .stat-row .value { font-weight: 700; }
 
+  /* Graphique d'historique financier : axes + remplissage sous la courbe
+     (repris de dashboard.html pour garder le meme rendu partout). */
+  .fm-chart-wrap { margin-top: 10px; }
+  .fm-chart-wrap--placeholder { opacity: 0.55; }
+  .fm-chart-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .fm-chart-header .title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .fm-chart-legend { display: flex; gap: 12px; font-size: 11px; color: var(--text-dim); }
+  .fm-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .fm-chart-legend .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .fm-chart-legend .dot.gain { background: var(--accent); }
+  .fm-chart-legend .dot.perte { background: var(--danger); }
+  .fm-chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .fm-chart-line { vector-effect: non-scaling-stroke; }
+  .fm-chart-area { opacity: 0.9; }
+  .fm-chart-dot { transition: r 0.15s; cursor: default; }
+  .fm-chart-dot:hover { r: 4.5; }
+  .fm-chart-gridline { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .fm-chart-axis-line { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .fm-chart-axis-label { fill: var(--text-dim); font-family: inherit; }
+  .fm-chart-axis-label.y { font-size: 7px; text-anchor: end; dominant-baseline: middle; }
+  .fm-chart-axis-label.x { font-size: 7px; text-anchor: middle; dominant-baseline: hanging; }
+  .fm-chart-placeholder-caption {
+    text-align: center; font-size: 10px; color: var(--text-dim); margin-top: 4px;
+  }
+
+  /* Budget salarial / transfert / masse salariale, sous le graphique */
+  .club-fin-budgets { display: flex; flex-direction: column; margin-top: 4px; }
+
   .stars { position: relative; display: inline-block; font-size: 14px; letter-spacing: 2px; line-height: 1; }
   .stars-bg { color: var(--border); }
   .stars-fg {
@@ -1824,45 +1855,161 @@ async function fetchFinanceHistory(club) {
   });
 }
 
-function renderFinanceChart(history) {
-  const w = 400, h = 90, padY = 8;
+// Masse salariale du club (joueurs + staff), calcul en direct — a
+// distinguer de masse_salariale_reference (figee a la cloture de saison,
+// plancher de budget_salarial_actuel).
+async function fetchClubSalaryMass(gameClubId) {
+  const [playersRes, staffRes] = await Promise.all([
+    supabaseClient.from("game_players").select("salaire_actuel").eq("game_club_id", gameClubId),
+    supabaseClient.from("game_staff").select("salaire_actuel").eq("game_club_id", gameClubId),
+  ]);
+  const totalJoueurs = (playersRes.data || []).reduce((a, p) => a + (Number(p.salaire_actuel) || 0), 0);
+  const totalStaff = (staffRes.data || []).reduce((a, s) => a + (Number(s.salaire_actuel) || 0), 0);
+  return totalJoueurs + totalStaff;
+}
+
+// Formatte un montant en version compacte pour les libelles de l'axe
+// vertical du graphique (ex: 1,2M€ / 850k€ / 300€).
+function formatMoneyAxis(n) {
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 1000000) {
+    const v = abs / 1000000;
+    return sign + (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1).replace(".", ",")) + "M€";
+  }
+  if (abs >= 1000) {
+    const v = abs / 1000;
+    return sign + (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1).replace(".", ",")) + "k€";
+  }
+  return sign + Math.round(abs) + "€";
+}
+
+// Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal.
+function formatChartMonth(date) {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" }).format(date).replace(/\.$/, "");
+}
+
+function renderFinanceChart(history, isPlaceholder = false) {
+  const totalW = 400, totalH = 90;
+  const padL = 30, padR = 6, padTop = 8, padBottom = 16;
+  const plotW = Math.max(1, totalW - padL - padR);
+  const plotH = Math.max(1, totalH - padTop - padBottom);
+
   const values = history.map(p => p.value);
   const min = Math.min(...values), max = Math.max(...values);
-  const range = Math.max(1, max - min);
-  const stepX = history.length > 1 ? w / (history.length - 1) : 0;
+  const flat = max === min;
+  const rawRange = Math.max(1, max - min);
+  const rangePad = flat ? Math.max(1, Math.abs(max) * 0.1) : rawRange * 0.1;
+  const yMin = min - rangePad, yMax = max + rangePad;
+  const range = Math.max(1, yMax - yMin);
+
+  const stepX = history.length > 1 ? plotW / (history.length - 1) : 0;
 
   const coords = history.map((pt, i) => {
-    const x = history.length > 1 ? i * stepX : w / 2;
-    const y = h - padY - ((pt.value - min) / range) * (h - padY * 2);
+    const x = padL + (history.length > 1 ? i * stepX : plotW / 2);
+    const y = padTop + plotH - ((pt.value - yMin) / range) * plotH;
     return { x, y, pt };
   });
 
   const linePoints = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-  const dots = coords.map(c => {
+  const baseY = (padTop + plotH).toFixed(1);
+  const areaPoints = `${padL},${baseY} ${linePoints} ${(padL + plotW).toFixed(1)},${baseY}`;
+
+  const dots = isPlaceholder ? "" : coords.map(c => {
     const color = c.pt.delta >= 0 ? "var(--accent)" : "var(--danger)";
-    const label = `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)}`;
-    return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.6" fill="${color}"><title>${label}</title></circle>`;
+    const label = `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
+    return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.5" fill="${color}"><title>${label}</title></circle>`;
   }).join("");
 
+  // ---- Axe vertical : quadrillage + libelles de valeurs en € ----
+  const nYTicks = 3;
+  let yAxisHtml = "";
+  for (let i = 0; i < nYTicks; i++) {
+    const v = yMin + (range * i) / (nYTicks - 1);
+    const y = (padTop + plotH - ((v - yMin) / range) * plotH).toFixed(1);
+    yAxisHtml += `
+      <line class="fm-chart-gridline" x1="${padL}" y1="${y}" x2="${(padL + plotW).toFixed(1)}" y2="${y}" />
+      <text class="fm-chart-axis-label y" x="${(padL - 6).toFixed(1)}" y="${y}">${formatMoneyAxis(v)}</text>
+    `;
+  }
+
+  // ---- Axe horizontal : libelles de dates (mois) ----
+  const nXTicks = Math.max(1, Math.min(3, history.length));
+  let xAxisHtml = "";
+  for (let i = 0; i < nXTicks; i++) {
+    const idx = nXTicks > 1 ? Math.round((i * (history.length - 1)) / (nXTicks - 1)) : 0;
+    const c = coords[idx];
+    const d = computeRealDate(currentGame?.date_debut, c.pt.jour);
+    const label = d ? formatChartMonth(d) : `J${c.pt.jour}`;
+    xAxisHtml += `<text class="fm-chart-axis-label x" x="${c.x.toFixed(1)}" y="${(padTop + plotH + 6).toFixed(1)}">${escapeHtml(label)}</text>`;
+  }
+
   return `
-    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%; height:auto; overflow:visible; margin-top:8px;">
-      <polyline points="${linePoints}" fill="none" stroke="var(--accent)" stroke-width="2" />
-      ${dots}
-    </svg>
+    <div class="fm-chart-wrap${isPlaceholder ? " fm-chart-wrap--placeholder" : ""}">
+      <div class="fm-chart-header">
+        <span class="title">${isPlaceholder ? "Aperçu du graphique" : "Historique des mouvements"}</span>
+        ${isPlaceholder ? "" : `
+        <span class="fm-chart-legend">
+          <span><span class="dot gain"></span>Entrée</span>
+          <span><span class="dot perte"></span>Sortie</span>
+        </span>`}
+      </div>
+      <svg class="fm-chart-svg" viewBox="0 0 ${totalW} ${totalH}" preserveAspectRatio="none">
+        <polygon class="fm-chart-area" points="${areaPoints}" fill="url(#clubFinanceGradient)" />
+        <defs>
+          <linearGradient id="clubFinanceGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35" />
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        ${yAxisHtml}
+        <line class="fm-chart-axis-line" x1="${padL}" y1="${padTop}" x2="${padL}" y2="${baseY}" />
+        <line class="fm-chart-axis-line" x1="${padL}" y1="${baseY}" x2="${(padL + plotW).toFixed(1)}" y2="${baseY}" />
+        <polyline class="fm-chart-line" points="${linePoints}" fill="none" stroke="var(--accent)" stroke-width="2"${isPlaceholder ? ' stroke-dasharray="4 4"' : ""} />
+        ${dots}
+        ${xAxisHtml}
+      </svg>
+      ${isPlaceholder ? `<div class="fm-chart-placeholder-caption">En attente du premier mouvement financier</div>` : ""}
+    </div>
   `;
+}
+
+// Historique factice (ligne plate au budget actuel) affiche quand aucun
+// mouvement financier n'a encore ete enregistre.
+function buildFinancePlaceholderHistory(budget) {
+  const value = budget || 0;
+  return [0, 1, 2, 3, 4].map(i => ({ jour: i, value, delta: 0, motif: null }));
 }
 
 async function renderFinances(club) {
   const el = document.getElementById("clubFinances");
-  const history = await fetchFinanceHistory(club);
+  const [history, masseSalariale] = await Promise.all([
+    fetchFinanceHistory(club),
+    fetchClubSalaryMass(club.game_club_id),
+  ]);
+  const hasHistory = history.length > 1;
+
   el.innerHTML = `
     <div class="stat-row">
       <span class="label">Budget disponible</span>
       <span class="value">${formatMoney(club.budget_actuel)}</span>
     </div>
-    ${history.length > 1
-      ? renderFinanceChart(history)
-      : `<div class="fm-empty" style="padding-top:6px;">Aucun mouvement enregistré pour l'instant.</div>`}
+    ${renderFinanceChart(hasHistory ? history : buildFinancePlaceholderHistory(club.budget_actuel), !hasHistory)}
+    <div class="club-fin-budgets">
+      <div class="stat-row">
+        <span class="label">Budget salarial</span>
+        <span class="value">${formatMoney(club.budget_salarial_actuel)}</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">Budget transfert</span>
+        <span class="value">${formatMoney(club.budget_transfert_actuel)}</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">Masse salariale</span>
+        <span class="value">${formatMoney(masseSalariale)}</span>
+      </div>
+    </div>
   `;
 }
 
@@ -3233,7 +3380,7 @@ async function loadClub() {
     .select(`
       game_club_id, nom, budget_actuel, classement, statut, nation, division,
       niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne,
-      nb_joueurs, meilleur_joueur_nom
+      nb_joueurs, meilleur_joueur_nom, budget_salarial_actuel, budget_transfert_actuel
     `)
     .eq("game_id", gameId)
     .eq("game_club_id", gameClubId)
