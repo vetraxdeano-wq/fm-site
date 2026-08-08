@@ -422,9 +422,15 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, gro
     ? clamp((club.affluence_moyenne ?? club.capacite_stade * 0.7) / club.capacite_stade, 0.25, 1)
     : 0.7;
   const ferveurPublique = 0.5 + remplissageStade * 0.5; // 0.625 - 1
+  // Poids de l'avantage domicile/extérieur relevé (avant : 1.02-1.17 dom /
+  // 0.9-0.99 ext, un écart trop resserré pour bien peser dans la force
+  // finale). Les coefficients de ferveur/enjeu/dynGroupe sont eux aussi
+  // relevés, et le plancher extérieur abaissé (0.9 -> 0.84) pour qu'un
+  // déplacement difficile (vestiaire fragile, faible ferveur adverse) pèse
+  // vraiment sur une équipe déjà moins bien classée.
   const bonusDomicile = contexte?.domicile
-    ? clamp(1 + 0.05 * ferveurPublique + 0.03 * (contexte?.enjeu ?? 0) + 0.03 * (dynGroupe - 0.7), 1.02, 1.17)
-    : clamp(0.99 - 0.03 * (1 - dynGroupe), 0.9, 0.99);
+    ? clamp(1 + 0.075 * ferveurPublique + 0.04 * (contexte?.enjeu ?? 0) + 0.04 * (dynGroupe - 0.7), 1.03, 1.22)
+    : clamp(0.97 - 0.045 * (1 - dynGroupe), 0.84, 0.98);
   const facteurEnjeu = 1 - (contexte?.enjeu ?? 0) * 0.04; // grosse pression = petite baisse de rendement moyen
   const facteurMeteo = contexte?.meteo && contexte.meteo !== 'normale' ? 0.97 : 1;
 
@@ -470,8 +476,11 @@ function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt 
   const bruit = bruitGaussien(6); // variabilité match à match
   const diffAjuste = diff + bruit;
 
-  // Possession "de force" : l'équipe la plus forte tend à avoir plus le ballon.
-  const possessionForceDom = 50 + diffAjuste * 0.58;
+  // Possession "de force" : l'équipe la plus forte tend à avoir plus le
+  // ballon. Coefficient relevé (0.58 -> 0.70) pour qu'un vrai mismatch (type
+  // PSG-Metz) se traduise par une possession très nettement déséquilibrée,
+  // pas un simple 58-42 qui gomme l'écart réel de niveau.
+  const possessionForceDom = 50 + diffAjuste * 0.70;
 
   // Possession "de style" : jusqu'ici le style tactique (Tiki-Taka, Longs
   // ballons devant, Contre-attaques directes...) ne pesait QUE sur le danger
@@ -487,7 +496,11 @@ function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt 
   // permettre aux vrais mismatchs (force ET style alignés) de sortir des
   // possessions très déséquilibrées, comme en vrai.
   const possessionBrute = possessionForceDom * 0.62 + possessionStyleDom * 0.38;
-  const possessionDom = clamp(possessionBrute, 14, 86);
+  // Bornes élargies (14-86 -> 8-92) : un très gros mismatch de force (grosse
+  // écurie à domicile contre lanterne rouge à l'extérieur) doit pouvoir
+  // produire une possession très largement à sens unique, cohérente avec
+  // l'écrasement statistique attendu dans ce cas.
+  const possessionDom = clamp(possessionBrute, 8, 92);
   const possessionExt = 100 - possessionDom;
 
   // Pression/occasions dépendent surtout de l'attaque adverse vs milieu/défense, ajustées par
@@ -507,8 +520,11 @@ function calculerDomination(forceDom, forceExt, mismatchDom = null, mismatchExt 
   const chocFormeDom = bruitGaussien(9);
   const chocFormeExt = bruitGaussien(9);
 
-  const dangerDom = clamp(50 + (forceDom.noteAttaque - forceExt.noteDefense) * 0.5 + ajustDom + chocFormeDom, 15, 92);
-  const dangerExt = clamp(50 + (forceExt.noteAttaque - forceDom.noteDefense) * 0.5 + ajustExt + chocFormeExt, 15, 92);
+  // Coefficient et bornes relevés (0.5 -> 0.62, 15-92 -> 8-96), en miroir de
+  // la possession ci-dessus : un gros écart d'attaque/défense doit se voir
+  // nettement dans le danger généré, pas être écrasé par le plafond.
+  const dangerDom = clamp(50 + (forceDom.noteAttaque - forceExt.noteDefense) * 0.62 + ajustDom + chocFormeDom, 8, 96);
+  const dangerExt = clamp(50 + (forceExt.noteAttaque - forceDom.noteDefense) * 0.62 + ajustExt + chocFormeExt, 8, 96);
 
   return {
     possession: { domicile: Math.round(possessionDom), exterieur: Math.round(possessionExt) },
@@ -594,14 +610,17 @@ function recalibrerStatsSelonScore(stats, scoreDom, scoreExt) {
 
   // Amplitude plafonnée et amortie (racine) : un 5-0 n'est pas 2.5x plus
   // "lopsided" qu'un 2-0 en termes de possession — la différence marginale
-  // se réduit avec l'écart de buts, comme dans la réalité.
-  const ampleurBase = clamp(Math.sqrt(marge) * 6, 0, 16);
+  // se réduit avec l'écart de buts, comme dans la réalité. Plafond relevé
+  // (16 -> 20) pour matcher les nouvelles bornes de possession de l'étape 2
+  // (8-92 au lieu de 14-86) : un match à sens unique (mismatch de force ET
+  // score qui va avec) doit pouvoir afficher une domination écrasante.
+  const ampleurBase = clamp(Math.sqrt(marge) * 7.5, 0, 20);
   // Facteur aléatoire : laisse ~20-30% des gros écarts se dérouler sans
   // correction extrême (le fameux "score flatteur" ou la victoire clinique).
   const facteurAlea = clamp(0.5 + Math.random() * 0.7, 0.5, 1.2);
   const skewPossession = ampleurBase * facteurAlea;
 
-  const nouvellePossGagnant = clamp(stats[gagnant].possession + skewPossession, 16, 84);
+  const nouvellePossGagnant = clamp(stats[gagnant].possession + skewPossession, 8, 92);
   stats[gagnant].possession = Math.round(nouvellePossGagnant);
   stats[perdant].possession = Math.round(100 - stats[gagnant].possession);
 
@@ -628,10 +647,20 @@ function recalibrerStatsSelonScore(stats, scoreDom, scoreExt) {
   // de tirs, jamais jusqu'à zéro (garde une trame de match plausible — même
   // une équipe qui prend 4 n'est pas restée sans se procurer une occasion).
   if (marge >= 3) {
-    const tassement = clamp(1 - (marge - 2) * 0.08, 0.6, 1);
+    // Tassement accentué (pente 0.08 -> 0.11, plancher 0.6 -> 0.48) : une
+    // équipe ULTRA dominée (gros mismatch de force qui débouche sur une
+    // déroute) doit voir son volume offensif vraiment fondre, pas juste
+    // légèrement s'éroder — jusqu'ici un 5-0 gardait encore l'essentiel de
+    // son volume de tirs, ce qui ne racontait pas la même histoire qu'un
+    // match à sens unique.
+    const tassement = clamp(1 - (marge - 2) * 0.11, 0.48, 1);
     stats[perdant].tirs = Math.max(1, Math.round(stats[perdant].tirs * tassement));
     stats[perdant].tirs_cadres = Math.min(stats[perdant].tirs_cadres, stats[perdant].tirs);
     stats[perdant].occasions_franches = Math.min(stats[perdant].occasions_franches, stats[perdant].tirs);
+    // Les passes/corners suivent la même débâcle : un perdant écrasé qui ne
+    // voit quasi plus le ballon touche aussi moins de corners que la
+    // moyenne générée à l'étape 3 (avant que le score ne soit connu).
+    stats[perdant].corners = Math.max(0, Math.round(stats[perdant].corners * tassement));
   }
 
   // Les passes réussies suivent la possession recalibrée (même logique que
@@ -765,11 +794,13 @@ function calculerButsEquipe(statsEquipe, forceAttaque, meilleurFinisseur, qualit
     }
 
     // Base différenciée : une occasion franche cadrée (0.27) se transforme
-    // nettement plus souvent qu'un tir cadré "disputé" (0.16). Plafond à
-    // 0.56 dans tous les cas — un taux de conversion réel dépasse très
-    // rarement 55% même pour le plus gros des mismatchs.
+    // nettement plus souvent qu'un tir cadré "disputé" (0.16). Coefficient
+    // d'écart relevé (0.5 -> 0.62) et plafond légèrement remonté (0.58 ->
+    // 0.63) : contre une défense très inférieure (gros mismatch), la
+    // qualité de finition doit peser plus lourd pour que le score final
+    // traduise vraiment la correction, pas seulement le volume de tirs.
     const base = estOccasionFranche ? 0.31 : 0.17;
-    const probaBut = clamp(base + (qualiteFinition - qualiteDefense) * 0.5, 0.05, 0.58) * facteurPression;
+    const probaBut = clamp(base + (qualiteFinition - qualiteDefense) * 0.62, 0.05, 0.63) * facteurPression;
     if (proba(probaBut)) {
       buts++;
     } else if (proba(0.55)) {
@@ -1091,20 +1122,31 @@ function attribuerPasseur(compositions, joueursParId, slotButeur, typeButeur = n
  * "encaisser" le point au tableau d'affichage malgré elle). En réalité, un
  * CSC vient quasi toujours d'un défenseur ou d'un latéral qui dévie
  * malencontreusement un centre/tir dans ses propres filets (dégagement raté,
- * déviation sous pression) — jamais un gardien (qui a sa propre logique
- * d'erreurs, gérée ailleurs) et très rarement un attaquant.
+ * déviation sous pression), très rarement un attaquant — et, désormais,
+ * exceptionnellement un gardien (relance ratée, sortie manquée, dégagement
+ * contré qui repart dans ses propres cages). Le gardien reste inclus avec un
+ * poids volontairement minuscule (cf. plus bas) : ça doit rester un événement
+ * rarissime, pas une source réaliste de CSC au même titre qu'un défenseur.
  */
 function attribuerAuteurCSC(compositionsAdverse, joueursParIdAdverse) {
   const candidatsDefense = compositionsAdverse.filter((c) => {
     const cat = profilRole(c.role).categorie;
     return cat === 'defenseur' || cat === 'milieu';
   });
+  const gardien = compositionsAdverse.filter((c) => profilRole(c.role).categorie === 'gardien');
   const pool = candidatsDefense.length
-    ? candidatsDefense
-    : compositionsAdverse.filter((c) => profilRole(c.role).categorie !== 'gardien');
+    ? [...candidatsDefense, ...gardien]
+    : [...compositionsAdverse.filter((c) => profilRole(c.role).categorie !== 'gardien'), ...gardien];
   if (!pool.length) return null;
 
   return tirerJoueurPondere(pool, joueursParIdAdverse, (profil, note) => {
+    if (profil.categorie === 'gardien') {
+      // Poids fixe, très faible (bévue rarissime) et volontairement
+      // indépendant de la note du jour : un gardien voit déjà ses erreurs se
+      // traduire via arrêts manqués/buts encaissés ailleurs dans le moteur,
+      // ce poids ne doit pas grimper significativement même un jour sans.
+      return 0.04;
+    }
     // Nettement plus fréquent chez un défenseur/latéral (plus exposé aux
     // dégagements et déviations dans sa propre surface) qu'un milieu.
     const facteurPoste = profil.categorie === 'defenseur' ? 1.4 : 1;
