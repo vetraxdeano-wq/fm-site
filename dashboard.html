@@ -5202,21 +5202,39 @@ async function showStaffDbSubtab(clubId) {
     return;
   }
 
+  // Garde anti-reentrance : si le sous-onglet est ouvert plusieurs fois
+  // pendant qu'un chargement est deja en cours (double clic, re-render), on
+  // n'en relance pas un second par-dessus — ca doublait le nombre de
+  // requetes concurrentes sur game_staff et faisait grimper le temps de
+  // chaque page jusqu'a plusieurs secondes, au point de faire timeout
+  // avancer_jour cote gameflow si l'utilisateur avancait un jour pendant
+  // ce temps.
+  if (sdbLoadingInFlight) {
+    return sdbLoadingInFlight;
+  }
+
   // Reprend la liste et les filtres d'un passage precedent (memorises en
   // IndexedDB), comme pour la BDD de joueurs, plutot que de tout re-
   // telecharger depuis Supabase a chaque retour sur l'onglet.
-  const restoredFromCache = await loadSdbStaffFromCache();
-  if (restoredFromCache) {
-    populateStaffDbFilterOptions();
-    restoreSdbFiltersFromCache();
-    updateSdbSortHeaderIndicators();
-    applyStaffDbFilters({ resetPage: false });
-    refreshSdbClubReputations(clubId).then(() => applyStaffDbFilters({ resetPage: false }));
-    if (!sdbLoadingComplete) {
-      loadRemainingStaffDb();
+  sdbLoadingInFlight = (async () => {
+    const restoredFromCache = await loadSdbStaffFromCache();
+    if (restoredFromCache) {
+      populateStaffDbFilterOptions();
+      restoreSdbFiltersFromCache();
+      updateSdbSortHeaderIndicators();
+      applyStaffDbFilters({ resetPage: false });
+      await refreshSdbClubReputations(clubId).then(() => applyStaffDbFilters({ resetPage: false }));
+      if (!sdbLoadingComplete) {
+        await loadRemainingStaffDb();
+      }
+    } else {
+      await loadStaffDb(clubId);
     }
-  } else {
-    await loadStaffDb(clubId);
+  })();
+  try {
+    await sdbLoadingInFlight;
+  } finally {
+    sdbLoadingInFlight = null;
   }
 }
 
@@ -5232,6 +5250,7 @@ let sdbLoadingComplete = false;
 let sdbAllStaff = [];
 let sdbFetcher = null;
 let sdbKnownStaffIds = new Set();
+let sdbLoadingInFlight = null;
 let sdbTotalStaff = 0;
 let sdbClubNameById = {};
 let sdbClubLogoById = {};
@@ -5341,7 +5360,7 @@ function wireSdbSortableHeaders() {
 // preparateurs...).
 const SDB_FETCH_PAGE_SIZE = 1000;
 const SDB_FETCH_RETRIES = 4;
-const SDB_FETCH_CONCURRENCY = 8;
+const SDB_FETCH_CONCURRENCY = 4;
 const SDB_FIRST_WAVE_SIZE = 1500;
 
 // --- Pagination sans OFFSET, par bornage d'id ---------------------------
@@ -6418,6 +6437,7 @@ let pdbLoaded = false;
 let pdbAllPlayers = [];
 let pdbFetcher = null;
 let pdbKnownPlayerIds = new Set();
+let pdbLoadingInFlight = null;
 let pdbClubNameById = {};
 let pdbClubLogoById = {};
 let pdbClubReputation = null;
@@ -6991,25 +7011,38 @@ async function showFmPlayersDbView(clubId) {
     return;
   }
 
+  // Garde anti-reentrance : voir showStaffDbSubtab pour la meme logique
+  // cote staff.
+  if (pdbLoadingInFlight) {
+    return pdbLoadingInFlight;
+  }
+
   // Reprend la liste et les filtres d'un passage precedent (memorises en
   // IndexedDB) plutot que de tout retelecharger depuis Supabase, ex: quand on
   // revient de la fiche d'un joueur.
-  const restoredFromCache = await loadPdbPlayersFromCache(clubId);
-  if (restoredFromCache) {
-    populatePlayersDbFilterOptions();
-    buildAdvancedFiltersModal();
-    restorePdbFiltersFromCache();
-    updatePdbSortHeaderIndicators();
-    applyPlayersDbFilters(clubId, { resetPage: false });
-    // Le cache restaure peut n'etre que partiel (ex: on a quitte la page en
-    // plein milieu du chargement en arriere-plan) : dans ce cas on reprend
-    // le telechargement du reste de la base la ou il s'etait arrete, plutot
-    // que de rester bloque avec une liste tronquee.
-    if (!pdbLoadingComplete) {
-      loadRemainingPlayersDb(clubId);
+  pdbLoadingInFlight = (async () => {
+    const restoredFromCache = await loadPdbPlayersFromCache(clubId);
+    if (restoredFromCache) {
+      populatePlayersDbFilterOptions();
+      buildAdvancedFiltersModal();
+      restorePdbFiltersFromCache();
+      updatePdbSortHeaderIndicators();
+      applyPlayersDbFilters(clubId, { resetPage: false });
+      // Le cache restaure peut n'etre que partiel (ex: on a quitte la page en
+      // plein milieu du chargement en arriere-plan) : dans ce cas on reprend
+      // le telechargement du reste de la base la ou il s'etait arrete, plutot
+      // que de rester bloque avec une liste tronquee.
+      if (!pdbLoadingComplete) {
+        await loadRemainingPlayersDb(clubId);
+      }
+    } else {
+      await loadPlayersDb(clubId);
     }
-  } else {
-    await loadPlayersDb(clubId);
+  })();
+  try {
+    await pdbLoadingInFlight;
+  } finally {
+    pdbLoadingInFlight = null;
   }
 }
 
@@ -7242,7 +7275,7 @@ const PDB_FIRST_WAVE_SIZE = 2000;
 // plus ralenti par l'attente du traitement de chaque lot (voir
 // fetchGamePlayersPages), donc on peut monter un peu par rapport aux 6
 // d'origine, sans pousser trop fort pour eviter des echecs reseau.
-const PDB_FETCH_CONCURRENCY = 8;
+const PDB_FETCH_CONCURRENCY = 4;
 
 async function loadPlayersDb(clubId) {
   const tbody = document.getElementById("pdbTableBody");
