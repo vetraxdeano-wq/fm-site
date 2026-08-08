@@ -1415,7 +1415,7 @@
   .fm-inbox-detail-meta .sender { color: var(--text); font-weight: 600; font-size: 13px; }
   .fm-inbox-detail-body { font-size: 13.5px; line-height: 1.7; white-space: pre-line; }
   .fm-inbox-match-btn {
-    margin-top: 16px; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--accent);
+    display: block; margin: 16px auto 0; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--accent);
     background: rgba(74,222,128,0.1); color: var(--accent); font-size: 13px; font-weight: 600;
     cursor: pointer; transition: background 0.15s;
   }
@@ -1428,7 +1428,18 @@
   .fm-msg-feature .fm-nf-team .mdet-club-logo, .fm-msg-feature .fm-nf-team .mdet-club-logo-fallback { width: 92px !important; height: 92px !important; }
   .fm-msg-score-teams { align-items: center; }
   .fm-msg-score-txt { font-size: 26px; font-weight: 800; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.6); letter-spacing: 0.02em; }
-  .fm-msg-scorers { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; max-width: 140px; line-height: 1.4; }
+  .fm-msg-scorers { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; color: var(--text-dim); margin-top: 4px; max-width: 140px; }
+  .fm-msg-scorer-chip { display: flex; align-items: center; gap: 5px; }
+  .fm-msg-scorer-chip.clickable { cursor: pointer; }
+  .fm-msg-scorer-chip.clickable:hover .fm-msg-scorer-name { color: var(--accent); text-decoration: underline; }
+  .fm-msg-mini-face {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    border-radius: 50%; background: var(--panel); border: 1px solid var(--accent);
+    font-weight: 700; color: var(--text); object-fit: cover; vertical-align: middle;
+  }
+  .fm-msg-motm.clickable { cursor: pointer; }
+  .fm-msg-motm.clickable:hover { color: var(--accent); text-decoration: underline; }
+  .fm-msg-motm .fm-msg-mini-face { margin: 0 5px 0 2px; }
   .fm-msg-stats-row { margin-bottom: 14px; }
   .fm-msg-stat-block {
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
@@ -1440,9 +1451,26 @@
   .fm-msg-compo-title { font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; text-align: center; }
   .fm-msg-compo-empty { font-size: 12.5px; color: var(--text-dim); font-style: italic; }
   .fm-msg-compo-note { font-size: 10.5px; color: var(--text-dim); text-align: center; margin-top: 10px; font-style: italic; }
+  /* Bloc "matchs precedents" (historique des confrontations directes),
+     affiche dans la carte avant-match au-dessus de la compo probable. */
+  .fm-msg-confront-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .fm-msg-confront-heading { font-size: 11.5px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px; }
+  .fm-msg-confront-empty { font-size: 12.5px; color: var(--text-dim); font-style: italic; }
+  .fm-msg-confront-list { display: flex; flex-direction: column; gap: 7px; }
+  .fm-msg-confront-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .fm-msg-confront-date { flex-shrink: 0; min-width: 58px; color: var(--text-dim); font-size: 10.5px; }
+  .fm-msg-confront-score { flex: 1; text-align: center; color: var(--text); font-weight: 600; }
+  .fm-msg-confront-tag {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 10px; font-weight: 800;
+  }
+  .fm-msg-confront-tag.victoire { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .fm-msg-confront-tag.defaite { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .fm-msg-confront-tag.nul { background: rgba(255,255,255,0.08); color: var(--text-dim); }
   /* Terrain dedie a la composition probable (avant-match) : classes propres
-     (pas de reutilisation de .tac-pitch/.tac-slot) pour ne jamais heriter du
-     rendu photo de joueur de l'onglet Tactique — toujours des initiales. */
+     (pas de reutilisation de .tac-pitch/.tac-slot). Affiche la photo du
+     joueur quand elle est disponible (comme l'onglet Tactique), sinon
+     retombe sur les 3 premieres lettres du nom. */
   .fm-msg-pitch {
     position: relative; width: 100%; max-width: 380px; aspect-ratio: 68 / 100; margin: 0 auto;
     background:
@@ -1462,11 +1490,14 @@
     position: absolute; transform: translate(-50%, -50%); width: 78px; text-align: center;
     display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default;
   }
+  .fm-msg-slot.clickable { cursor: pointer; }
+  .fm-msg-slot.clickable:hover .fm-msg-slot-dot { border-color: var(--gold); }
   .fm-msg-slot-dot {
     width: 38px; height: 38px; border-radius: 50%; background: var(--panel);
     border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; color: var(--text); flex-shrink: 0;
+    font-size: 12px; font-weight: 700; color: var(--text); flex-shrink: 0; overflow: hidden;
   }
+  .fm-msg-slot-dot img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
   .fm-msg-slot.empty .fm-msg-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
   .fm-msg-slot-name {
     font-size: 10.5px; font-weight: 600; background: rgba(0,0,0,0.6); border-radius: 4px;
@@ -8915,19 +8946,60 @@ async function renderFmInboxDetail() {
   });
 }
 
+// Recupere, pour un lot de joueurs (game_players.id), leur photo et leur
+// club actuel — reutilise pour la compo probable (avant-match) ainsi que
+// les buteurs / l'homme du match (apres-match), afin d'afficher leur visage
+// et de pouvoir ouvrir leur fiche au clic (meme jointure que tacSlotDotHtml
+// sur l'onglet Tactique : game_players.player_ref -> players.photo_url).
+async function mdetFetchPlayerMeta(playerIds) {
+  const ids = [...new Set((playerIds || []).filter(id => id != null))];
+  if (!ids.length) return {};
+  const { data, error } = await supabaseClient
+    .from("game_players")
+    .select("id, game_club_id, players(photo_url)")
+    .in("id", ids);
+  if (error) { console.error(error); return {}; }
+  const map = {};
+  (data || []).forEach(p => {
+    map[p.id] = { photoUrl: p.players?.photo_url || null, clubId: p.game_club_id };
+  });
+  return map;
+}
+
+// Petit avatar rond en ligne (buteurs / homme du match) : photo si connue,
+// sinon initiales de repli — mêmes gabarits que mdetGoToPlayer pour le clic.
+function mdetMiniFaceHtml(nom, photoUrl, size) {
+  const initiales = escapeHtml((nom || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase());
+  const px = size || 18;
+  const styleBase = `width:${px}px;height:${px}px;font-size:${Math.round(px * 0.42)}px;`;
+  if (!photoUrl) {
+    return `<span class="fm-msg-mini-face" style="${styleBase}">${initiales}</span>`;
+  }
+  return `<img class="fm-msg-mini-face" style="${styleBase}" src="${escapeHtml(photoUrl)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;fm-msg-mini-face&quot; style=&quot;${styleBase}&quot;>${initiales}</span>'">`;
+}
+
 // Mini-terrain de la composition adverse probable (avant-match), calque sur
 // le rendu de l'onglet Tactique (.tac-pitch / .tac-slot), en lecture seule.
-function renderCompoPitchHtml(compo) {
+// `meta` (game_players.id -> {photoUrl, clubId}) permet d'afficher la photo
+// du joueur et d'ouvrir sa fiche au clic.
+function renderCompoPitchHtml(compo, meta) {
   if (!compo || !compo.slots || !compo.slots.length) {
     return `<div class="fm-msg-compo-empty">Composition adverse inconnue (aucune tactique enregistrée pour ce club).</div>`;
   }
   const slots = compo.slots.map(s => {
     const nomCourt = (s.player_nom || "?").trim().split(/\s+/).pop();
     const initiales = nomCourt.slice(0, 3).toUpperCase();
+    const m = s.player_id ? (meta || {})[s.player_id] : null;
+    const dotHtml = m && m.photoUrl
+      ? `<img src="${escapeHtml(m.photoUrl)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent:'${escapeHtml(initiales)}'}))">`
+      : escapeHtml(initiales);
+    const clickAttr = s.player_id
+      ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String((m && m.clubId) || "")).replace(/'/g, "&#39;")}','${escapeHtml(String(s.player_id))}')"`
+      : "";
     return `
-    <div class="fm-msg-slot${!s.player_nom ? " empty" : ""}" style="left:${s.x}%; top:${s.y}%;"
-         title="${escapeHtml(s.player_nom || "Indisponible")} — ${escapeHtml(s.label)}${s.remplace ? ` (remplace ${escapeHtml(s.sortant_nom || "")})` : ""}">
-      <div class="fm-msg-slot-dot">${escapeHtml(initiales)}</div>
+    <div class="fm-msg-slot${!s.player_nom ? " empty" : ""}${s.player_id ? " clickable" : ""}" style="left:${s.x}%; top:${s.y}%;"
+         title="${escapeHtml(s.player_nom || "Indisponible")} — ${escapeHtml(s.label)}${s.remplace ? ` (remplace ${escapeHtml(s.sortant_nom || "")})` : ""}"${clickAttr}>
+      <div class="fm-msg-slot-dot">${dotHtml}</div>
       <div class="fm-msg-slot-name">${s.player_nom ? escapeHtml(nomCourt) : s.label}${s.remplace ? " *" : ""}</div>
     </div>
   `;
@@ -8939,8 +9011,55 @@ function renderCompoPitchHtml(compo) {
   `;
 }
 
+// Historique des confrontations directes (avant-match) : `confrontations`
+// vient deja de render_data (5 derniers matchs joues entre les 2 clubs),
+// il ne restait qu'à l'afficher. dom_id/ext_id du render servent à retrouver
+// le nom du club domicile/exterieur de chaque match passé (seuls les 2
+// mêmes clubs sont possibles).
+function renderConfrontationsHtml(r) {
+  const list = r.confrontations || [];
+  if (!list.length) {
+    return `
+      <div class="fm-msg-confront-wrap">
+        <div class="fm-msg-confront-heading">Matchs précédents</div>
+        <div class="fm-msg-confront-empty">Aucune confrontation directe pour le moment.</div>
+      </div>
+    `;
+  }
+  const myId = String(myGameClubId);
+  const rows = list.map(c => {
+    const d = c.date_match ? new Date(c.date_match) : null;
+    const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "";
+    const domNom = String(c.club_domicile_id) === String(r.dom_id) ? r.dom_nom : r.ext_nom;
+    const extNom = String(c.club_exterieur_id) === String(r.ext_id) ? r.ext_nom : r.dom_nom;
+    let issue = "nul", tag = "N";
+    if (c.score_domicile != null && c.score_exterieur != null) {
+      const isMyHome = String(c.club_domicile_id) === myId;
+      const myScore = isMyHome ? c.score_domicile : c.score_exterieur;
+      const advScore = isMyHome ? c.score_exterieur : c.score_domicile;
+      if (myScore > advScore) { issue = "victoire"; tag = "V"; }
+      else if (myScore < advScore) { issue = "defaite"; tag = "D"; }
+    }
+    return `
+      <div class="fm-msg-confront-row">
+        <span class="fm-msg-confront-date">${escapeHtml(dateLabel)}</span>
+        <span class="fm-msg-confront-score">${escapeHtml(domNom)} ${c.score_domicile ?? "-"} - ${c.score_exterieur ?? "-"} ${escapeHtml(extNom)}</span>
+        <span class="fm-msg-confront-tag ${issue}">${tag}</span>
+      </div>
+    `;
+  }).join("");
+  return `
+    <div class="fm-msg-confront-wrap">
+      <div class="fm-msg-confront-heading">Matchs précédents</div>
+      <div class="fm-msg-confront-list">${rows}</div>
+    </div>
+  `;
+}
+
 async function renderAvantMatchCard(r) {
   const logos = await mdetFetchClubLogos([r.dom_id, r.ext_id]);
+  const compoIds = (r.compo?.slots || []).map(s => s.player_id).filter(Boolean);
+  const meta = await mdetFetchPlayerMeta(compoIds);
   const d = r.date_match ? new Date(r.date_match) : null;
   const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
   const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "long" }) : "";
@@ -8978,19 +9097,41 @@ async function renderAvantMatchCard(r) {
         ${r.meilleur_buteur ? `<div class="fm-msg-stat-line">Meilleur buteur : ${escapeHtml(r.meilleur_buteur.nom)} (${r.meilleur_buteur.buts} but${r.meilleur_buteur.buts > 1 ? "s" : ""})</div>` : ""}
       </div>
     </div>
+    ${renderConfrontationsHtml(r)}
     <div class="fm-msg-compo-wrap">
       <div class="fm-msg-compo-heading">Composition probable adverse</div>
-      ${renderCompoPitchHtml(r.compo)}
+      ${renderCompoPitchHtml(r.compo, meta)}
     </div>
   `;
 }
 
 async function renderApresMatchCard(r) {
   const logos = await mdetFetchClubLogos([r.dom_id, r.ext_id]);
+  const playerIds = [
+    ...(r.buteurs || []).map(b => b.id),
+    r.homme_du_match ? r.homme_du_match.id : null,
+  ].filter(Boolean);
+  const meta = await mdetFetchPlayerMeta(playerIds);
+
   const scorersFor = (clubId) => (r.buteurs || [])
     .filter(b => String(b.game_club_id) === String(clubId))
-    .map(b => `${escapeHtml(b.nom)}${b.minute ? ` ${b.minute}'` : ""}`)
-    .join(", ");
+    .map(b => {
+      const m = b.id ? meta[b.id] : null;
+      const clickAttr = b.id
+        ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String((m && m.clubId) || clubId)).replace(/'/g, "&#39;")}','${escapeHtml(String(b.id))}')"`
+        : "";
+      return `
+        <span class="fm-msg-scorer-chip${b.id ? " clickable" : ""}"${clickAttr}>
+          ${mdetMiniFaceHtml(b.nom, m && m.photoUrl, 16)}
+          <span class="fm-msg-scorer-name">${escapeHtml(b.nom)}${b.minute ? ` ${b.minute}'` : ""}</span>
+        </span>
+      `;
+    }).join("");
+
+  const motmMeta = r.homme_du_match && r.homme_du_match.id ? meta[r.homme_du_match.id] : null;
+  const motmClickAttr = r.homme_du_match && r.homme_du_match.id
+    ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String((motmMeta && motmMeta.clubId) || "")).replace(/'/g, "&#39;")}','${escapeHtml(String(r.homme_du_match.id))}')"`
+    : "";
 
   return `
     <div class="fm-nf-feature fm-msg-feature">
@@ -9012,7 +9153,7 @@ async function renderApresMatchCard(r) {
           ${scorersFor(r.ext_id) ? `<div class="fm-msg-scorers">${scorersFor(r.ext_id)}</div>` : ""}
         </div>
       </div>
-      ${r.homme_du_match ? `<div class="fm-nf-footer">⭐ Homme du match : ${escapeHtml(r.homme_du_match.nom)} (${Number(r.homme_du_match.note).toFixed(1)})</div>` : ""}
+      ${r.homme_du_match ? `<div class="fm-nf-footer fm-msg-motm${r.homme_du_match.id ? " clickable" : ""}"${motmClickAttr}>⭐ Homme du match : ${mdetMiniFaceHtml(r.homme_du_match.nom, motmMeta && motmMeta.photoUrl, 20)}${escapeHtml(r.homme_du_match.nom)} (${Number(r.homme_du_match.note).toFixed(1)})</div>` : ""}
       ${!r.has_stats ? `<div class="fm-nf-footer">Statistiques détaillées non disponibles pour ce match.</div>` : ""}
     </div>
   `;
