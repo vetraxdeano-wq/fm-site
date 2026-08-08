@@ -814,11 +814,11 @@
      pour rester alignes avec les points quel que soit le zoom. */
   .fm-chart-gridline { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .fm-chart-axis-line { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
-  .fm-chart-axis-label { fill: var(--text-dim); font-family: inherit; }
-  .fm-chart-axis-label.y { font-size: 7px; text-anchor: end; dominant-baseline: middle; }
-  .fm-chart-axis-label.x { font-size: 7px; text-anchor: middle; dominant-baseline: hanging; }
+  .fm-chart-axis-label { fill: var(--text-dim); font-family: inherit; opacity: 0.75; }
+  .fm-chart-axis-label.y { font-size: 6px; text-anchor: end; dominant-baseline: middle; }
+  .fm-chart-axis-label.x { font-size: 6px; text-anchor: middle; dominant-baseline: hanging; }
   .fin-chart-big .fm-chart-axis-label.y,
-  .fin-chart-big .fm-chart-axis-label.x { font-size: 9px; }
+  .fin-chart-big .fm-chart-axis-label.x { font-size: 7.5px; }
   .fm-chart-placeholder-caption {
     text-align: center; font-size: 10px; color: var(--text-dim); margin-top: 4px;
   }
@@ -8916,6 +8916,36 @@ function formatMoneyAxis(n) {
   return sign + Math.round(abs) + "€";
 }
 
+// Regroupe l'historique (un point par mouvement financier) en un point par
+// mois calendaire, pour que le graphique reste lisible meme quand un mois
+// contient de nombreux mouvements. Le point retenu par mois est le solde
+// de fin de mois (dernier mouvement chronologique du mois) ; le delta
+// affiche au survol est la somme des mouvements du mois.
+function aggregateFinanceHistoryByMonth(history) {
+  if (!history || history.length === 0) return history;
+  const groups = [];
+  let currentKey = null;
+  for (const pt of history) {
+    const d = computeRealDate(currentGame?.date_debut, pt.jour);
+    const key = d ? `${d.getFullYear()}-${d.getMonth()}` : `j${pt.jour}`;
+    if (key !== currentKey) {
+      groups.push([]);
+      currentKey = key;
+    }
+    groups[groups.length - 1].push(pt);
+  }
+  return groups.map(g => {
+    const last = g[g.length - 1];
+    const deltaSum = g.reduce((a, p) => a + p.delta, 0);
+    return {
+      jour: last.jour,
+      value: last.value,
+      delta: deltaSum,
+      motif: g.length === 1 ? last.motif : `${g.length} mouvements`,
+    };
+  });
+}
+
 // Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal, a partir
 // d'une date reelle calculee via computeRealDate (date_debut + jour).
 function formatChartMonth(date) {
@@ -9027,7 +9057,7 @@ function buildFinancePlaceholderHistory(budget) {
 
 async function renderFinances(club) {
   const el = document.getElementById("fmFinances");
-  const history = await fetchFinanceHistory(club);
+  const history = aggregateFinanceHistoryByMonth(await fetchFinanceHistory(club));
   const hasHistory = history.length > 1;
   el.innerHTML = `
     <div class="fm-stat-row">
@@ -9091,6 +9121,30 @@ function renderSalaryMassCard(mass) {
 // le budget_actuel courant, qui varie lui chaque mois (droits TV, guichet...).
 // Pour les autres clubs, tout est auto-reparti par le SQL (ratio_repartition_manuel = null).
 
+// Facteur de cout de la marge salariale : la masse salariale est une
+// depense recurrente (elle se repete chaque saison) alors que le budget
+// transfert est une depense nette ponctuelle. Debloquer 1 de marge
+// salariale doit donc couter FIN_REPART_COUT_SALARIAL fois plus cher que
+// 1 de budget transfert : a ratio egal, le budget transfert perd
+// FIN_REPART_COUT_SALARIAL fois plus vite qu'il n'alimente la marge.
+const FIN_REPART_COUT_SALARIAL = 3;
+
+// Plafond de realisme : un club ne peut pas developper du jour au
+// lendemain une marge salariale demesuree par rapport a sa masse actuelle.
+// La marge max atteignable via le curseur est donc bornee a ce pourcentage
+// de la masse salariale de reference, meme si l'enveloppe allouable
+// permettrait davantage.
+const FIN_REPART_MARGE_MAX_PCT = 0.40;
+
+// Marge salariale maximale atteignable pour ce club : le plus petit entre
+// ce que permet l'enveloppe allouable (compte tenu du cout x3) et le
+// plafond de realisme (% de la masse de reference).
+function repartitionMargeMax(club) {
+  const allouable = Number(club.budget_allouable_saison) || 0;
+  const masseRef = Number(club.masse_salariale_reference) || 0;
+  return Math.min(allouable / FIN_REPART_COUT_SALARIAL, masseRef * FIN_REPART_MARGE_MAX_PCT);
+}
+
 // Reproduit cote client le meme calcul que set_ratio_repartition_budget,
 // pour un retour visuel instantane pendant qu'on deplace le curseur (avant
 // la confirmation serveur au relachement).
@@ -9101,17 +9155,21 @@ function computeRepartitionLocal(club, ratio) {
     return { salarial: masseRef, transfert: 0 };
   }
   const r = Math.min(Math.max(ratio, 0), 1);
-  const marge = Math.round(allouable * r);
-  return { salarial: masseRef + marge, transfert: allouable - marge };
+  const margeMax = repartitionMargeMax(club);
+  // La marge salariale ne croit qu'a 1/COUT de la vitesse a laquelle le
+  // budget transfert est entame, et jamais au-dela du plafond de realisme.
+  const marge = Math.round(margeMax * r);
+  const transfert = allouable - Math.round(marge * FIN_REPART_COUT_SALARIAL);
+  return { salarial: masseRef + marge, transfert: Math.max(transfert, 0) };
 }
 
 // Ratio actuellement applique, deduit des montants stockes (fonctionne que
 // ratio_repartition_manuel soit null - auto - ou fixe par l'utilisateur).
 function currentRepartitionRatio(club) {
-  const allouable = Number(club.budget_allouable_saison) || 0;
-  if (allouable <= 0) return 0;
+  const margeMax = repartitionMargeMax(club);
+  if (margeMax <= 0) return 0;
   const marge = (Number(club.budget_salarial_actuel) || 0) - (Number(club.masse_salariale_reference) || 0);
-  return Math.min(Math.max(marge / allouable, 0), 1);
+  return Math.min(Math.max(marge / margeMax, 0), 1);
 }
 
 function renderRepartitionCard(club, isOwnClub) {
@@ -9171,7 +9229,7 @@ function renderRepartitionCard(club, isOwnClub) {
         <input type="range" min="0" max="100" step="1" value="${Math.round(ratio * 100)}"
           class="fin-repart-slider" id="finRepartSlider" />
       </div>
-      <div class="fin-repart-hint">Redistribue l'enveloppe de la saison entre salaires et transferts, sans toucher à la trésorerie disponible. Ajustable à tout moment.</div>
+      <div class="fin-repart-hint">Redistribue l'enveloppe de la saison entre salaires et transferts, sans toucher à la trésorerie disponible. Développer la marge salariale coûte ${FIN_REPART_COUT_SALARIAL}x son montant en budget transfert (dépense récurrente vs dépense nette). Ajustable à tout moment.</div>
     </div>
   `;
 }
@@ -9283,6 +9341,8 @@ async function openFinancesModal(club) {
   const hasHistory = history.length > 1;
   finCurrentMovements = hasHistory ? history : [];
   finActiveSubtab = "revenus";
+  const chartHistory = aggregateFinanceHistoryByMonth(history);
+  const chartHasHistory = chartHistory.length > 1;
 
   modal.innerHTML = `
     <div class="fin-header">
@@ -9297,7 +9357,7 @@ async function openFinancesModal(club) {
       <span class="fin-budget-label">Budget disponible</span>
       <span class="fin-budget-value">${formatMoney(club.budget_actuel)}</span>
     </div>
-    ${renderFinanceChart(hasHistory ? history : buildFinancePlaceholderHistory(club.budget_actuel), !hasHistory, { w: 760, h: 220, extraClass: "fin-chart-big" })}
+    ${renderFinanceChart(chartHasHistory ? chartHistory : buildFinancePlaceholderHistory(club.budget_actuel), !chartHasHistory, { w: 760, h: 220, extraClass: "fin-chart-big" })}
 
     <div class="fin-section-title">Masse salariale (joueurs + staff)</div>
     ${renderSalaryMassCard(mass)}
