@@ -815,10 +815,10 @@
   .fm-chart-gridline { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .fm-chart-axis-line { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .fm-chart-axis-label { fill: var(--text-dim); font-family: inherit; }
-  .fm-chart-axis-label.y { font-size: 9px; text-anchor: end; dominant-baseline: middle; }
-  .fm-chart-axis-label.x { font-size: 9px; text-anchor: middle; dominant-baseline: hanging; }
+  .fm-chart-axis-label.y { font-size: 7px; text-anchor: end; dominant-baseline: middle; }
+  .fm-chart-axis-label.x { font-size: 7px; text-anchor: middle; dominant-baseline: hanging; }
   .fin-chart-big .fm-chart-axis-label.y,
-  .fin-chart-big .fm-chart-axis-label.x { font-size: 11px; }
+  .fin-chart-big .fm-chart-axis-label.x { font-size: 9px; }
   .fm-chart-placeholder-caption {
     text-align: center; font-size: 10px; color: var(--text-dim); margin-top: 4px;
   }
@@ -8881,7 +8881,7 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
 
   // Marges internes du SVG pour laisser la place aux axes : a gauche pour
   // les libelles de valeurs (€), en bas pour les libelles de mois.
-  const padL = compact ? 38 : 58;
+  const padL = compact ? 30 : 46;
   const padR = compact ? 6 : 12;
   const padTop = 8;
   const padBottom = compact ? 16 : 22;
