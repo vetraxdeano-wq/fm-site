@@ -1414,6 +1414,12 @@
   .fm-inbox-detail-meta .fm-inbox-icon { width: 34px; height: 34px; font-size: 15px; }
   .fm-inbox-detail-meta .sender { color: var(--text); font-weight: 600; font-size: 13px; }
   .fm-inbox-detail-body { font-size: 13.5px; line-height: 1.7; white-space: pre-line; }
+  .fm-inbox-match-btn {
+    margin-top: 16px; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--accent);
+    background: rgba(74,222,128,0.1); color: var(--accent); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .fm-inbox-match-btn:hover { background: rgba(74,222,128,0.2); }
 
   /* ---- Compétitions (sous-onglet) : calendrier horizontal en haut (pleine
      largeur, plus d'espace), compétitions du club en dessous ---- */
@@ -8684,7 +8690,7 @@ async function loadInboxMessages() {
 
   const { data, error } = await supabaseClient
     .from("game_messages")
-    .select("id, game_club_id, jour, type, icon, sender, subject, body, is_read, created_at")
+    .select("id, game_club_id, jour, type, icon, sender, subject, body, is_read, created_at, related_match_id")
     .eq("game_id", gameId)
     .or(`game_club_id.eq.${myGameClubId},game_club_id.is.null`)
     .order("created_at", { ascending: false });
@@ -8705,6 +8711,7 @@ async function loadInboxMessages() {
     preview: (m.body || "").split("\n").find(line => line.trim().length > 0) || "",
     body: m.body,
     unread: !m.is_read,
+    relatedMatchId: m.related_match_id || null,
   }));
 }
 
@@ -8787,7 +8794,13 @@ function renderFmInboxDetail() {
       </span>
     </div>
     <div class="fm-inbox-detail-body">${escapeHtml(msg.body)}</div>
+    ${msg.relatedMatchId ? `<button class="fm-inbox-match-btn" type="button" id="fmInboxMatchBtn">Voir le détail du match</button>` : ""}
   `;
+
+  const matchBtn = document.getElementById("fmInboxMatchBtn");
+  if (matchBtn) {
+    matchBtn.addEventListener("click", () => openMatchDetails(msg.relatedMatchId));
+  }
 }
 
 async function selectFmInboxMessage(msgId) {
