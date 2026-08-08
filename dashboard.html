@@ -1431,7 +1431,7 @@
      scroller pour voir toute la carte. Repasse en 1 colonne sur mobile. */
   .fm-msg-avant-body { display: flex; gap: 16px; align-items: flex-start; }
   .fm-msg-avant-left { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-  .fm-msg-avant-right { flex: 0 0 300px; }
+  .fm-msg-avant-right { flex: 0 0 340px; }
   @media (max-width: 900px) {
     .fm-msg-avant-body { flex-direction: column; }
     .fm-msg-avant-right { flex: 0 0 auto; width: 100%; }
@@ -1480,12 +1480,23 @@
   .fm-msg-confront-tag.victoire { background: rgba(74,222,128,0.15); color: var(--accent); }
   .fm-msg-confront-tag.defaite { background: rgba(239,68,68,0.15); color: var(--danger); }
   .fm-msg-confront-tag.nul { background: rgba(255,255,255,0.08); color: var(--text-dim); }
+  /* Forme generale (5 derniers matchs, toutes competitions), affichee sous
+     le nom/classement de chaque equipe dans l'en-tete avant-match — distinct
+     des confrontations directes (qui restent dans le bloc de gauche). */
+  .fm-msg-form-row { display: flex; gap: 4px; justify-content: center; margin-top: 6px; }
+  .fm-msg-form-badge {
+    width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 9.5px; font-weight: 800; cursor: default;
+  }
+  .fm-msg-form-badge.victoire { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .fm-msg-form-badge.defaite { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .fm-msg-form-badge.nul { background: rgba(255,255,255,0.08); color: var(--text-dim); }
   /* Terrain dedie a la composition probable (avant-match) : classes propres
      (pas de reutilisation de .tac-pitch/.tac-slot). Affiche la photo du
      joueur quand elle est disponible (comme l'onglet Tactique), sinon
      retombe sur les 3 premieres lettres du nom. */
   .fm-msg-pitch {
-    position: relative; width: 100%; max-width: 300px; aspect-ratio: 68 / 100; margin: 0 auto;
+    position: relative; width: 100%; max-width: 340px; aspect-ratio: 68 / 100; margin: 0 auto;
     background:
       linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px) 0 0/100% 12.5%,
       repeating-linear-gradient(180deg, #1c3d24 0, #1c3d24 10%, #193a21 10%, #193a21 20%);
@@ -1500,21 +1511,21 @@
     border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; transform: translate(-50%,-50%);
   }
   .fm-msg-slot {
-    position: absolute; transform: translate(-50%, -50%); width: 68px; text-align: center;
+    position: absolute; transform: translate(-50%, -50%); width: 76px; text-align: center;
     display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default;
   }
   .fm-msg-slot.clickable { cursor: pointer; }
   .fm-msg-slot.clickable:hover .fm-msg-slot-dot { border-color: var(--gold); }
   .fm-msg-slot-dot {
-    width: 34px; height: 34px; border-radius: 50%; background: var(--panel);
+    width: 38px; height: 38px; border-radius: 50%; background: var(--panel);
     border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; color: var(--text); flex-shrink: 0; overflow: hidden;
+    font-size: 12px; font-weight: 700; color: var(--text); flex-shrink: 0; overflow: hidden;
   }
   .fm-msg-slot-dot img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
   .fm-msg-slot.empty .fm-msg-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
   .fm-msg-slot-name {
-    font-size: 10px; font-weight: 600; background: rgba(0,0,0,0.6); border-radius: 4px;
-    padding: 1px 5px; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 10.5px; font-weight: 600; background: rgba(0,0,0,0.6); border-radius: 4px;
+    padding: 1px 5px; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   @media (max-width: 900px) {
     .fm-msg-pitch { max-width: 320px; }
@@ -9045,6 +9056,31 @@ function renderCompoPitchHtml(compo, getSlotMeta) {
   `;
 }
 
+// Forme generale d'un club (5 derniers matchs, toutes competitions
+// confondues, n'importe quel adversaire) — distincte des confrontations
+// directes. `recentList` vient de render_data.mon_recent / .adv_recent
+// (le plus recent en premier) ; on l'affiche du plus ancien (gauche) au
+// plus recent (droite), motif habituel d'un guide de forme.
+function fmFormBadgesHtml(recentList, clubId) {
+  const list = (recentList || []).slice().reverse();
+  if (!list.length) return "";
+  const badges = list.map(m => {
+    const isHome = String(m.club_domicile_id) === String(clubId);
+    const myScore = isHome ? m.score_domicile : m.score_exterieur;
+    const advScore = isHome ? m.score_exterieur : m.score_domicile;
+    let tag = "N", cls = "nul";
+    if (myScore != null && advScore != null) {
+      if (myScore > advScore) { tag = "V"; cls = "victoire"; }
+      else if (myScore < advScore) { tag = "D"; cls = "defaite"; }
+    }
+    const advNom = isHome ? m.ext_nom : m.dom_nom;
+    const scoreLabel = `${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}`;
+    const titre = `${isHome ? "Domicile" : "Extérieur"} · ${scoreLabel} vs ${advNom || "?"}`;
+    return `<span class="fm-msg-form-badge ${cls}" title="${escapeHtml(titre)}">${tag}</span>`;
+  }).join("");
+  return `<div class="fm-msg-form-row">${badges}</div>`;
+}
+
 // Historique des confrontations directes (avant-match) : `confrontations`
 // vient deja de render_data (5 derniers matchs joues entre les 2 clubs),
 // il ne restait qu'à l'afficher. dom_id/ext_id du render servent à retrouver
@@ -9137,6 +9173,11 @@ async function renderAvantMatchCard(r) {
   const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
   const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "long" }) : "";
   const isHome = String(r.dom_id) === String(myGameClubId);
+  // Forme generale (5 derniers matchs, toutes competitions) de chaque cote —
+  // r.mon_recent/r.adv_recent visent respectivement mon club et l'adversaire,
+  // qu'on reassocie a dom/ext selon qui joue a domicile.
+  const domRecent = String(r.dom_id) === String(r.mon_id) ? r.mon_recent : r.adv_recent;
+  const extRecent = String(r.ext_id) === String(r.mon_id) ? r.mon_recent : r.adv_recent;
 
   return `
     <div class="fm-nf-feature fm-msg-feature">
@@ -9149,6 +9190,7 @@ async function renderAvantMatchCard(r) {
           ${mdetLogoHtml(logos[r.dom_id], r.dom_nom, 92)}
           <div class="fm-nf-team-name">${escapeHtml(r.dom_nom)}</div>
           <div class="fm-nf-team-rank">${fmRankLabel(r.dom_classement)}</div>
+          ${fmFormBadgesHtml(domRecent, r.dom_id)}
         </div>
         <div class="fm-nf-vs">
           <span class="fm-nf-vs-txt">VS</span>
@@ -9158,6 +9200,7 @@ async function renderAvantMatchCard(r) {
           ${mdetLogoHtml(logos[r.ext_id], r.ext_nom, 92)}
           <div class="fm-nf-team-name">${escapeHtml(r.ext_nom)}</div>
           <div class="fm-nf-team-rank">${fmRankLabel(r.ext_classement)}</div>
+          ${fmFormBadgesHtml(extRecent, r.ext_id)}
         </div>
       </div>
     </div>
