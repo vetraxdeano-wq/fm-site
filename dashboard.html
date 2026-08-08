@@ -8921,8 +8921,19 @@ function formatMoneyAxis(n) {
 // contient de nombreux mouvements. Le point retenu par mois est le solde
 // de fin de mois (dernier mouvement chronologique du mois) ; le delta
 // affiche au survol est la somme des mouvements du mois.
+// Un point "Solde initial" (avant le tout premier mouvement) est toujours
+// ajoute en tete : sans lui, tant que tous les mouvements de la partie
+// tombent dans le meme mois (typiquement en debut de partie), l'agregation
+// ne produirait qu'un seul point et le graphique basculerait a tort sur le
+// mode "en attente de donnees" alors que de vrais mouvements existent.
 function aggregateFinanceHistoryByMonth(history) {
   if (!history || history.length === 0) return history;
+  const opening = {
+    jour: history[0].jour,
+    value: history[0].value - history[0].delta,
+    delta: 0,
+    motif: "Solde initial",
+  };
   const groups = [];
   let currentKey = null;
   for (const pt of history) {
@@ -8934,7 +8945,7 @@ function aggregateFinanceHistoryByMonth(history) {
     }
     groups[groups.length - 1].push(pt);
   }
-  return groups.map(g => {
+  const monthlyPoints = groups.map(g => {
     const last = g[g.length - 1];
     const deltaSum = g.reduce((a, p) => a + p.delta, 0);
     return {
@@ -8944,6 +8955,7 @@ function aggregateFinanceHistoryByMonth(history) {
       motif: g.length === 1 ? last.motif : `${g.length} mouvements`,
     };
   });
+  return [opening, ...monthlyPoints];
 }
 
 // Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal, a partir
