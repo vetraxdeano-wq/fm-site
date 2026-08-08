@@ -8920,20 +8920,13 @@ function formatMoneyAxis(n) {
 // mois calendaire, pour que le graphique reste lisible meme quand un mois
 // contient de nombreux mouvements. Le point retenu par mois est le solde
 // de fin de mois (dernier mouvement chronologique du mois) ; le delta
-// affiche au survol est la somme des mouvements du mois.
-// Un point "Solde initial" (avant le tout premier mouvement) est toujours
-// ajoute en tete : sans lui, tant que tous les mouvements de la partie
-// tombent dans le meme mois (typiquement en debut de partie), l'agregation
-// ne produirait qu'un seul point et le graphique basculerait a tort sur le
-// mode "en attente de donnees" alors que de vrais mouvements existent.
+// affiche au survol est la somme des mouvements du mois. Peut renvoyer un
+// seul point si tous les mouvements de la partie tombent dans le meme mois
+// (typiquement en debut de partie) : le graphique gere nativement ce cas
+// (voir renderFinanceChart) en centrant un point unique plutot que de
+// tracer une ligne.
 function aggregateFinanceHistoryByMonth(history) {
   if (!history || history.length === 0) return history;
-  const opening = {
-    jour: history[0].jour,
-    value: history[0].value - history[0].delta,
-    delta: 0,
-    motif: "Solde initial",
-  };
   const groups = [];
   let currentKey = null;
   for (const pt of history) {
@@ -8945,7 +8938,7 @@ function aggregateFinanceHistoryByMonth(history) {
     }
     groups[groups.length - 1].push(pt);
   }
-  const monthlyPoints = groups.map(g => {
+  return groups.map(g => {
     const last = g[g.length - 1];
     const deltaSum = g.reduce((a, p) => a + p.delta, 0);
     return {
@@ -8955,7 +8948,6 @@ function aggregateFinanceHistoryByMonth(history) {
       motif: g.length === 1 ? last.motif : `${g.length} mouvements`,
     };
   });
-  return [opening, ...monthlyPoints];
 }
 
 // Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal, a partir
@@ -9021,11 +9013,14 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
   // ---- Axe horizontal : libelles de dates (mois), depuis jour + date_debut ----
   const nXTicks = Math.max(1, Math.min(compact ? 3 : 6, history.length));
   let xAxisHtml = "";
+  let lastLabel = null;
   for (let i = 0; i < nXTicks; i++) {
     const idx = nXTicks > 1 ? Math.round((i * (history.length - 1)) / (nXTicks - 1)) : 0;
     const c = coords[idx];
     const d = computeRealDate(currentGame?.date_debut, c.pt.jour);
     const label = d ? formatChartMonth(d) : `J${c.pt.jour}`;
+    if (label === lastLabel) continue; // evite un libelle de mois duplique cote a cote
+    lastLabel = label;
     xAxisHtml += `<text class="fm-chart-axis-label x" x="${c.x.toFixed(1)}" y="${(padTop + plotH + 6).toFixed(1)}">${escapeHtml(label)}</text>`;
   }
 
@@ -9069,8 +9064,9 @@ function buildFinancePlaceholderHistory(budget) {
 
 async function renderFinances(club) {
   const el = document.getElementById("fmFinances");
-  const history = aggregateFinanceHistoryByMonth(await fetchFinanceHistory(club));
-  const hasHistory = history.length > 1;
+  const rawHistory = await fetchFinanceHistory(club);
+  const hasHistory = rawHistory.length >= 1;
+  const history = aggregateFinanceHistoryByMonth(rawHistory);
   el.innerHTML = `
     <div class="fm-stat-row">
       <span class="label">Budget disponible</span>
@@ -9354,7 +9350,7 @@ async function openFinancesModal(club) {
   finCurrentMovements = hasHistory ? history : [];
   finActiveSubtab = "revenus";
   const chartHistory = aggregateFinanceHistoryByMonth(history);
-  const chartHasHistory = chartHistory.length > 1;
+  const chartHasHistory = history.length >= 1;
 
   modal.innerHTML = `
     <div class="fin-header">
