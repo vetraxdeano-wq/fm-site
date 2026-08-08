@@ -1438,11 +1438,45 @@
   .fm-msg-compo-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
   .fm-msg-compo-heading { font-size: 11.5px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px; }
   .fm-msg-compo-title { font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; text-align: center; }
-  .fm-msg-pitch { max-width: 280px; height: 320px; margin: 0 auto; }
   .fm-msg-compo-empty { font-size: 12.5px; color: var(--text-dim); font-style: italic; }
-  .fm-msg-compo-note { font-size: 10.5px; color: var(--text-dim); text-align: center; margin-top: 8px; font-style: italic; }
+  .fm-msg-compo-note { font-size: 10.5px; color: var(--text-dim); text-align: center; margin-top: 10px; font-style: italic; }
+  /* Terrain dedie a la composition probable (avant-match) : classes propres
+     (pas de reutilisation de .tac-pitch/.tac-slot) pour ne jamais heriter du
+     rendu photo de joueur de l'onglet Tactique — toujours des initiales. */
+  .fm-msg-pitch {
+    position: relative; width: 100%; max-width: 380px; aspect-ratio: 68 / 100; margin: 0 auto;
+    background:
+      linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px) 0 0/100% 12.5%,
+      repeating-linear-gradient(180deg, #1c3d24 0, #1c3d24 10%, #193a21 10%, #193a21 20%);
+    border: 2px solid rgba(255,255,255,0.25); border-radius: 10px; overflow: hidden;
+  }
+  .fm-msg-pitch::before {
+    content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+    background: rgba(255,255,255,0.25); transform: translateY(-50%);
+  }
+  .fm-msg-pitch::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 22%; aspect-ratio: 1/1;
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; transform: translate(-50%,-50%);
+  }
+  .fm-msg-slot {
+    position: absolute; transform: translate(-50%, -50%); width: 78px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default;
+  }
+  .fm-msg-slot-dot {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--panel);
+    border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--text); flex-shrink: 0;
+  }
+  .fm-msg-slot.empty .fm-msg-slot-dot { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
+  .fm-msg-slot-name {
+    font-size: 10.5px; font-weight: 600; background: rgba(0,0,0,0.6); border-radius: 4px;
+    padding: 1px 5px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   @media (max-width: 900px) {
-    .fm-msg-pitch { height: 280px; }
+    .fm-msg-pitch { max-width: 320px; }
+    .fm-msg-slot { width: 66px; }
+    .fm-msg-slot-dot { width: 32px; height: 32px; font-size: 10.5px; }
+    .fm-msg-slot-name { font-size: 9.5px; max-width: 76px; }
   }
 
   /* ---- Compétitions (sous-onglet) : calendrier horizontal en haut (pleine
@@ -8854,16 +8888,20 @@ function renderCompoPitchHtml(compo) {
   if (!compo || !compo.slots || !compo.slots.length) {
     return `<div class="fm-msg-compo-empty">Composition adverse inconnue (aucune tactique enregistrée pour ce club).</div>`;
   }
-  const slots = compo.slots.map(s => `
-    <div class="tac-slot${!s.player_nom ? " empty" : ""}" style="left:${s.x}%; top:${s.y}%;"
+  const slots = compo.slots.map(s => {
+    const nomCourt = (s.player_nom || "?").trim().split(/\s+/).pop();
+    const initiales = nomCourt.slice(0, 3).toUpperCase();
+    return `
+    <div class="fm-msg-slot${!s.player_nom ? " empty" : ""}" style="left:${s.x}%; top:${s.y}%;"
          title="${escapeHtml(s.player_nom || "Indisponible")} — ${escapeHtml(s.label)}${s.remplace ? ` (remplace ${escapeHtml(s.sortant_nom || "")})` : ""}">
-      <div class="tac-slot-dot">${escapeHtml((s.player_nom || "?").trim().split(/\s+/).pop().slice(0,3).toUpperCase())}</div>
-      <div class="tac-slot-name">${s.player_nom ? escapeHtml(s.player_nom) : s.label}${s.remplace ? " *" : ""}</div>
+      <div class="fm-msg-slot-dot">${escapeHtml(initiales)}</div>
+      <div class="fm-msg-slot-name">${s.player_nom ? escapeHtml(nomCourt) : s.label}${s.remplace ? " *" : ""}</div>
     </div>
-  `).join("");
+  `;
+  }).join("");
   return `
     <div class="fm-msg-compo-title">${escapeHtml(compo.formation || "Composition probable")}</div>
-    <div class="tac-pitch fm-msg-pitch">${slots}</div>
+    <div class="fm-msg-pitch">${slots}</div>
     ${compo.slots.some(s => s.remplace) ? `<div class="fm-msg-compo-note">* remplace un titulaire indisponible</div>` : ""}
   `;
 }
@@ -8885,7 +8923,7 @@ async function renderAvantMatchCard(r) {
         <div class="fm-nf-team" data-club-id="${r.dom_id}">
           ${mdetLogoHtml(logos[r.dom_id], r.dom_nom, 92)}
           <div class="fm-nf-team-name">${escapeHtml(r.dom_nom)}</div>
-          <div class="fm-nf-team-rank">${r.dom_id === r.adv_id ? fmRankLabel(r.adv_classement) : "—"}</div>
+          <div class="fm-nf-team-rank">${fmRankLabel(r.dom_classement)}</div>
         </div>
         <div class="fm-nf-vs">
           <span class="fm-nf-vs-txt">VS</span>
@@ -8894,7 +8932,7 @@ async function renderAvantMatchCard(r) {
         <div class="fm-nf-team" data-club-id="${r.ext_id}">
           ${mdetLogoHtml(logos[r.ext_id], r.ext_nom, 92)}
           <div class="fm-nf-team-name">${escapeHtml(r.ext_nom)}</div>
-          <div class="fm-nf-team-rank">${r.ext_id === r.adv_id ? fmRankLabel(r.adv_classement) : "—"}</div>
+          <div class="fm-nf-team-rank">${fmRankLabel(r.ext_classement)}</div>
         </div>
       </div>
     </div>
@@ -9550,11 +9588,16 @@ function mdetRenderEvenements(stats, clubDomId, nomDom, nomExt) {
 
 function mdetNoteClass(note) {
   const n = Number(note);
+  // Seuils recalés : 6.5 est la nouvelle note de base en début de match
+  // (avant, elle tombait pile sur le seuil "bon", ce qui faisait passer
+  // une performance neutre pour une bonne performance). Chaque palier est
+  // décalé de -0.5 par rapport aux anciens seuils pour que 6.5 tombe
+  // confortablement au milieu de la bande "moyen".
   if (!Number.isFinite(n)) return "mdet-note-moyen";
-  if (n >= 7.5) return "mdet-note-elite";
-  if (n >= 6.5) return "mdet-note-bon";
-  if (n >= 5.5) return "mdet-note-moyen";
-  if (n >= 4.5) return "mdet-note-faible";
+  if (n >= 8.0) return "mdet-note-elite";
+  if (n >= 7.0) return "mdet-note-bon";
+  if (n >= 6.0) return "mdet-note-moyen";
+  if (n >= 5.0) return "mdet-note-faible";
   return "mdet-note-mauvais";
 }
 
