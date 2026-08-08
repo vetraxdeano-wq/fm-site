@@ -1249,6 +1249,54 @@
   .fin-salary-legend .dot.players { background: var(--accent); }
   .fin-salary-legend .dot.staff { background: var(--gold); }
 
+  /* Repartition budget salarial / budget transfert (curseur pour le club
+     controle par l'utilisateur, lecture seule sinon). Fige a la cloture de
+     saison (masse de reference + enveloppe allouable + marge de securite),
+     seul le curseur redistribue l'enveloppe deja figee, a tout moment. */
+  .fin-repart-card {
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+  }
+  .fin-repart-bar-track {
+    display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: #0d0f13;
+    margin-bottom: 12px;
+  }
+  .fin-repart-bar-seg { transition: width 0.12s ease; }
+  .fin-repart-bar-seg.salarial-fixe { background: var(--gold); opacity: 0.55; }
+  .fin-repart-bar-seg.salarial-marge { background: var(--gold); }
+  .fin-repart-bar-seg.transfert { background: var(--accent); }
+  .fin-repart-bar-seg.reserve { background: #2a2f3a; }
+  .fin-repart-legend {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; font-size: 11.5px; color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+  .fin-repart-legend .item { display: flex; align-items: center; gap: 6px; }
+  .fin-repart-legend .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .fin-repart-legend .dot.salarial-fixe { background: var(--gold); opacity: 0.55; }
+  .fin-repart-legend .dot.salarial-marge { background: var(--gold); }
+  .fin-repart-legend .dot.transfert { background: var(--accent); }
+  .fin-repart-legend .dot.reserve { background: #2a2f3a; }
+  .fin-repart-legend b { color: var(--text); font-weight: 700; }
+  .fin-repart-slider-row { display: flex; flex-direction: column; gap: 6px; }
+  .fin-repart-slider-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+  .fin-repart-slider-labels .side-salarial { color: var(--gold); }
+  .fin-repart-slider-labels .side-transfert { color: var(--accent); }
+  .fin-repart-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px;
+    background: linear-gradient(to right, var(--gold), var(--accent)); cursor: pointer; outline: none; }
+  .fin-repart-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--text); border: 3px solid var(--panel); cursor: pointer; }
+  .fin-repart-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--text);
+    border: 3px solid var(--panel); cursor: pointer; }
+  .fin-repart-slider:disabled { opacity: 0.4; cursor: not-allowed; }
+  .fin-repart-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+  .fin-repart-auto-note {
+    font-size: 11.5px; color: var(--text-dim); background: #14171d; border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .fin-repart-crise {
+    font-size: 12px; color: var(--danger); background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.35); border-radius: 10px; padding: 10px 14px; margin-top: 10px;
+  }
+
   /* Sous-onglets Revenus / Depenses */
   .fin-subtabs { display: flex; gap: 8px; margin-bottom: 12px; }
   .fin-subtab-btn {
@@ -9033,6 +9081,150 @@ function renderSalaryMassCard(mass) {
   `;
 }
 
+// Repartition budget salarial / budget transfert : l'enveloppe totale de
+// la saison (masse_salariale_reference + budget_allouable_saison + marge
+// de securite) est figee a la cloture de saison (voir cloturer_budgets_saison
+// cote SQL, appelee par resoudre_barrages_et_finaliser_saison). Seul le
+// curseur du club controle par l'utilisateur redistribue cette enveloppe
+// deja figee entre salarial (au-dessus de la masse de reference) et
+// transfert, a n'importe quel moment de la saison — sans recalculer depuis
+// le budget_actuel courant, qui varie lui chaque mois (droits TV, guichet...).
+// Pour les autres clubs, tout est auto-reparti par le SQL (ratio_repartition_manuel = null).
+
+// Reproduit cote client le meme calcul que set_ratio_repartition_budget,
+// pour un retour visuel instantane pendant qu'on deplace le curseur (avant
+// la confirmation serveur au relachement).
+function computeRepartitionLocal(club, ratio) {
+  const allouable = Number(club.budget_allouable_saison) || 0;
+  const masseRef = Number(club.masse_salariale_reference) || 0;
+  if (allouable <= 0) {
+    return { salarial: masseRef, transfert: 0 };
+  }
+  const r = Math.min(Math.max(ratio, 0), 1);
+  const marge = Math.round(allouable * r);
+  return { salarial: masseRef + marge, transfert: allouable - marge };
+}
+
+// Ratio actuellement applique, deduit des montants stockes (fonctionne que
+// ratio_repartition_manuel soit null - auto - ou fixe par l'utilisateur).
+function currentRepartitionRatio(club) {
+  const allouable = Number(club.budget_allouable_saison) || 0;
+  if (allouable <= 0) return 0;
+  const marge = (Number(club.budget_salarial_actuel) || 0) - (Number(club.masse_salariale_reference) || 0);
+  return Math.min(Math.max(marge / allouable, 0), 1);
+}
+
+function renderRepartitionCard(club, isOwnClub) {
+  const masseRef = Number(club.masse_salariale_reference) || 0;
+  const allouable = Number(club.budget_allouable_saison) || 0;
+  const reserve = Number(club.marge_securite_saison) || 0;
+  const ratio = currentRepartitionRatio(club);
+  const { salarial, transfert } = computeRepartitionLocal(club, ratio);
+  const totalEnveloppe = Math.max(masseRef + allouable + reserve, 1);
+  const pctFixe = (masseRef / totalEnveloppe) * 100;
+  const pctMarge = ((salarial - masseRef) / totalEnveloppe) * 100;
+  const pctTransfert = (transfert / totalEnveloppe) * 100;
+  const pctReserve = (reserve / totalEnveloppe) * 100;
+  const enCrise = allouable <= 0 && masseRef > 0;
+
+  const bar = `
+    <div class="fin-repart-bar-track" id="finRepartBar">
+      <div class="fin-repart-bar-seg salarial-fixe" style="width:${pctFixe}%"></div>
+      <div class="fin-repart-bar-seg salarial-marge" style="width:${pctMarge}%"></div>
+      <div class="fin-repart-bar-seg transfert" style="width:${pctTransfert}%"></div>
+      <div class="fin-repart-bar-seg reserve" style="width:${pctReserve}%"></div>
+    </div>
+    <div class="fin-repart-legend">
+      <div class="item"><span class="dot salarial-fixe"></span>Masse salariale — <b id="finRepartMasse">${formatMoney(masseRef)}</b></div>
+      <div class="item"><span class="dot transfert"></span>Budget transfert — <b id="finRepartTransfert">${formatMoney(transfert)}</b></div>
+      <div class="item"><span class="dot salarial-marge"></span>Marge salariale — <b id="finRepartMarge">${formatMoney(salarial - masseRef)}</b></div>
+      <div class="item"><span class="dot reserve"></span>Réserve de sécurité — <b>${formatMoney(reserve)}</b></div>
+    </div>
+  `;
+
+  if (!isOwnClub) {
+    return `
+      <div class="fin-repart-card">
+        ${bar}
+        <div class="fin-repart-auto-note">Répartition automatique, ajustée selon la santé financière du club.</div>
+      </div>
+    `;
+  }
+
+  if (enCrise) {
+    return `
+      <div class="fin-repart-card">
+        ${bar}
+        <div class="fin-repart-crise">Trésorerie insuffisante pour dégager une marge : tout le budget disponible couvre à peine la masse salariale. Rien à répartir tant que les finances ne se redressent pas (prochaine réévaluation à la clôture de la saison).</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="fin-repart-card">
+      ${bar}
+      <div class="fin-repart-slider-row">
+        <div class="fin-repart-slider-labels">
+          <span class="side-salarial">Salarial</span>
+          <span class="side-transfert">Transfert</span>
+        </div>
+        <input type="range" min="0" max="100" step="1" value="${Math.round(ratio * 100)}"
+          class="fin-repart-slider" id="finRepartSlider" />
+      </div>
+      <div class="fin-repart-hint">Redistribue l'enveloppe de la saison entre salaires et transferts, sans toucher à la trésorerie disponible. Ajustable à tout moment.</div>
+    </div>
+  `;
+}
+
+function bindRepartitionCard(club, isOwnClub) {
+  if (!isOwnClub) return;
+  const slider = document.getElementById("finRepartSlider");
+  if (!slider) return;
+
+  slider.addEventListener("input", () => {
+    const ratio = Number(slider.value) / 100;
+    const { salarial, transfert } = computeRepartitionLocal(club, ratio);
+    const masseRef = Number(club.masse_salariale_reference) || 0;
+    const allouable = Number(club.budget_allouable_saison) || 0;
+    const reserve = Number(club.marge_securite_saison) || 0;
+    const totalEnveloppe = Math.max(masseRef + allouable + reserve, 1);
+    const bar = document.getElementById("finRepartBar");
+    if (bar) {
+      bar.children[0].style.width = `${(masseRef / totalEnveloppe) * 100}%`;
+      bar.children[1].style.width = `${((salarial - masseRef) / totalEnveloppe) * 100}%`;
+      bar.children[2].style.width = `${(transfert / totalEnveloppe) * 100}%`;
+      bar.children[3].style.width = `${(reserve / totalEnveloppe) * 100}%`;
+    }
+    const elTransfert = document.getElementById("finRepartTransfert");
+    const elMarge = document.getElementById("finRepartMarge");
+    if (elTransfert) elTransfert.textContent = formatMoney(transfert);
+    if (elMarge) elMarge.textContent = formatMoney(salarial - masseRef);
+  });
+
+  slider.addEventListener("change", async () => {
+    const ratio = Number(slider.value) / 100;
+    slider.disabled = true;
+    try {
+      const { data, error } = await supabaseClient.rpc("set_ratio_repartition_budget", {
+        p_game_club_id: club.game_club_id,
+        p_ratio: ratio,
+      });
+      if (error) throw error;
+      const result = Array.isArray(data) ? data[0] : data;
+      if (result) {
+        club.budget_salarial_actuel = result.budget_salarial;
+        club.budget_transfert_actuel = result.budget_transfert;
+        club.ratio_repartition_manuel = result.ratio_utilise;
+      }
+    } catch (err) {
+      console.error("Erreur mise a jour repartition budget", err);
+      toast("Impossible d'enregistrer la répartition", true);
+    } finally {
+      slider.disabled = false;
+    }
+  });
+}
+
 // Sous-onglets Revenus / Depenses de la popup Finances : reutilise
 // l'historique reel (game_events, type="finance") deja charge, filtre par
 // le signe du montant (delta >= 0 = entree, delta < 0 = sortie).
@@ -9110,6 +9302,9 @@ async function openFinancesModal(club) {
     <div class="fin-section-title">Masse salariale (joueurs + staff)</div>
     ${renderSalaryMassCard(mass)}
 
+    <div class="fin-section-title">Répartition budget salarial / transfert</div>
+    ${renderRepartitionCard(club, club.user_id === userId)}
+
     <div class="fin-section-title">Mouvements</div>
     <div class="fin-subtabs">
       <button type="button" class="fin-subtab-btn" data-subtab="revenus">Revenus</button>
@@ -9122,6 +9317,7 @@ async function openFinancesModal(club) {
   document.querySelectorAll(".fin-subtab-btn").forEach(btn => {
     btn.addEventListener("click", () => showFinSubtab(btn.getAttribute("data-subtab")));
   });
+  bindRepartitionCard(club, club.user_id === userId);
   showFinSubtab("revenus");
 }
 
@@ -11144,7 +11340,9 @@ async function showMyClub(gameClubId, canChange) {
     .select(`
       game_club_id, nom, budget_actuel, classement, statut, nation, division,
       niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne,
-      nb_joueurs, meilleur_joueur_nom
+      nb_joueurs, meilleur_joueur_nom, user_id,
+      budget_salarial_actuel, budget_transfert_actuel, masse_salariale_reference,
+      budget_allouable_saison, marge_securite_saison, ratio_repartition_manuel
     `)
     .eq("game_club_id", gameClubId)
     .single();
