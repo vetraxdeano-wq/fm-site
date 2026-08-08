@@ -794,7 +794,6 @@
   /* Mini graphique d'historique financier (repris dans l'onglet Finance) */
   .fm-chart-wrap { margin-top: 10px; }
   .fm-chart-wrap--placeholder { opacity: 0.55; }
-  .fm-chart-wrap--placeholder .fm-chart-labels { justify-content: center; }
   .fm-chart-header {
     display: flex; justify-content: space-between; align-items: baseline;
     margin-bottom: 8px;
@@ -810,9 +809,18 @@
   .fm-chart-area { opacity: 0.9; }
   .fm-chart-dot { transition: r 0.15s; cursor: default; }
   .fm-chart-dot:hover { r: 4.5; }
-  .fm-chart-labels {
-    display: flex; justify-content: space-between; margin-top: 4px;
-    font-size: 10px; color: var(--text-dim);
+  /* Axes du graphique : quadrillage horizontal (valeurs en €) + libelles
+     verticaux des mois (axe des dates), dessines directement dans le SVG
+     pour rester alignes avec les points quel que soit le zoom. */
+  .fm-chart-gridline { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .fm-chart-axis-line { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .fm-chart-axis-label { fill: var(--text-dim); font-family: inherit; }
+  .fm-chart-axis-label.y { font-size: 9px; text-anchor: end; dominant-baseline: middle; }
+  .fm-chart-axis-label.x { font-size: 9px; text-anchor: middle; dominant-baseline: hanging; }
+  .fin-chart-big .fm-chart-axis-label.y,
+  .fin-chart-big .fm-chart-axis-label.x { font-size: 11px; }
+  .fm-chart-placeholder-caption {
+    text-align: center; font-size: 10px; color: var(--text-dim); margin-top: 4px;
   }
 
   /* Boite de reception (messages) */
@@ -8843,30 +8851,93 @@ async function fetchFinanceHistory(club) {
   });
 }
 
+// Formatte un montant en version compacte pour les libelles de l'axe
+// vertical du graphique (ex: 1,2M€ / 850k€ / 300€), pour rester lisible
+// sur un axe etroit contrairement a formatMoney (toujours en toutes lettres).
+function formatMoneyAxis(n) {
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 1000000) {
+    const v = abs / 1000000;
+    return sign + (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1).replace(".", ",")) + "M€";
+  }
+  if (abs >= 1000) {
+    const v = abs / 1000;
+    return sign + (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1).replace(".", ",")) + "k€";
+  }
+  return sign + Math.round(abs) + "€";
+}
+
+// Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal, a partir
+// d'une date reelle calculee via computeRealDate (date_debut + jour).
+function formatChartMonth(date) {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" }).format(date).replace(/\.$/, "");
+}
+
 function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
-  const w = opts.w || 400, h = opts.h || 70, padY = 8;
+  const totalW = opts.w || 400, totalH = opts.h || 70;
+  const compact = totalW <= 450;
+
+  // Marges internes du SVG pour laisser la place aux axes : a gauche pour
+  // les libelles de valeurs (€), en bas pour les libelles de mois.
+  const padL = compact ? 38 : 58;
+  const padR = compact ? 6 : 12;
+  const padTop = 8;
+  const padBottom = compact ? 16 : 22;
+  const plotW = Math.max(1, totalW - padL - padR);
+  const plotH = Math.max(1, totalH - padTop - padBottom);
+
   const values = history.map(p => p.value);
   const min = Math.min(...values), max = Math.max(...values);
   const flat = max === min;
-  const range = Math.max(1, max - min);
-  const stepX = history.length > 1 ? w / (history.length - 1) : 0;
+  // Marge additionnelle au-dessus/en-dessous des valeurs reelles pour que
+  // la courbe ne colle pas aux bords du graphique.
+  const rawRange = Math.max(1, max - min);
+  const rangePad = flat ? Math.max(1, Math.abs(max) * 0.1) : rawRange * 0.1;
+  const yMin = min - rangePad, yMax = max + rangePad;
+  const range = Math.max(1, yMax - yMin);
+
+  const stepX = history.length > 1 ? plotW / (history.length - 1) : 0;
 
   const coords = history.map((pt, i) => {
-    const x = history.length > 1 ? i * stepX : w / 2;
-    const y = flat ? h / 2 : h - padY - ((pt.value - min) / range) * (h - padY * 2);
+    const x = padL + (history.length > 1 ? i * stepX : plotW / 2);
+    const y = padTop + plotH - ((pt.value - yMin) / range) * plotH;
     return { x, y, pt };
   });
 
   const linePoints = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-  const areaPoints = `0,${h} ${linePoints} ${w},${h}`;
+  const baseY = (padTop + plotH).toFixed(1);
+  const areaPoints = `${padL},${baseY} ${linePoints} ${(padL + plotW).toFixed(1)},${baseY}`;
 
   const dots = isPlaceholder ? "" : coords.map(c => {
     const color = c.pt.delta >= 0 ? "var(--accent)" : "var(--danger)";
     const label = `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
-    return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="${color}"><title>${label}</title></circle>`;
+    return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${compact ? 2.5 : 3}" fill="${color}"><title>${label}</title></circle>`;
   }).join("");
 
-  const firstLabel = history[0].jour, lastLabel = history[history.length - 1].jour;
+  // ---- Axe vertical : quadrillage + libelles de valeurs en € ----
+  const nYTicks = compact ? 3 : 5;
+  let yAxisHtml = "";
+  for (let i = 0; i < nYTicks; i++) {
+    const v = yMin + (range * i) / (nYTicks - 1);
+    const y = (padTop + plotH - ((v - yMin) / range) * plotH).toFixed(1);
+    yAxisHtml += `
+      <line class="fm-chart-gridline" x1="${padL}" y1="${y}" x2="${(padL + plotW).toFixed(1)}" y2="${y}" />
+      <text class="fm-chart-axis-label y" x="${(padL - 6).toFixed(1)}" y="${y}">${formatMoneyAxis(v)}</text>
+    `;
+  }
+
+  // ---- Axe horizontal : libelles de dates (mois), depuis jour + date_debut ----
+  const nXTicks = Math.max(1, Math.min(compact ? 3 : 6, history.length));
+  let xAxisHtml = "";
+  for (let i = 0; i < nXTicks; i++) {
+    const idx = nXTicks > 1 ? Math.round((i * (history.length - 1)) / (nXTicks - 1)) : 0;
+    const c = coords[idx];
+    const d = computeRealDate(currentGame?.date_debut, c.pt.jour);
+    const label = d ? formatChartMonth(d) : `J${c.pt.jour}`;
+    xAxisHtml += `<text class="fm-chart-axis-label x" x="${c.x.toFixed(1)}" y="${(padTop + plotH + 6).toFixed(1)}">${escapeHtml(label)}</text>`;
+  }
 
   return `
     <div class="fm-chart-wrap${isPlaceholder ? " fm-chart-wrap--placeholder" : ""}${opts.extraClass ? " " + opts.extraClass : ""}">
@@ -8878,7 +8949,7 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
           <span><span class="dot perte"></span>Sortie</span>
         </span>`}
       </div>
-      <svg class="fm-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <svg class="fm-chart-svg" viewBox="0 0 ${totalW} ${totalH}" preserveAspectRatio="none">
         <polygon class="fm-chart-area" points="${areaPoints}" fill="url(#financeGradient)" />
         <defs>
           <linearGradient id="financeGradient" x1="0" y1="0" x2="0" y2="1">
@@ -8886,14 +8957,14 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
             <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
           </linearGradient>
         </defs>
+        ${yAxisHtml}
+        <line class="fm-chart-axis-line" x1="${padL}" y1="${padTop}" x2="${padL}" y2="${baseY}" />
+        <line class="fm-chart-axis-line" x1="${padL}" y1="${baseY}" x2="${(padL + plotW).toFixed(1)}" y2="${baseY}" />
         <polyline class="fm-chart-line" points="${linePoints}" fill="none" stroke="var(--accent)" stroke-width="2"${isPlaceholder ? ' stroke-dasharray="4 4"' : ""} />
         ${dots}
+        ${xAxisHtml}
       </svg>
-      <div class="fm-chart-labels">
-        ${isPlaceholder
-          ? `<span>En attente du premier mouvement financier</span>`
-          : `<span>Jour ${firstLabel}</span><span>Jour ${lastLabel}</span>`}
-      </div>
+      ${isPlaceholder ? `<div class="fm-chart-placeholder-caption">En attente du premier mouvement financier</div>` : ""}
     </div>
   `;
 }
