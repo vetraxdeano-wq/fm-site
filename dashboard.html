@@ -1088,6 +1088,11 @@
     display: flex; align-items: center; justify-content: center; font-size: 13px;
     background: #14171d; border: 2px solid var(--border); z-index: 1;
   }
+  .mdet-timeline-dot.csc { border-color: var(--danger); background: rgba(239,68,68,0.18); }
+  .mdet-csc-tag {
+    display: inline-block; font-size: 9px; font-weight: 800; color: #fff; background: var(--danger);
+    border-radius: 4px; padding: 1px 4px; margin-left: 4px; vertical-align: middle; letter-spacing: 0.02em;
+  }
   .mdet-timeline-minute { font-size: 10.5px; color: var(--gold); font-weight: 700; margin-top: 6px; }
   .mdet-timeline-text { font-size: 11.5px; color: var(--text); line-height: 1.35; margin-top: 2px; }
   .mdet-event-detail { color: var(--text-dim); display: block; font-size: 10.5px; margin-top: 1px; }
@@ -1442,6 +1447,8 @@
   .fm-msg-scorer-chip { display: flex; align-items: center; gap: 5px; }
   .fm-msg-scorer-chip.clickable { cursor: pointer; }
   .fm-msg-scorer-chip.clickable:hover .fm-msg-scorer-name { color: var(--accent); text-decoration: underline; }
+  .fm-msg-scorer-chip.csc .fm-msg-mini-face { border-color: var(--danger); }
+  .fm-msg-csc-tag { color: var(--danger); font-weight: 800; font-size: 9px; letter-spacing: 0.02em; }
   .fm-msg-mini-face {
     display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
     border-radius: 50%; background: var(--panel); border: 1px solid var(--accent);
@@ -1485,12 +1492,22 @@
      des confrontations directes (qui restent dans le bloc de gauche). */
   .fm-msg-form-row { display: flex; gap: 4px; justify-content: center; margin-top: 6px; }
   .fm-msg-form-badge {
-    width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: 9.5px; font-weight: 800; cursor: default;
+    position: relative; width: 18px; height: 18px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; cursor: default;
   }
   .fm-msg-form-badge.victoire { background: rgba(74,222,128,0.15); color: var(--accent); }
   .fm-msg-form-badge.defaite { background: rgba(239,68,68,0.15); color: var(--danger); }
   .fm-msg-form-badge.nul { background: rgba(255,255,255,0.08); color: var(--text-dim); }
+  .fm-msg-form-badge:hover::after {
+    content: attr(data-tip); position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+    background: #14171d; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+    font-size: 10px; font-weight: 600; color: var(--text); white-space: nowrap; z-index: 30;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .fm-msg-form-badge:hover::before {
+    content: ""; position: absolute; bottom: 118%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--border); z-index: 30;
+  }
   /* Terrain dedie a la composition probable (avant-match) : classes propres
      (pas de reutilisation de .tac-pitch/.tac-slot). Affiche la photo du
      joueur quand elle est disponible (comme l'onglet Tactique), sinon
@@ -9059,10 +9076,11 @@ function renderCompoPitchHtml(compo, getSlotMeta) {
 // Forme generale d'un club (5 derniers matchs, toutes competitions
 // confondues, n'importe quel adversaire) — distincte des confrontations
 // directes. `recentList` vient de render_data.mon_recent / .adv_recent
-// (le plus recent en premier) ; on l'affiche du plus ancien (gauche) au
-// plus recent (droite), motif habituel d'un guide de forme.
+// (le plus recent en premier) ; affiche dans cet ordre, le dernier match a
+// gauche. Infobulle personnalisee (data-tip + CSS) au survol de chaque
+// badge avec la date, le lieu et le score du match concerne.
 function fmFormBadgesHtml(recentList, clubId) {
-  const list = (recentList || []).slice().reverse();
+  const list = recentList || [];
   if (!list.length) return "";
   const badges = list.map(m => {
     const isHome = String(m.club_domicile_id) === String(clubId);
@@ -9075,8 +9093,10 @@ function fmFormBadgesHtml(recentList, clubId) {
     }
     const advNom = isHome ? m.ext_nom : m.dom_nom;
     const scoreLabel = `${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}`;
-    const titre = `${isHome ? "Domicile" : "Extérieur"} · ${scoreLabel} vs ${advNom || "?"}`;
-    return `<span class="fm-msg-form-badge ${cls}" title="${escapeHtml(titre)}">${tag}</span>`;
+    const d = m.date_match ? new Date(m.date_match) : null;
+    const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : "";
+    const tip = `${dateLabel ? dateLabel + " · " : ""}${isHome ? "Dom" : "Ext"} · ${scoreLabel} vs ${advNom || "?"}`;
+    return `<span class="fm-msg-form-badge ${cls}" data-tip="${escapeHtml(tip)}">${tag}</span>`;
   }).join("");
   return `<div class="fm-msg-form-row">${badges}</div>`;
 }
@@ -9254,16 +9274,16 @@ async function renderApresMatchCard(r, matchId) {
   };
 
   const scorersFor = (clubId) => buteurs
-    .filter(b => String(b.game_club_id) === String(clubId))
+    .filter(b => String(b.equipe_creditee_game_club_id ?? b.game_club_id) === String(clubId))
     .map(b => {
       const m = resolvePlayer(b.id, b.nom, b.game_club_id);
       const clickAttr = m && m.id
-        ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(m.clubId || clubId)).replace(/'/g, "&#39;")}','${escapeHtml(String(m.id))}')"`
+        ? ` onclick="window.mdetGoToPlayer('${escapeHtml(String(m.clubId || b.game_club_id)).replace(/'/g, "&#39;")}','${escapeHtml(String(m.id))}')"`
         : "";
       return `
-        <span class="fm-msg-scorer-chip${m && m.id ? " clickable" : ""}"${clickAttr}>
+        <span class="fm-msg-scorer-chip${m && m.id ? " clickable" : ""}${b.est_csc ? " csc" : ""}"${clickAttr}>
           ${mdetMiniFaceHtml(b.nom, m && m.photoUrl, 16)}
-          <span class="fm-msg-scorer-name">${escapeHtml(b.nom)}${b.minute ? ` ${b.minute}'` : ""}</span>
+          <span class="fm-msg-scorer-name">${escapeHtml(b.nom)}${b.minute ? ` ${b.minute}'` : ""}${b.est_csc ? ` <span class="fm-msg-csc-tag">csc</span>` : ""}</span>
         </span>
       `;
     }).join("");
@@ -9892,10 +9912,22 @@ function mdetRenderEvenements(stats, clubDomId, nomDom, nomExt) {
 
   (stats.buteurs || []).forEach(b => {
     const passeur = (stats.passeurs || []).find(p => p.but_de === b.player_id && p.minute === b.minute);
+    // Un but contre son camp (est_csc) est marque par un joueur dans SON
+    // propre but : game_club_id designe donc son equipe a lui, alors que
+    // c'est l'equipe adverse (equipe_creditee_game_club_id) qui inscrit le
+    // but au score. Sans distinction, l'evenement affichait le nom de
+    // l'equipe du buteur comme si elle avait marque normalement — d'ou la
+    // confusion. On affiche desormais un tag "CSC" + la vraie equipe
+        // creditee, avec un point rouge dans la frise.
+    const clubCredite = b.equipe_creditee_game_club_id ?? b.game_club_id;
+    const nomEquipeCreditee = mdetNomEquipe(clubCredite, clubDomId, nomDom, nomExt);
     evts.push({
-      minute: b.minute, icone: MDET_ICONES.but,
-      texte: `<strong>${escapeHtml(b.player_nom)}</strong> (${escapeHtml(mdetNomEquipe(b.game_club_id, clubDomId, nomDom, nomExt))})`
-        + (passeur ? ` <span class="mdet-event-detail">— passe déc. ${escapeHtml(passeur.player_nom)}</span>` : ""),
+      minute: b.minute, icone: MDET_ICONES.but, csc: !!b.est_csc,
+      texte: b.est_csc
+        ? `<strong>${escapeHtml(b.player_nom)}</strong> <span class="mdet-csc-tag">CSC</span>`
+          + ` <span class="mdet-event-detail">but pour ${escapeHtml(nomEquipeCreditee)}</span>`
+        : `<strong>${escapeHtml(b.player_nom)}</strong> (${escapeHtml(nomEquipeCreditee)})`
+          + (passeur ? ` <span class="mdet-event-detail">— passe déc. ${escapeHtml(passeur.player_nom)}</span>` : ""),
     });
   });
   (stats.cartons || []).forEach(c => {
@@ -9929,7 +9961,7 @@ function mdetRenderEvenements(stats, clubDomId, nomDom, nomExt) {
 
   return `<div class="mdet-timeline">${evts.map(e => `
     <div class="mdet-timeline-item">
-      <div class="mdet-timeline-dot">${e.icone}</div>
+      <div class="mdet-timeline-dot${e.csc ? " csc" : ""}">${e.icone}</div>
       <div class="mdet-timeline-minute">${e.minute}e</div>
       <div class="mdet-timeline-text">${e.texte}</div>
     </div>
