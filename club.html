@@ -2854,9 +2854,10 @@ function renderReputation(club, players, isOwnClub) {
 }
 
 // Popup "Améliorer" une infrastructure (centre d'entraînement / formation /
-// recrutement des jeunes) : affiche le niveau actuel, le plafond lié à la
-// réputation, le coût/durée du prochain palier, ou l'état d'un chantier en
-// cours / d'un cooldown, avec un bouton pour lancer les travaux.
+// recrutement des jeunes) : le niveau chiffré (/20) et le plafond de
+// réputation restent volontairement invisibles pour le joueur — seules les
+// étoiles renseignent le niveau. La popup affiche juste le coût/durée du
+// prochain palier, ou l'état d'un chantier en cours / d'un cooldown.
 function openAmeliorerModal(infraKey, club) {
   const label = AMELIORER_INFRA_LABELS[infraKey] || "Infrastructure";
   const etat = infraEtatCache[infraKey];
@@ -2865,6 +2866,7 @@ function openAmeliorerModal(infraKey, club) {
   const travaux = infraTravauxCache[infraKey];
   const cooldownFin = etat?.cooldown_fin ? new Date(etat.cooldown_fin + "T00:00:00") : null;
   const now = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  const stars = (niveauActuel !== null && niveauActuel !== undefined && niveauActuel > 0) ? starsFromScale(niveauActuel) : null;
 
   const overlay = document.getElementById("ameliorerOverlay");
   const modal = document.getElementById("ameliorerModal");
@@ -2876,10 +2878,9 @@ function openAmeliorerModal(infraKey, club) {
       <div class="fm-empty">🚧 Chantier en cours, démarré le ${formatRealDate(new Date(travaux.date_debut + "T00:00:00"))}.</div>
       <div class="stat-row"><span class="label">Fin prévue</span><span class="value">${formatRealDate(new Date(travaux.date_fin_prevue + "T00:00:00"))}</span></div>
       <div class="stat-row"><span class="label">Coût investi</span><span class="value">${formatInt(travaux.cout)} €</span></div>
-      <div class="stat-row"><span class="label">Gain</span><span class="value">+1 ou +2 (révélé à la fin des travaux)</span></div>
     `;
   } else if (niveauActuel !== null && niveauActuel !== undefined && niveauActuel >= niveauMax) {
-    body = `<div class="fm-empty">La réputation actuelle du club ne permet pas d'aller au-delà de ${niveauMax}/20 pour cette infrastructure.</div>`;
+    body = `<div class="fm-empty">La réputation actuelle du club ne permet pas d'aller plus loin sur cette infrastructure pour le moment.</div>`;
   } else if (cooldownFin && now && cooldownFin > now) {
     body = `<div class="fm-empty">Chantier terminé récemment sur cette infrastructure : prochains travaux possibles à partir du ${formatRealDate(cooldownFin)}.</div>`;
   } else {
@@ -2887,8 +2888,6 @@ function openAmeliorerModal(infraKey, club) {
     const cout = infraCoutClient(niveauBase);
     const duree = infraDureeMoisClient(niveauBase);
     body = `
-      <div class="stat-row"><span class="label">Plafond (réputation du club)</span><span class="value">${niveauMax}/20</span></div>
-      <div class="stat-row"><span class="label">Prochain palier</span><span class="value">+1 ou +2 (aléatoire)</span></div>
       <div class="stat-row"><span class="label">Coût estimé</span><span class="value">${formatInt(cout)} €</span></div>
       <div class="stat-row"><span class="label">Durée estimée</span><span class="value">${duree} mois</span></div>
       <div class="stat-row"><span class="label">Budget disponible</span><span class="value">${formatInt(club.budget_actuel)} €</span></div>
@@ -2901,7 +2900,7 @@ function openAmeliorerModal(infraKey, club) {
     <div class="fin-header">
       <div>
         <div class="fin-header-title">Améliorer — ${escapeHtml(label)}</div>
-        <div class="fin-header-sub">Niveau actuel : ${niveauActuel !== null && niveauActuel !== undefined && niveauActuel >= 0 ? `${niveauActuel}/20` : "Aucun"}</div>
+        <div class="fin-header-sub">${stars !== null ? starsHtml(stars) : "Aucune infrastructure"}</div>
       </div>
       <button class="fin-close" id="ameliorerCloseBtn">✕</button>
     </div>
