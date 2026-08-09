@@ -215,6 +215,13 @@
   .stat-row:last-child { border-bottom: none; }
   .stat-row .label { color: var(--text-dim); }
   .stat-row .value { font-weight: 700; }
+  .stat-row-value-wrap { display: flex; align-items: center; gap: 10px; }
+  .ameliorer-btn {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--gold); background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.35);
+    border-radius: 6px; padding: 3px 9px; cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .ameliorer-btn:hover { background: rgba(251,191,36,0.16); border-color: rgba(251,191,36,0.55); }
 
   /* Graphique d'historique financier : axes + remplissage sous la courbe
      (repris de dashboard.html pour garder le meme rendu partout). */
@@ -1195,6 +1202,10 @@
 
 <div class="fin-overlay hidden" id="finOverlay">
   <div class="fin-modal" id="finModal"></div>
+</div>
+
+<div class="fin-overlay hidden" id="ameliorerOverlay">
+  <div class="fin-modal" id="ameliorerModal"></div>
 </div>
 
 <script>
@@ -2715,6 +2726,10 @@ document.getElementById("finOverlay").addEventListener("click", (e) => {
   if (e.target.id === "finOverlay") closeFinancesModal();
 });
 
+document.getElementById("ameliorerOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "ameliorerOverlay") closeAmeliorerModal();
+});
+
 // Rend une carte cliquable (curseur pointeur + effet hover), utilise pour
 // ouvrir la popup Finances au clic. Idempotent.
 function makeCardClickable(contentElId, onClick) {
@@ -2728,7 +2743,16 @@ function makeCardClickable(contentElId, onClick) {
 }
 
 // ===================== REPUTATION & INFRASTRUCTURES =====================
-function renderReputation(club, players) {
+// Libelles + valeur brute (echelle /20 en base) pour chacune des 3
+// infrastructures ameliorables, utilises a la fois pour l'affichage et pour
+// savoir quelle infra ouvrir dans la popup "Ameliorer".
+const AMELIORER_INFRA_LABELS = {
+  entrainement: "Centre d'entraînement",
+  formation: "Centre de formation",
+  jeunes: "Recrutement des jeunes",
+};
+
+function renderReputation(club, players, isOwnClub) {
   const el = document.getElementById("clubReputation");
 
   const withRep = (players || []).filter(p => p.reputation_mondiale !== null && p.reputation_mondiale !== undefined);
@@ -2739,6 +2763,15 @@ function renderReputation(club, players) {
 
   const entrainementStars = club.niveau_entrainement ? starsFromScale(club.niveau_entrainement) : null;
   const formationStars = club.centre_formation && club.centre_formation > 0 ? starsFromScale(club.centre_formation) : null;
+  const jeunesStars = club.jeunes_centre && club.jeunes_centre > 0 ? starsFromScale(club.jeunes_centre) : null;
+
+  // Bouton "Améliorer" reserve au manager du club consulte (pas affiche en
+  // consultation d'un club adverse). Le contenu detaille de la popup sera
+  // construit plus tard : pour l'instant elle affiche juste le niveau
+  // actuel de l'infra concernee.
+  const ameliorerBtn = (key) => isOwnClub
+    ? `<button type="button" class="ameliorer-btn" data-infra="${key}">Améliorer</button>`
+    : "";
 
   el.innerHTML = `
     <div class="stat-row">
@@ -2746,12 +2779,16 @@ function renderReputation(club, players) {
       <span class="value">${repStars !== null ? starsHtml(repStars) : "-"}</span>
     </div>
     <div class="stat-row">
-      <span class="label">Centre d'entraînement</span>
-      <span class="value">${entrainementStars !== null ? starsHtml(entrainementStars) : "-"}</span>
+      <span class="label">${AMELIORER_INFRA_LABELS.entrainement}</span>
+      <span class="stat-row-value-wrap"><span class="value">${entrainementStars !== null ? starsHtml(entrainementStars) : "-"}</span>${ameliorerBtn("entrainement")}</span>
     </div>
     <div class="stat-row">
-      <span class="label">Centre de formation</span>
-      <span class="value">${formationStars !== null ? starsHtml(formationStars) : "Aucun"}</span>
+      <span class="label">${AMELIORER_INFRA_LABELS.formation}</span>
+      <span class="stat-row-value-wrap"><span class="value">${formationStars !== null ? starsHtml(formationStars) : "Aucun"}</span>${ameliorerBtn("formation")}</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">${AMELIORER_INFRA_LABELS.jeunes}</span>
+      <span class="stat-row-value-wrap"><span class="value">${jeunesStars !== null ? starsHtml(jeunesStars) : "Aucun"}</span>${ameliorerBtn("jeunes")}</span>
     </div>
     <div class="stat-row">
       <span class="label">Stade</span>
@@ -2762,6 +2799,39 @@ function renderReputation(club, players) {
       <span class="value">${formatInt(club.affluence_moyenne)}</span>
     </div>
   `;
+
+  el.querySelectorAll(".ameliorer-btn").forEach(btn => {
+    btn.addEventListener("click", () => openAmeliorerModal(btn.getAttribute("data-infra"), club));
+  });
+}
+
+// Popup "Améliorer" une infrastructure (centre d'entraînement / formation /
+// recrutement des jeunes). Contenu volontairement minimal pour l'instant :
+// le detail (cout, effets, palier suivant...) sera ajoute plus tard.
+function openAmeliorerModal(infraKey, club) {
+  const label = AMELIORER_INFRA_LABELS[infraKey] || "Infrastructure";
+  const rawByKey = { entrainement: club.niveau_entrainement, formation: club.centre_formation, jeunes: club.jeunes_centre };
+  const niveauActuel = rawByKey[infraKey];
+  const overlay = document.getElementById("ameliorerOverlay");
+  const modal = document.getElementById("ameliorerModal");
+  if (!overlay || !modal) return;
+  modal.innerHTML = `
+    <div class="fin-header">
+      <div>
+        <div class="fin-header-title">Améliorer — ${escapeHtml(label)}</div>
+        <div class="fin-header-sub">Niveau actuel : ${niveauActuel ? `${niveauActuel}/20` : "Aucun"}</div>
+      </div>
+      <button class="fin-close" id="ameliorerCloseBtn">✕</button>
+    </div>
+    <div class="fm-empty">Détails à venir.</div>
+  `;
+  overlay.classList.remove("hidden");
+  document.getElementById("ameliorerCloseBtn").addEventListener("click", closeAmeliorerModal);
+}
+
+function closeAmeliorerModal() {
+  const overlay = document.getElementById("ameliorerOverlay");
+  if (overlay) overlay.classList.add("hidden");
 }
 
 // ===================== EFFECTIF CLE (capitaine / vice-capitaine / meilleur joueur) =====================
@@ -4322,7 +4392,7 @@ async function loadClub() {
     .from("game_club_overview")
     .select(`
       game_club_id, nom, budget_actuel, classement, statut, nation, division,
-      niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne,
+      niveau_entrainement, centre_formation, jeunes_centre, capacite_stade, affluence_moyenne,
       nb_joueurs, meilleur_joueur_nom, user_id,
       budget_salarial_actuel, budget_transfert_actuel, masse_salariale_reference,
       budget_allouable_saison, marge_securite_saison, ratio_repartition_manuel
@@ -4383,7 +4453,7 @@ async function loadClub() {
   renderPitch();
   renderFinances(club);
   makeCardClickable("clubFinances", () => openFinancesModal(club, isOwnClub));
-  renderReputation(club, players || []);
+  renderReputation(club, players || [], isOwnClub);
   renderKeyPeople(club, players || [], rawClub);
   loadAndRenderPalmares(gameId, gameClubId);
 }
