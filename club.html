@@ -199,6 +199,8 @@
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
   }
+  .card-clickable { cursor: pointer; transition: border-color 0.15s; }
+  .card-clickable:hover { border-color: var(--text-dim); }
   .card-title {
     display: flex; justify-content: space-between; align-items: center;
     font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
@@ -235,15 +237,145 @@
   .fm-chart-dot:hover { r: 4.5; }
   .fm-chart-gridline { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .fm-chart-axis-line { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
-  .fm-chart-axis-label { fill: var(--text-dim); font-family: inherit; }
-  .fm-chart-axis-label.y { font-size: 7px; text-anchor: end; dominant-baseline: middle; }
-  .fm-chart-axis-label.x { font-size: 7px; text-anchor: middle; dominant-baseline: hanging; }
+  .fm-chart-axis-label { fill: var(--text-dim); font-family: inherit; opacity: 0.75; }
+  .fm-chart-axis-label.y { font-size: 6px; text-anchor: end; dominant-baseline: middle; }
+  .fm-chart-axis-label.x { font-size: 6px; text-anchor: middle; dominant-baseline: hanging; }
+  .fin-chart-big .fm-chart-axis-label.y,
+  .fin-chart-big .fm-chart-axis-label.x { font-size: 7.5px; }
   .fm-chart-placeholder-caption {
     text-align: center; font-size: 10px; color: var(--text-dim); margin-top: 4px;
   }
 
-  /* Budget salarial / transfert / masse salariale, sous le graphique */
-  .club-fin-budgets { display: flex; flex-direction: column; margin-top: 4px; }
+  /* Recap "mois dernier" / "cette saison" au-dessus du graphique, se met a
+     jour tout seul a chaque rendu (voir computeFinanceRecaps). */
+  .fin-recap-row { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 4px; }
+  .fin-recap-item { font-size: 12.5px; font-weight: 700; }
+  .fin-recap-item.gain { color: var(--accent); }
+  .fin-recap-item.perte { color: var(--danger); }
+  .fin-recap-label { font-weight: 500; color: var(--text-dim); }
+
+  /* ---- Popup Finances (repris de dashboard.html pour un rendu identique) :
+     detail budget, masse salariale, repartition et sous-onglets Revenus /
+     Depenses. ---- */
+  .fin-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px); z-index: 400;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .fin-overlay.hidden { display: none !important; }
+  .fin-modal {
+    width: 100%; max-width: 820px; max-height: 92vh; overflow-y: auto; overflow-x: hidden;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px 26px;
+  }
+  .fin-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 4px; }
+  .fin-header-title { font-size: 16px; font-weight: 800; }
+  .fin-header-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .fin-close {
+    background: none; border: none; color: var(--text-dim); font-size: 18px;
+    cursor: pointer; line-height: 1; padding: 4px; flex-shrink: 0;
+  }
+  .fin-close:hover { color: var(--text); }
+
+  .fin-budget-row { margin: 16px 0 4px; display: flex; align-items: baseline; gap: 10px; }
+  .fin-budget-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .fin-budget-value { font-size: 26px; font-weight: 800; color: var(--gold); }
+
+  .fin-chart-big .fm-chart-svg { height: 220px; }
+  .fin-chart-big .fm-chart-header .title { font-size: 12px; }
+
+  .fin-section-title {
+    font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-dim); margin: 22px 0 10px;
+  }
+
+  .fin-salary-card {
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+  }
+  .fin-salary-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .fin-salary-total .amount { font-size: 20px; font-weight: 800; }
+  .fin-salary-total .label { font-size: 12px; color: var(--text-dim); }
+  .fin-salary-bar-track {
+    display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #0d0f13;
+    margin: 10px 0 8px;
+  }
+  .fin-salary-bar-fill.players { background: var(--accent); }
+  .fin-salary-bar-fill.staff { background: var(--gold); }
+  .fin-salary-legend { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-dim); }
+  .fin-salary-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .fin-salary-legend .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .fin-salary-legend .dot.players { background: var(--accent); }
+  .fin-salary-legend .dot.staff { background: var(--gold); }
+
+  .fin-repart-card {
+    background: #14171d; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+  }
+  .fin-repart-bar-track {
+    display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: #0d0f13;
+    margin-bottom: 12px;
+  }
+  .fin-repart-bar-seg { transition: width 0.12s ease; }
+  .fin-repart-bar-seg.salarial-fixe { background: var(--gold); opacity: 0.55; }
+  .fin-repart-bar-seg.salarial-marge { background: var(--gold); }
+  .fin-repart-bar-seg.transfert { background: var(--accent); }
+  .fin-repart-bar-seg.reserve { background: #2a2f3a; }
+  .fin-repart-legend {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; font-size: 11.5px; color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+  .fin-repart-legend .item { display: flex; align-items: center; gap: 6px; }
+  .fin-repart-legend .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .fin-repart-legend .dot.salarial-fixe { background: var(--gold); opacity: 0.55; }
+  .fin-repart-legend .dot.salarial-marge { background: var(--gold); }
+  .fin-repart-legend .dot.transfert { background: var(--accent); }
+  .fin-repart-legend .dot.reserve { background: #2a2f3a; }
+  .fin-repart-legend b { color: var(--text); font-weight: 700; }
+  .fin-repart-slider-row { display: flex; flex-direction: column; gap: 6px; }
+  .fin-repart-slider-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+  .fin-repart-slider-labels .side-salarial { color: var(--gold); }
+  .fin-repart-slider-labels .side-transfert { color: var(--accent); }
+  .fin-repart-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px;
+    background: linear-gradient(to right, var(--gold), var(--accent)); cursor: pointer; outline: none; }
+  .fin-repart-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--text); border: 3px solid var(--panel); cursor: pointer; }
+  .fin-repart-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--text);
+    border: 3px solid var(--panel); cursor: pointer; }
+  .fin-repart-slider:disabled { opacity: 0.4; cursor: not-allowed; }
+  .fin-repart-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+  .fin-repart-auto-note {
+    font-size: 11.5px; color: var(--text-dim); background: #14171d; border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .fin-repart-crise {
+    font-size: 12px; color: var(--danger); background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.35); border-radius: 10px; padding: 10px 14px; margin-top: 10px;
+  }
+
+  .fin-subtabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .fin-subtab-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 7px 16px; border-radius: 999px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .fin-subtab-btn:hover { border-color: var(--text-dim); color: var(--text); }
+  .fin-subtab-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(251,191,36,0.08); }
+  .fin-subtab-total { font-size: 12.5px; color: var(--text-dim); margin-bottom: 10px; }
+  .fin-subtab-total b { font-weight: 800; }
+  .fin-movement-list { display: flex; flex-direction: column; }
+  .fin-movement-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .fin-movement-row:last-child { border-bottom: none; }
+  .fin-movement-motif { color: var(--text); }
+  .fin-movement-jour { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .fin-movement-amount { font-weight: 700; white-space: nowrap; }
+  .fin-movement-amount.gain { color: var(--accent); }
+  .fin-movement-amount.perte { color: var(--danger); }
+  .fin-empty { color: var(--text-dim); font-size: 12.5px; padding: 24px 0; text-align: center; }
+
+  @media (max-width: 640px) {
+    .fin-modal { padding: 16px 16px 20px; }
+    .fin-budget-value { font-size: 22px; }
+  }
 
   .stars { position: relative; display: inline-block; font-size: 14px; letter-spacing: 2px; line-height: 1; }
   .stars-bg { color: var(--border); }
@@ -967,6 +1099,10 @@
 
 <div class="mdet-overlay hidden" id="mdetOverlay">
   <div class="mdet-modal" id="mdetContent"></div>
+</div>
+
+<div class="fin-overlay hidden" id="finOverlay">
+  <div class="fin-modal" id="finModal"></div>
 </div>
 
 <script>
@@ -1832,7 +1968,9 @@ function emptyPitchSvg() {
   `;
 }
 
-// ===================== FINANCES (reprend la logique de dashboard.html) =====================
+// ===================== FINANCES (identique a dashboard.html : module +
+// popup de detail, pour que les deux pages affichent exactement la meme
+// chose) =====================
 async function fetchFinanceHistory(club) {
   const { data, error } = await supabaseClient
     .from("game_events")
@@ -1855,21 +1993,30 @@ async function fetchFinanceHistory(club) {
   });
 }
 
-// Masse salariale du club (joueurs + staff), calcul en direct — a
-// distinguer de masse_salariale_reference (figee a la cloture de saison,
-// plancher de budget_salarial_actuel).
+// Masse salariale du club : somme des salaires mensuels de tous les
+// joueurs (game_players.salaire_actuel) et de tout le staff technique
+// (game_staff.salaire_actuel) rattaches au club, toutes categories
+// d'equipe confondues (equipe A, reserve, U18).
 async function fetchClubSalaryMass(gameClubId) {
   const [playersRes, staffRes] = await Promise.all([
     supabaseClient.from("game_players").select("salaire_actuel").eq("game_club_id", gameClubId),
     supabaseClient.from("game_staff").select("salaire_actuel").eq("game_club_id", gameClubId),
   ]);
-  const totalJoueurs = (playersRes.data || []).reduce((a, p) => a + (Number(p.salaire_actuel) || 0), 0);
-  const totalStaff = (staffRes.data || []).reduce((a, s) => a + (Number(s.salaire_actuel) || 0), 0);
-  return totalJoueurs + totalStaff;
+
+  const playerSalaries = (playersRes.data || []).map(p => Number(p.salaire_actuel) || 0);
+  const staffSalaries = (staffRes.data || []).map(s => Number(s.salaire_actuel) || 0);
+  const totalJoueurs = playerSalaries.reduce((a, b) => a + b, 0);
+  const totalStaff = staffSalaries.reduce((a, b) => a + b, 0);
+
+  return {
+    totalJoueurs, totalStaff, total: totalJoueurs + totalStaff,
+    nbJoueurs: playerSalaries.length, nbStaff: staffSalaries.length,
+  };
 }
 
 // Formatte un montant en version compacte pour les libelles de l'axe
-// vertical du graphique (ex: 1,2M€ / 850k€ / 300€).
+// vertical du graphique (ex: 1,2M€ / 850k€ / 300€), pour rester lisible
+// sur un axe etroit contrairement a formatMoney (toujours en toutes lettres).
 function formatMoneyAxis(n) {
   const sign = n < 0 ? "-" : "";
   const abs = Math.abs(n);
@@ -1884,21 +2031,160 @@ function formatMoneyAxis(n) {
   return sign + Math.round(abs) + "€";
 }
 
-// Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal.
+// Construit une serie a exactement un point par mois calendaire, pour les
+// FIN_MONTHS_COUNT derniers mois, le dernier point etant toujours le mois
+// en cours (aujourd'hui = date_debut + jour_actuel, jamais la date du
+// navigateur). Un mois sans aucun mouvement reconduit le dernier solde
+// connu (ligne plate) plutot que d'etre saute, pour garder un espacement
+// regulier et fidele au calendrier. Tout mouvement dont la date recalculee
+// depasserait "aujourd'hui" (glitch de donnees, jour_actuel incoherent) est
+// ecarte : le graphique ne doit jamais deriver dans le futur, et le dernier
+// point doit toujours coller au bord droit du graphique (mois en cours =
+// dernier point de la serie, jamais de mois "fantome" apres).
+const FIN_MONTHS_COUNT = 6;
+
+function buildFinanceMonthlySeries(rawHistory, club) {
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (!today) return rawHistory || [];
+
+  const cleanHistory = (rawHistory || []).filter(pt => {
+    const d = computeRealDate(currentGame.date_debut, pt.jour);
+    return d && d <= today;
+  });
+
+  const months = [];
+  for (let i = FIN_MONTHS_COUNT - 1; i >= 0; i--) {
+    months.push(new Date(today.getFullYear(), today.getMonth() - i, 1));
+  }
+
+  // Dernier solde connu avant la fenetre affichee, pour pouvoir reconduire
+  // une valeur meme si aucun mouvement n'est tombe dans les mois affiches.
+  let lastKnownValue = null;
+  const beforeWindow = cleanHistory.filter(pt => computeRealDate(currentGame.date_debut, pt.jour) < months[0]);
+  if (beforeWindow.length) lastKnownValue = beforeWindow[beforeWindow.length - 1].value;
+  else if (cleanHistory.length === 0) lastKnownValue = Number(club?.budget_actuel) || 0;
+
+  return months.map((monthStart, idx) => {
+    const isCurrentMonth = idx === months.length - 1;
+    const nextMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    const inMonth = cleanHistory.filter(pt => {
+      const d = computeRealDate(currentGame.date_debut, pt.jour);
+      return d >= monthStart && d < nextMonth;
+    });
+
+    let value, delta, motif, jour;
+    if (isCurrentMonth) {
+      // Mois en cours : toujours le solde live (budget_actuel), jamais une
+      // valeur reconstituee, pour rester exact et coller au bord droit.
+      value = Number(club?.budget_actuel) || 0;
+      delta = inMonth.reduce((a, p) => a + p.delta, 0);
+      motif = inMonth.length === 1 ? inMonth[0].motif : (inMonth.length ? `${inMonth.length} mouvements` : null);
+      jour = currentGame.jour_actuel;
+    } else if (inMonth.length) {
+      const last = inMonth[inMonth.length - 1];
+      value = last.value;
+      delta = inMonth.reduce((a, p) => a + p.delta, 0);
+      motif = inMonth.length === 1 ? last.motif : `${inMonth.length} mouvements`;
+      jour = last.jour;
+    } else {
+      value = lastKnownValue !== null ? lastKnownValue : (Number(club?.budget_actuel) || 0);
+      delta = 0;
+      motif = null;
+      jour = null; // aucun mouvement reel ce mois-la
+    }
+    if (inMonth.length) lastKnownValue = value;
+    return { value, delta, motif, jour, monthDate: monthStart };
+  });
+}
+
+// Recap "mois dernier" / "cette saison" affiche au-dessus du graphique.
+// "Mois dernier" = somme des mouvements du mois calendaire precedent (null
+// si la partie n'a pas encore un mois complet). "Cette saison" = somme des
+// mouvements depuis le debut de la saison en cours ; les saisons calquant
+// leur cycle sur l'anniversaire annuel de date_debut (pas de champ dedie
+// cote base), le debut de saison est approxime par date_debut + (saison-1)
+// ans. Se recalcule a chaque rendu, donc se met a jour tout seul des que
+// jour_actuel avance (nouveau mois / nouvelle saison).
+function computeFinanceRecaps(rawHistory) {
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (!today || !rawHistory || rawHistory.length === 0) return { moisDernier: null, saison: null };
+
+  const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 1);
+  let moisDernier = null;
+  let saison = null;
+
+  let sumMoisDernier = 0, hasMoisDernier = false;
+  for (const ev of rawHistory) {
+    const d = computeRealDate(currentGame.date_debut, ev.jour);
+    if (d && d >= prevMonth && d < prevMonthEnd) {
+      sumMoisDernier += ev.delta;
+      hasMoisDernier = true;
+    }
+  }
+  if (hasMoisDernier) moisDernier = sumMoisDernier;
+
+  if (currentGame.date_debut && currentGame.saison != null) {
+    const seasonStart = new Date(`${currentGame.date_debut}T00:00:00`);
+    if (!isNaN(seasonStart.getTime())) {
+      seasonStart.setFullYear(seasonStart.getFullYear() + (Number(currentGame.saison) - 1));
+      let sumSaison = 0;
+      for (const ev of rawHistory) {
+        const d = computeRealDate(currentGame.date_debut, ev.jour);
+        if (d && d >= seasonStart && d <= today) sumSaison += ev.delta;
+      }
+      saison = sumSaison;
+    }
+  }
+
+  return { moisDernier, saison };
+}
+
+function renderFinanceRecap(recaps) {
+  const items = [];
+  if (recaps.moisDernier !== null) {
+    items.push({ value: recaps.moisDernier, label: "le mois dernier" });
+  }
+  if (recaps.saison !== null) {
+    items.push({ value: recaps.saison, label: "cette saison" });
+  }
+  if (!items.length) return "";
+  return `
+    <div class="fin-recap-row">
+      ${items.map(it => `
+        <span class="fin-recap-item ${it.value >= 0 ? "gain" : "perte"}">
+          ${it.value >= 0 ? "+" : ""}${formatMoney(it.value)} <span class="fin-recap-label">${it.label}</span>
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+// Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal, a partir
+// d'une date reelle calculee via computeRealDate (date_debut + jour).
 function formatChartMonth(date) {
   if (!date) return "";
   return new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" }).format(date).replace(/\.$/, "");
 }
 
-function renderFinanceChart(history, isPlaceholder = false) {
-  const totalW = 400, totalH = 90;
-  const padL = 30, padR = 6, padTop = 8, padBottom = 16;
+function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
+  const totalW = opts.w || 400, totalH = opts.h || 70;
+  const compact = totalW <= 450;
+
+  // Marges internes du SVG pour laisser la place aux axes : a gauche pour
+  // les libelles de valeurs (€), en bas pour les libelles de mois.
+  const padL = compact ? 30 : 46;
+  const padR = compact ? 6 : 12;
+  const padTop = 8;
+  const padBottom = compact ? 16 : 22;
   const plotW = Math.max(1, totalW - padL - padR);
   const plotH = Math.max(1, totalH - padTop - padBottom);
 
   const values = history.map(p => p.value);
   const min = Math.min(...values), max = Math.max(...values);
   const flat = max === min;
+  // Marge additionnelle au-dessus/en-dessous des valeurs reelles pour que
+  // la courbe ne colle pas aux bords du graphique.
   const rawRange = Math.max(1, max - min);
   const rangePad = flat ? Math.max(1, Math.abs(max) * 0.1) : rawRange * 0.1;
   const yMin = min - rangePad, yMax = max + rangePad;
@@ -1918,12 +2204,14 @@ function renderFinanceChart(history, isPlaceholder = false) {
 
   const dots = isPlaceholder ? "" : coords.map(c => {
     const color = c.pt.delta >= 0 ? "var(--accent)" : "var(--danger)";
-    const label = `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
-    return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.5" fill="${color}"><title>${label}</title></circle>`;
+    const label = c.pt.jour === null
+      ? `${formatChartMonth(c.pt.monthDate)} : aucun mouvement (solde ${formatMoney(c.pt.value)})`
+      : `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
+    return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${compact ? 2.5 : 3}" fill="${color}"><title>${label}</title></circle>`;
   }).join("");
 
   // ---- Axe vertical : quadrillage + libelles de valeurs en € ----
-  const nYTicks = 3;
+  const nYTicks = compact ? 3 : 5;
   let yAxisHtml = "";
   for (let i = 0; i < nYTicks; i++) {
     const v = yMin + (range * i) / (nYTicks - 1);
@@ -1934,19 +2222,19 @@ function renderFinanceChart(history, isPlaceholder = false) {
     `;
   }
 
-  // ---- Axe horizontal : libelles de dates (mois) ----
-  const nXTicks = Math.max(1, Math.min(3, history.length));
+  // ---- Axe horizontal : libelles de dates (mois), un libelle par point ----
+  // La serie ne contient plus qu'un point par mois calendaire (voir
+  // buildFinanceMonthlySeries), donc chaque point recoit son propre
+  // libelle : plus de sous-echantillonnage ni de risque de doublon.
   let xAxisHtml = "";
-  for (let i = 0; i < nXTicks; i++) {
-    const idx = nXTicks > 1 ? Math.round((i * (history.length - 1)) / (nXTicks - 1)) : 0;
-    const c = coords[idx];
-    const d = computeRealDate(currentGame?.date_debut, c.pt.jour);
+  for (const c of coords) {
+    const d = c.pt.monthDate || computeRealDate(currentGame?.date_debut, c.pt.jour);
     const label = d ? formatChartMonth(d) : `J${c.pt.jour}`;
     xAxisHtml += `<text class="fm-chart-axis-label x" x="${c.x.toFixed(1)}" y="${(padTop + plotH + 6).toFixed(1)}">${escapeHtml(label)}</text>`;
   }
 
   return `
-    <div class="fm-chart-wrap${isPlaceholder ? " fm-chart-wrap--placeholder" : ""}">
+    <div class="fm-chart-wrap${isPlaceholder ? " fm-chart-wrap--placeholder" : ""}${opts.extraClass ? " " + opts.extraClass : ""}">
       <div class="fm-chart-header">
         <span class="title">${isPlaceholder ? "Aperçu du graphique" : "Historique des mouvements"}</span>
         ${isPlaceholder ? "" : `
@@ -1975,42 +2263,321 @@ function renderFinanceChart(history, isPlaceholder = false) {
   `;
 }
 
-// Historique factice (ligne plate au budget actuel) affiche quand aucun
-// mouvement financier n'a encore ete enregistre.
+// Historique factice (ligne plate au budget actuel, un point par mois sur
+// la meme fenetre de FIN_MONTHS_COUNT mois que la vraie serie) affiche
+// quand aucun mouvement financier n'a encore ete enregistre, pour donner un
+// apercu du graphique avant qu'il n'y ait de vraies donnees.
 function buildFinancePlaceholderHistory(budget) {
   const value = budget || 0;
-  return [0, 1, 2, 3, 4].map(i => ({ jour: i, value, delta: 0, motif: null }));
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (!today) return [0, 1, 2, 3, 4].map(i => ({ jour: i, value, delta: 0, motif: null }));
+  const months = [];
+  for (let i = FIN_MONTHS_COUNT - 1; i >= 0; i--) {
+    months.push(new Date(today.getFullYear(), today.getMonth() - i, 1));
+  }
+  return months.map(monthDate => ({ value, delta: 0, motif: null, jour: null, monthDate }));
 }
 
 async function renderFinances(club) {
   const el = document.getElementById("clubFinances");
-  const [history, masseSalariale] = await Promise.all([
-    fetchFinanceHistory(club),
-    fetchClubSalaryMass(club.game_club_id),
-  ]);
-  const hasHistory = history.length > 1;
-
+  const rawHistory = await fetchFinanceHistory(club);
+  const hasHistory = rawHistory.length >= 1;
+  const history = buildFinanceMonthlySeries(rawHistory, club);
   el.innerHTML = `
     <div class="stat-row">
       <span class="label">Budget disponible</span>
       <span class="value">${formatMoney(club.budget_actuel)}</span>
     </div>
+    ${renderFinanceRecap(computeFinanceRecaps(rawHistory))}
     ${renderFinanceChart(hasHistory ? history : buildFinancePlaceholderHistory(club.budget_actuel), !hasHistory)}
-    <div class="club-fin-budgets">
-      <div class="stat-row">
-        <span class="label">Budget salarial</span>
-        <span class="value">${formatMoney(club.budget_salarial_actuel)}</span>
+  `;
+}
+
+function renderSalaryMassCard(mass) {
+  const total = Math.max(1, mass.total);
+  const pctJoueurs = Math.round((mass.totalJoueurs / total) * 100);
+  const pctStaff = 100 - pctJoueurs;
+  return `
+    <div class="fin-salary-card">
+      <div class="fin-salary-total">
+        <span class="amount">${formatMoney(mass.total)}</span>
+        <span class="label">/ mois</span>
       </div>
-      <div class="stat-row">
-        <span class="label">Budget transfert</span>
-        <span class="value">${formatMoney(club.budget_transfert_actuel)}</span>
+      <div class="fin-salary-bar-track">
+        <div class="fin-salary-bar-fill players" style="width:${pctJoueurs}%"></div>
+        <div class="fin-salary-bar-fill staff" style="width:${pctStaff}%"></div>
       </div>
-      <div class="stat-row">
-        <span class="label">Masse salariale</span>
-        <span class="value">${formatMoney(masseSalariale)}</span>
+      <div class="fin-salary-legend">
+        <span><span class="dot players"></span>Joueurs (${mass.nbJoueurs}) — ${formatMoney(mass.totalJoueurs)}</span>
+        <span><span class="dot staff"></span>Staff (${mass.nbStaff}) — ${formatMoney(mass.totalStaff)}</span>
       </div>
     </div>
   `;
+}
+
+// Repartition budget salarial / budget transfert : l'enveloppe totale de
+// la saison (masse_salariale_reference + budget_allouable_saison + marge
+// de securite) est figee a la cloture de saison. Seul le curseur du club
+// controle par l'utilisateur redistribue cette enveloppe deja figee entre
+// salarial (au-dessus de la masse de reference) et transfert, a n'importe
+// quel moment de la saison. Pour les autres clubs, tout est auto-reparti.
+const FIN_REPART_COUT_SALARIAL = 3;
+const FIN_REPART_MARGE_MAX_PCT = 0.40;
+
+function repartitionMargeMax(club) {
+  const allouable = Number(club.budget_allouable_saison) || 0;
+  const masseRef = Number(club.masse_salariale_reference) || 0;
+  return Math.min(allouable / FIN_REPART_COUT_SALARIAL, masseRef * FIN_REPART_MARGE_MAX_PCT);
+}
+
+// Reproduit cote client le meme calcul que set_ratio_repartition_budget,
+// pour un retour visuel instantane pendant qu'on deplace le curseur (avant
+// la confirmation serveur au relachement).
+function computeRepartitionLocal(club, ratio) {
+  const allouable = Number(club.budget_allouable_saison) || 0;
+  const masseRef = Number(club.masse_salariale_reference) || 0;
+  if (allouable <= 0) {
+    return { salarial: masseRef, transfert: 0 };
+  }
+  const r = Math.min(Math.max(ratio, 0), 1);
+  const margeMax = repartitionMargeMax(club);
+  const marge = Math.round(margeMax * r);
+  const transfert = allouable - Math.round(marge * FIN_REPART_COUT_SALARIAL);
+  return { salarial: masseRef + marge, transfert: Math.max(transfert, 0) };
+}
+
+function currentRepartitionRatio(club) {
+  const margeMax = repartitionMargeMax(club);
+  if (margeMax <= 0) return 0;
+  const marge = (Number(club.budget_salarial_actuel) || 0) - (Number(club.masse_salariale_reference) || 0);
+  return Math.min(Math.max(marge / margeMax, 0), 1);
+}
+
+function renderRepartitionCard(club, isOwnClub) {
+  const masseRef = Number(club.masse_salariale_reference) || 0;
+  const allouable = Number(club.budget_allouable_saison) || 0;
+  const reserve = Number(club.marge_securite_saison) || 0;
+  const ratio = currentRepartitionRatio(club);
+  const { salarial, transfert } = computeRepartitionLocal(club, ratio);
+  const totalEnveloppe = Math.max(masseRef + allouable + reserve, 1);
+  const pctFixe = (masseRef / totalEnveloppe) * 100;
+  const pctMarge = ((salarial - masseRef) / totalEnveloppe) * 100;
+  const pctTransfert = (transfert / totalEnveloppe) * 100;
+  const pctReserve = (reserve / totalEnveloppe) * 100;
+  const enCrise = allouable <= 0 && masseRef > 0;
+
+  const bar = `
+    <div class="fin-repart-bar-track" id="finRepartBar">
+      <div class="fin-repart-bar-seg salarial-fixe" style="width:${pctFixe}%"></div>
+      <div class="fin-repart-bar-seg salarial-marge" style="width:${pctMarge}%"></div>
+      <div class="fin-repart-bar-seg transfert" style="width:${pctTransfert}%"></div>
+      <div class="fin-repart-bar-seg reserve" style="width:${pctReserve}%"></div>
+    </div>
+    <div class="fin-repart-legend">
+      <div class="item"><span class="dot salarial-fixe"></span>Masse salariale — <b id="finRepartMasse">${formatMoney(masseRef)}</b></div>
+      <div class="item"><span class="dot transfert"></span>Budget transfert — <b id="finRepartTransfert">${formatMoney(transfert)}</b></div>
+      <div class="item"><span class="dot salarial-marge"></span>Marge salariale — <b id="finRepartMarge">${formatMoney(salarial - masseRef)}</b></div>
+      <div class="item"><span class="dot reserve"></span>Réserve de sécurité — <b>${formatMoney(reserve)}</b></div>
+    </div>
+  `;
+
+  if (!isOwnClub) {
+    return `
+      <div class="fin-repart-card">
+        ${bar}
+        <div class="fin-repart-auto-note">Répartition automatique, ajustée selon la santé financière du club.</div>
+      </div>
+    `;
+  }
+
+  if (enCrise) {
+    return `
+      <div class="fin-repart-card">
+        ${bar}
+        <div class="fin-repart-crise">Trésorerie insuffisante pour dégager une marge : tout le budget disponible couvre à peine la masse salariale. Rien à répartir tant que les finances ne se redressent pas (prochaine réévaluation à la clôture de la saison).</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="fin-repart-card">
+      ${bar}
+      <div class="fin-repart-slider-row">
+        <div class="fin-repart-slider-labels">
+          <span class="side-salarial">Salarial</span>
+          <span class="side-transfert">Transfert</span>
+        </div>
+        <input type="range" min="0" max="100" step="1" value="${Math.round(ratio * 100)}"
+          class="fin-repart-slider" id="finRepartSlider" />
+      </div>
+      <div class="fin-repart-hint">Redistribue l'enveloppe de la saison entre salaires et transferts, sans toucher à la trésorerie disponible. Développer la marge salariale coûte ${FIN_REPART_COUT_SALARIAL}x son montant en budget transfert (dépense récurrente vs dépense nette). Ajustable à tout moment.</div>
+    </div>
+  `;
+}
+
+function bindRepartitionCard(club, isOwnClub) {
+  if (!isOwnClub) return;
+  const slider = document.getElementById("finRepartSlider");
+  if (!slider) return;
+
+  slider.addEventListener("input", () => {
+    const ratio = Number(slider.value) / 100;
+    const { salarial, transfert } = computeRepartitionLocal(club, ratio);
+    const masseRef = Number(club.masse_salariale_reference) || 0;
+    const allouable = Number(club.budget_allouable_saison) || 0;
+    const reserve = Number(club.marge_securite_saison) || 0;
+    const totalEnveloppe = Math.max(masseRef + allouable + reserve, 1);
+    const bar = document.getElementById("finRepartBar");
+    if (bar) {
+      bar.children[0].style.width = `${(masseRef / totalEnveloppe) * 100}%`;
+      bar.children[1].style.width = `${((salarial - masseRef) / totalEnveloppe) * 100}%`;
+      bar.children[2].style.width = `${(transfert / totalEnveloppe) * 100}%`;
+      bar.children[3].style.width = `${(reserve / totalEnveloppe) * 100}%`;
+    }
+    const elTransfert = document.getElementById("finRepartTransfert");
+    const elMarge = document.getElementById("finRepartMarge");
+    if (elTransfert) elTransfert.textContent = formatMoney(transfert);
+    if (elMarge) elMarge.textContent = formatMoney(salarial - masseRef);
+  });
+
+  slider.addEventListener("change", async () => {
+    const ratio = Number(slider.value) / 100;
+    slider.disabled = true;
+    try {
+      const { data, error } = await supabaseClient.rpc("set_ratio_repartition_budget", {
+        p_game_club_id: club.game_club_id,
+        p_ratio: ratio,
+      });
+      if (error) throw error;
+      const result = Array.isArray(data) ? data[0] : data;
+      if (result) {
+        club.budget_salarial_actuel = result.budget_salarial;
+        club.budget_transfert_actuel = result.budget_transfert;
+        club.ratio_repartition_manuel = result.ratio_utilise;
+      }
+    } catch (err) {
+      console.error("Erreur mise a jour repartition budget", err);
+      toast("Impossible d'enregistrer la répartition", true);
+    } finally {
+      slider.disabled = false;
+    }
+  });
+}
+
+// Sous-onglets Revenus / Depenses de la popup Finances.
+let finCurrentMovements = [];
+let finActiveSubtab = "revenus";
+
+function renderFinMovementList(subtab) {
+  const filtered = finCurrentMovements
+    .filter(m => subtab === "revenus" ? m.delta >= 0 : m.delta < 0)
+    .slice()
+    .reverse();
+
+  const total = filtered.reduce((a, m) => a + Math.abs(m.delta), 0);
+
+  const rowsHtml = filtered.length
+    ? filtered.map(m => `
+        <div class="fin-movement-row">
+          <div>
+            <div class="fin-movement-motif">${escapeHtml(m.motif || (subtab === "revenus" ? "Entrée" : "Sortie"))}</div>
+            <div class="fin-movement-jour">Jour ${m.jour}</div>
+          </div>
+          <div class="fin-movement-amount ${subtab === "revenus" ? "gain" : "perte"}">${subtab === "revenus" ? "+" : "-"}${formatMoney(Math.abs(m.delta))}</div>
+        </div>
+      `).join("")
+    : `<div class="fin-empty">Aucun ${subtab === "revenus" ? "revenu" : "dépense"} enregistré pour le moment.</div>`;
+
+  return `
+    <div class="fin-subtab-total">${filtered.length} mouvement${filtered.length > 1 ? "s" : ""} · Total <b>${formatMoney(total)}</b></div>
+    <div class="fin-movement-list">${rowsHtml}</div>
+  `;
+}
+
+function showFinSubtab(subtab) {
+  finActiveSubtab = subtab;
+  document.querySelectorAll(".fin-subtab-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-subtab") === subtab);
+  });
+  const body = document.getElementById("finMovementsBody");
+  if (body) body.innerHTML = renderFinMovementList(subtab);
+}
+
+// Popup plein detail des finances, ouverte au clic sur la carte "Finances" :
+// budget, graphique en grand, masse salariale (joueurs + staff reunis) et
+// sous-onglets Revenus / Depenses bases sur le vrai historique de game_events.
+async function openFinancesModal(club, isOwnClub) {
+  const overlay = document.getElementById("finOverlay");
+  const modal = document.getElementById("finModal");
+  modal.innerHTML = `<div class="fin-empty">Chargement...</div>`;
+  overlay.classList.remove("hidden");
+
+  const [history, mass] = await Promise.all([
+    fetchFinanceHistory(club),
+    fetchClubSalaryMass(club.game_club_id),
+  ]);
+  const hasHistory = history.length > 1;
+  finCurrentMovements = hasHistory ? history : [];
+  finActiveSubtab = "revenus";
+  const chartHistory = buildFinanceMonthlySeries(history, club);
+  const chartHasHistory = history.length >= 1;
+
+  modal.innerHTML = `
+    <div class="fin-header">
+      <div>
+        <div class="fin-header-title">Finances — ${escapeHtml(club.nom || "")}</div>
+        <div class="fin-header-sub">Vue d'ensemble du budget et de la masse salariale</div>
+      </div>
+      <button class="fin-close" id="finCloseBtn">✕</button>
+    </div>
+
+    <div class="fin-budget-row">
+      <span class="fin-budget-label">Budget disponible</span>
+      <span class="fin-budget-value">${formatMoney(club.budget_actuel)}</span>
+    </div>
+    ${renderFinanceRecap(computeFinanceRecaps(history))}
+    ${renderFinanceChart(chartHasHistory ? chartHistory : buildFinancePlaceholderHistory(club.budget_actuel), !chartHasHistory, { w: 760, h: 220, extraClass: "fin-chart-big" })}
+
+    <div class="fin-section-title">Masse salariale (joueurs + staff)</div>
+    ${renderSalaryMassCard(mass)}
+
+    <div class="fin-section-title">Répartition budget salarial / transfert</div>
+    ${renderRepartitionCard(club, isOwnClub)}
+
+    <div class="fin-section-title">Mouvements</div>
+    <div class="fin-subtabs">
+      <button type="button" class="fin-subtab-btn" data-subtab="revenus">Revenus</button>
+      <button type="button" class="fin-subtab-btn" data-subtab="depenses">Dépenses</button>
+    </div>
+    <div id="finMovementsBody"></div>
+  `;
+
+  document.getElementById("finCloseBtn").addEventListener("click", closeFinancesModal);
+  document.querySelectorAll(".fin-subtab-btn").forEach(btn => {
+    btn.addEventListener("click", () => showFinSubtab(btn.getAttribute("data-subtab")));
+  });
+  bindRepartitionCard(club, isOwnClub);
+  showFinSubtab("revenus");
+}
+
+function closeFinancesModal() {
+  document.getElementById("finOverlay").classList.add("hidden");
+}
+
+document.getElementById("finOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "finOverlay") closeFinancesModal();
+});
+
+// Rend une carte cliquable (curseur pointeur + effet hover), utilise pour
+// ouvrir la popup Finances au clic. Idempotent.
+function makeCardClickable(contentElId, onClick) {
+  const contentEl = document.getElementById(contentElId);
+  if (!contentEl) return;
+  const card = contentEl.closest(".card");
+  if (!card || card.dataset.navBound) return;
+  card.dataset.navBound = "1";
+  card.classList.add("card-clickable");
+  card.addEventListener("click", onClick);
 }
 
 // ===================== REPUTATION & INFRASTRUCTURES =====================
@@ -3380,7 +3947,9 @@ async function loadClub() {
     .select(`
       game_club_id, nom, budget_actuel, classement, statut, nation, division,
       niveau_entrainement, centre_formation, capacite_stade, affluence_moyenne,
-      nb_joueurs, meilleur_joueur_nom, budget_salarial_actuel, budget_transfert_actuel
+      nb_joueurs, meilleur_joueur_nom, user_id,
+      budget_salarial_actuel, budget_transfert_actuel, masse_salariale_reference,
+      budget_allouable_saison, marge_securite_saison, ratio_repartition_manuel
     `)
     .eq("game_id", gameId)
     .eq("game_club_id", gameClubId)
@@ -3435,6 +4004,7 @@ async function loadClub() {
   renderClubHero(club, rawClub);
   renderPitch();
   renderFinances(club);
+  makeCardClickable("clubFinances", () => openFinancesModal(club, isOwnClub));
   renderReputation(club, players || []);
   renderKeyPeople(club, players || [], rawClub);
   loadAndRenderPalmares(gameId, gameClubId);
