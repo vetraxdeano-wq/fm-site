@@ -712,10 +712,10 @@ function renderClubLogo(logoUrl) {
   }
 }
 
-// Clic sur le logo ou le nom du club (carte "Contrat & valeur") -> fiche du club.
+// Clic sur le logo ou le nom du club (carte "Contrat & valeur") -> infos du club.
 function goToClub() {
   if (!clubIdParam || !gameId) return;
-  window.location.href = `squad.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubIdParam)}`;
+  window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubIdParam)}`;
 }
 
 // ---------- Drapeaux ----------
