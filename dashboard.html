@@ -1222,6 +1222,14 @@
   .fin-budget-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
   .fin-budget-value { font-size: 26px; font-weight: 800; color: var(--gold); }
 
+  /* Recap "mois dernier" / "cette saison" au-dessus du graphique, se met a
+     jour tout seul a chaque rendu (voir computeFinanceRecaps). */
+  .fin-recap-row { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 4px; }
+  .fin-recap-item { font-size: 12.5px; font-weight: 700; }
+  .fin-recap-item.gain { color: var(--accent); }
+  .fin-recap-item.perte { color: var(--danger); }
+  .fin-recap-label { font-weight: 500; color: var(--text-dim); }
+
   .fin-chart-big .fm-chart-svg { height: 220px; }
   .fin-chart-big .fm-chart-header .title { font-size: 12px; }
 
@@ -8916,38 +8924,133 @@ function formatMoneyAxis(n) {
   return sign + Math.round(abs) + "€";
 }
 
-// Regroupe l'historique (un point par mouvement financier) en un point par
-// mois calendaire, pour que le graphique reste lisible meme quand un mois
-// contient de nombreux mouvements. Le point retenu par mois est le solde
-// de fin de mois (dernier mouvement chronologique du mois) ; le delta
-// affiche au survol est la somme des mouvements du mois. Peut renvoyer un
-// seul point si tous les mouvements de la partie tombent dans le meme mois
-// (typiquement en debut de partie) : le graphique gere nativement ce cas
-// (voir renderFinanceChart) en centrant un point unique plutot que de
-// tracer une ligne.
-function aggregateFinanceHistoryByMonth(history) {
-  if (!history || history.length === 0) return history;
-  const groups = [];
-  let currentKey = null;
-  for (const pt of history) {
-    const d = computeRealDate(currentGame?.date_debut, pt.jour);
-    const key = d ? `${d.getFullYear()}-${d.getMonth()}` : `j${pt.jour}`;
-    if (key !== currentKey) {
-      groups.push([]);
-      currentKey = key;
-    }
-    groups[groups.length - 1].push(pt);
-  }
-  return groups.map(g => {
-    const last = g[g.length - 1];
-    const deltaSum = g.reduce((a, p) => a + p.delta, 0);
-    return {
-      jour: last.jour,
-      value: last.value,
-      delta: deltaSum,
-      motif: g.length === 1 ? last.motif : `${g.length} mouvements`,
-    };
+// Construit une serie a exactement un point par mois calendaire, pour les
+// FIN_MONTHS_COUNT derniers mois, le dernier point etant toujours le mois
+// en cours (aujourd'hui = date_debut + jour_actuel, jamais la date du
+// navigateur). Un mois sans aucun mouvement reconduit le dernier solde
+// connu (ligne plate) plutot que d'etre saute, pour garder un espacement
+// regulier et fidele au calendrier. Tout mouvement dont la date recalculee
+// depasserait "aujourd'hui" (glitch de donnees, jour_actuel incoherent) est
+// ecarte : le graphique ne doit jamais deriver dans le futur, et le dernier
+// point doit toujours coller au bord droit du graphique (mois en cours =
+// dernier point de la serie, jamais de mois "fantome" apres).
+const FIN_MONTHS_COUNT = 6;
+
+function buildFinanceMonthlySeries(rawHistory, club) {
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (!today) return rawHistory || [];
+
+  const cleanHistory = (rawHistory || []).filter(pt => {
+    const d = computeRealDate(currentGame.date_debut, pt.jour);
+    return d && d <= today;
   });
+
+  const months = [];
+  for (let i = FIN_MONTHS_COUNT - 1; i >= 0; i--) {
+    months.push(new Date(today.getFullYear(), today.getMonth() - i, 1));
+  }
+
+  // Dernier solde connu avant la fenetre affichee, pour pouvoir reconduire
+  // une valeur meme si aucun mouvement n'est tombe dans les mois affiches.
+  let lastKnownValue = null;
+  const beforeWindow = cleanHistory.filter(pt => computeRealDate(currentGame.date_debut, pt.jour) < months[0]);
+  if (beforeWindow.length) lastKnownValue = beforeWindow[beforeWindow.length - 1].value;
+  else if (cleanHistory.length === 0) lastKnownValue = Number(club?.budget_actuel) || 0;
+
+  return months.map((monthStart, idx) => {
+    const isCurrentMonth = idx === months.length - 1;
+    const nextMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    const inMonth = cleanHistory.filter(pt => {
+      const d = computeRealDate(currentGame.date_debut, pt.jour);
+      return d >= monthStart && d < nextMonth;
+    });
+
+    let value, delta, motif, jour;
+    if (isCurrentMonth) {
+      // Mois en cours : toujours le solde live (budget_actuel), jamais une
+      // valeur reconstituee, pour rester exact et coller au bord droit.
+      value = Number(club?.budget_actuel) || 0;
+      delta = inMonth.reduce((a, p) => a + p.delta, 0);
+      motif = inMonth.length === 1 ? inMonth[0].motif : (inMonth.length ? `${inMonth.length} mouvements` : null);
+      jour = currentGame.jour_actuel;
+    } else if (inMonth.length) {
+      const last = inMonth[inMonth.length - 1];
+      value = last.value;
+      delta = inMonth.reduce((a, p) => a + p.delta, 0);
+      motif = inMonth.length === 1 ? last.motif : `${inMonth.length} mouvements`;
+      jour = last.jour;
+    } else {
+      value = lastKnownValue !== null ? lastKnownValue : (Number(club?.budget_actuel) || 0);
+      delta = 0;
+      motif = null;
+      jour = null; // aucun mouvement reel ce mois-la
+    }
+    if (inMonth.length) lastKnownValue = value;
+    return { value, delta, motif, jour, monthDate: monthStart };
+  });
+}
+
+// Recap "mois dernier" / "cette saison" affiche au-dessus du graphique.
+// "Mois dernier" = somme des mouvements du mois calendaire precedent (null
+// si la partie n'a pas encore un mois complet). "Cette saison" = somme des
+// mouvements depuis le debut de la saison en cours ; les saisons calquant
+// leur cycle sur l'anniversaire annuel de date_debut (pas de champ dedie
+// cote base), le debut de saison est approxime par date_debut + (saison-1)
+// ans. Se recalcule a chaque rendu, donc se met a jour tout seul des que
+// jour_actuel avance (nouveau mois / nouvelle saison).
+function computeFinanceRecaps(rawHistory) {
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (!today || !rawHistory || rawHistory.length === 0) return { moisDernier: null, saison: null };
+
+  const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 1);
+  let moisDernier = null;
+  let saison = null;
+
+  let sumMoisDernier = 0, hasMoisDernier = false;
+  for (const ev of rawHistory) {
+    const d = computeRealDate(currentGame.date_debut, ev.jour);
+    if (d && d >= prevMonth && d < prevMonthEnd) {
+      sumMoisDernier += ev.delta;
+      hasMoisDernier = true;
+    }
+  }
+  if (hasMoisDernier) moisDernier = sumMoisDernier;
+
+  if (currentGame.date_debut && currentGame.saison != null) {
+    const seasonStart = new Date(`${currentGame.date_debut}T00:00:00`);
+    if (!isNaN(seasonStart.getTime())) {
+      seasonStart.setFullYear(seasonStart.getFullYear() + (Number(currentGame.saison) - 1));
+      let sumSaison = 0;
+      for (const ev of rawHistory) {
+        const d = computeRealDate(currentGame.date_debut, ev.jour);
+        if (d && d >= seasonStart && d <= today) sumSaison += ev.delta;
+      }
+      saison = sumSaison;
+    }
+  }
+
+  return { moisDernier, saison };
+}
+
+function renderFinanceRecap(recaps) {
+  const items = [];
+  if (recaps.moisDernier !== null) {
+    items.push({ value: recaps.moisDernier, label: "le mois dernier" });
+  }
+  if (recaps.saison !== null) {
+    items.push({ value: recaps.saison, label: "cette saison" });
+  }
+  if (!items.length) return "";
+  return `
+    <div class="fin-recap-row">
+      ${items.map(it => `
+        <span class="fin-recap-item ${it.value >= 0 ? "gain" : "perte"}">
+          ${it.value >= 0 ? "+" : ""}${formatMoney(it.value)} <span class="fin-recap-label">${it.label}</span>
+        </span>
+      `).join("")}
+    </div>
+  `;
 }
 
 // Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal, a partir
@@ -8994,7 +9097,9 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
 
   const dots = isPlaceholder ? "" : coords.map(c => {
     const color = c.pt.delta >= 0 ? "var(--accent)" : "var(--danger)";
-    const label = `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
+    const label = c.pt.jour === null
+      ? `${formatChartMonth(c.pt.monthDate)} : aucun mouvement (solde ${formatMoney(c.pt.value)})`
+      : `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
     return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${compact ? 2.5 : 3}" fill="${color}"><title>${label}</title></circle>`;
   }).join("");
 
@@ -9010,17 +9115,14 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
     `;
   }
 
-  // ---- Axe horizontal : libelles de dates (mois), depuis jour + date_debut ----
-  const nXTicks = Math.max(1, Math.min(compact ? 3 : 6, history.length));
+  // ---- Axe horizontal : libelles de dates (mois), un libelle par point ----
+  // La serie ne contient plus qu'un point par mois calendaire (voir
+  // buildFinanceMonthlySeries), donc chaque point recoit son propre
+  // libelle : plus de sous-echantillonnage ni de risque de doublon.
   let xAxisHtml = "";
-  let lastLabel = null;
-  for (let i = 0; i < nXTicks; i++) {
-    const idx = nXTicks > 1 ? Math.round((i * (history.length - 1)) / (nXTicks - 1)) : 0;
-    const c = coords[idx];
-    const d = computeRealDate(currentGame?.date_debut, c.pt.jour);
+  for (const c of coords) {
+    const d = c.pt.monthDate || computeRealDate(currentGame?.date_debut, c.pt.jour);
     const label = d ? formatChartMonth(d) : `J${c.pt.jour}`;
-    if (label === lastLabel) continue; // evite un libelle de mois duplique cote a cote
-    lastLabel = label;
     xAxisHtml += `<text class="fm-chart-axis-label x" x="${c.x.toFixed(1)}" y="${(padTop + plotH + 6).toFixed(1)}">${escapeHtml(label)}</text>`;
   }
 
@@ -9054,24 +9156,32 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
   `;
 }
 
-// Historique factice (ligne plate au budget actuel) affiche quand aucun
-// mouvement financier n'a encore ete enregistre, pour donner un apercu du
-// graphique avant qu'il n'y ait de vraies donnees.
+// Historique factice (ligne plate au budget actuel, un point par mois sur
+// la meme fenetre de FIN_MONTHS_COUNT mois que la vraie serie) affiche
+// quand aucun mouvement financier n'a encore ete enregistre, pour donner un
+// apercu du graphique avant qu'il n'y ait de vraies donnees.
 function buildFinancePlaceholderHistory(budget) {
   const value = budget || 0;
-  return [0, 1, 2, 3, 4].map(i => ({ jour: i, value, delta: 0, motif: null }));
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (!today) return [0, 1, 2, 3, 4].map(i => ({ jour: i, value, delta: 0, motif: null }));
+  const months = [];
+  for (let i = FIN_MONTHS_COUNT - 1; i >= 0; i--) {
+    months.push(new Date(today.getFullYear(), today.getMonth() - i, 1));
+  }
+  return months.map(monthDate => ({ value, delta: 0, motif: null, jour: null, monthDate }));
 }
 
 async function renderFinances(club) {
   const el = document.getElementById("fmFinances");
   const rawHistory = await fetchFinanceHistory(club);
   const hasHistory = rawHistory.length >= 1;
-  const history = aggregateFinanceHistoryByMonth(rawHistory);
+  const history = buildFinanceMonthlySeries(rawHistory, club);
   el.innerHTML = `
     <div class="fm-stat-row">
       <span class="label">Budget disponible</span>
       <span class="value">${formatMoney(club.budget_actuel)}</span>
     </div>
+    ${renderFinanceRecap(computeFinanceRecaps(rawHistory))}
     ${renderFinanceChart(hasHistory ? history : buildFinancePlaceholderHistory(club.budget_actuel), !hasHistory)}
   `;
 }
@@ -9349,7 +9459,7 @@ async function openFinancesModal(club) {
   const hasHistory = history.length > 1;
   finCurrentMovements = hasHistory ? history : [];
   finActiveSubtab = "revenus";
-  const chartHistory = aggregateFinanceHistoryByMonth(history);
+  const chartHistory = buildFinanceMonthlySeries(history, club);
   const chartHasHistory = history.length >= 1;
 
   modal.innerHTML = `
@@ -9365,6 +9475,7 @@ async function openFinancesModal(club) {
       <span class="fin-budget-label">Budget disponible</span>
       <span class="fin-budget-value">${formatMoney(club.budget_actuel)}</span>
     </div>
+    ${renderFinanceRecap(computeFinanceRecaps(history))}
     ${renderFinanceChart(chartHasHistory ? chartHistory : buildFinancePlaceholderHistory(club.budget_actuel), !chartHasHistory, { w: 760, h: 220, extraClass: "fin-chart-big" })}
 
     <div class="fin-section-title">Masse salariale (joueurs + staff)</div>
