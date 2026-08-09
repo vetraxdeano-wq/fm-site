@@ -88,6 +88,7 @@ function minuteAleatoire() {
 // ============================================================
 // MAPPING RÔLES (issus de tactiques.compositions[].role)
 // GB = gardien, D = défenseur, MD = milieu défensif/relayeur,
+// M = milieu central classique (box-to-box, entre MD et MO),
 // MO = milieu offensif (inclut les ailiers/attaquants de couloir, MOD/MOG),
 // AL = arrière latéral, BT = buteur/attaquant de pointe
 // ============================================================
@@ -115,6 +116,18 @@ const PROFILS_ROLE = {
     poidsButeur: 0.7,
     poidsPasseur: 1.0,
     poidsCarton: 1.4,
+  },
+  M: {
+    // Milieu central classique (MC) : entre le relayeur/destructeur (MD) et
+    // le meneur offensif (MO), un profil box-to-box equilibre — ni aussi
+    // defensif qu'un MD, ni aussi tourne vers le but qu'un MO. Utilise par
+    // les formations avec un vrai double/triple axe central (4-4-2,
+    // 4-4-2 Diamant Axial, 4-3-3 MD Jeu large, 5-3-2 MD AL...).
+    categorie: 'milieu',
+    attributsCles: ['passes', 'controle_de_balle', 'vision_du_jeu', 'endurance', 'decisions', 'placement', 'technique'],
+    poidsButeur: 1.0,
+    poidsPasseur: 1.3,
+    poidsCarton: 1.1,
   },
   MO: {
     categorie: 'milieu_offensif',
