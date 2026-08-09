@@ -2254,9 +2254,43 @@ function renderFinanceRecap(recaps) {
 
 // Libelle "mois annee" (ex: "juin 25") pour l'axe horizontal, a partir
 // d'une date reelle calculee via computeRealDate (date_debut + jour).
-function formatChartMonth(date) {
+function formatChartMonth(date, showYear = true) {
   if (!date) return "";
-  return new Intl.DateTimeFormat("fr-FR", { month: "short", year: "2-digit" }).format(date).replace(/\.$/, "");
+  const opts = showYear ? { month: "short", year: "2-digit" } : { month: "short" };
+  return new Intl.DateTimeFormat("fr-FR", opts).format(date).replace(/\.$/, "");
+}
+
+// Arrondit "range" au chiffre rond le plus proche (1/2/5/10 * 10^n), utilise
+// pour calculer un pas de graduation "propre" sur l'axe vertical.
+function niceAxisNumber(range, round) {
+  if (!Number.isFinite(range) || range <= 0) return 1;
+  const exponent = Math.floor(Math.log10(range));
+  const fraction = range / Math.pow(10, exponent);
+  let niceFraction;
+  if (round) {
+    if (fraction < 1.5) niceFraction = 1;
+    else if (fraction < 3) niceFraction = 2;
+    else if (fraction < 7) niceFraction = 5;
+    else niceFraction = 10;
+  } else {
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 5) niceFraction = 5;
+    else niceFraction = 10;
+  }
+  return niceFraction * Math.pow(10, exponent);
+}
+
+// Genere des graduations "fourchette" (valeurs rondes proches des finances
+// actuelles) plutot que d'interpoler exactement entre min et max.
+function niceAxisTicks(yMin, yMax, wantedCount) {
+  const rawStep = (yMax - yMin) / Math.max(1, wantedCount - 1);
+  const step = niceAxisNumber(rawStep, true);
+  if (!step) return null;
+  const start = Math.ceil(yMin / step) * step;
+  const ticks = [];
+  for (let v = start; v <= yMax + step * 1e-6; v += step) ticks.push(v);
+  return ticks.length >= 2 ? ticks : null;
 }
 
 function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
@@ -2295,18 +2329,18 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
   const areaPoints = `${padL},${baseY} ${linePoints} ${(padL + plotW).toFixed(1)},${baseY}`;
 
   const dots = isPlaceholder ? "" : coords.map(c => {
-    const color = c.pt.delta >= 0 ? "var(--accent)" : "var(--danger)";
     const label = c.pt.jour === null
       ? `${formatChartMonth(c.pt.monthDate)} : aucun mouvement (solde ${formatMoney(c.pt.value)})`
       : `J${c.pt.jour}${c.pt.motif ? " — " + c.pt.motif : ""} : ${c.pt.delta >= 0 ? "+" : ""}${formatMoney(c.pt.delta)} (solde ${formatMoney(c.pt.value)})`;
-    return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${compact ? 2.5 : 3}" fill="${color}"><title>${label}</title></circle>`;
+    return `<circle class="fm-chart-dot" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${compact ? 2.5 : 3}" fill="var(--accent)"><title>${label}</title></circle>`;
   }).join("");
 
   // ---- Axe vertical : quadrillage + libelles de valeurs en € ----
   const nYTicks = compact ? 3 : 5;
+  const niceTicks = niceAxisTicks(yMin, yMax, nYTicks);
+  const yTickValues = niceTicks || Array.from({ length: nYTicks }, (_, i) => yMin + (range * i) / (nYTicks - 1));
   let yAxisHtml = "";
-  for (let i = 0; i < nYTicks; i++) {
-    const v = yMin + (range * i) / (nYTicks - 1);
+  for (const v of yTickValues) {
     const y = (padTop + plotH - ((v - yMin) / range) * plotH).toFixed(1);
     yAxisHtml += `
       <line class="fm-chart-gridline" x1="${padL}" y1="${y}" x2="${(padL + plotW).toFixed(1)}" y2="${y}" />
@@ -2315,13 +2349,18 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
   }
 
   // ---- Axe horizontal : libelles de dates (mois), un libelle par point ----
-  // La serie ne contient plus qu'un point par mois calendaire (voir
-  // buildFinanceMonthlySeries), donc chaque point recoit son propre
-  // libelle : plus de sous-echantillonnage ni de risque de doublon.
   let xAxisHtml = "";
+  let lastAxisYear = null;
   for (const c of coords) {
     const d = c.pt.monthDate || computeRealDate(currentGame?.date_debut, c.pt.jour);
-    const label = d ? formatChartMonth(d) : `J${c.pt.jour}`;
+    let label;
+    if (d) {
+      const yr = d.getFullYear();
+      label = formatChartMonth(d, yr !== lastAxisYear);
+      lastAxisYear = yr;
+    } else {
+      label = `J${c.pt.jour}`;
+    }
     xAxisHtml += `<text class="fm-chart-axis-label x" x="${c.x.toFixed(1)}" y="${(padTop + plotH + 6).toFixed(1)}">${escapeHtml(label)}</text>`;
   }
 
@@ -2329,11 +2368,6 @@ function renderFinanceChart(history, isPlaceholder = false, opts = {}) {
     <div class="fm-chart-wrap${isPlaceholder ? " fm-chart-wrap--placeholder" : ""}${opts.extraClass ? " " + opts.extraClass : ""}">
       <div class="fm-chart-header">
         <span class="title">${isPlaceholder ? "Aperçu du graphique" : "Historique des mouvements"}</span>
-        ${isPlaceholder ? "" : `
-        <span class="fm-chart-legend">
-          <span><span class="dot gain"></span>Entrée</span>
-          <span><span class="dot perte"></span>Sortie</span>
-        </span>`}
       </div>
       <svg class="fm-chart-svg" viewBox="0 0 ${totalW} ${totalH}" preserveAspectRatio="none">
         <polygon class="fm-chart-area" points="${areaPoints}" fill="url(#clubFinanceGradient)" />
@@ -2556,9 +2590,30 @@ function bindRepartitionCard(club, isOwnClub) {
   });
 }
 
-// Sous-onglets Revenus / Depenses de la popup Finances.
+// Sous-onglets Revenus / Depenses de la popup Finances, restreints au mois
+// calendaire en cours (voir filterCurrentMonthMovements).
 let finCurrentMovements = [];
 let finActiveSubtab = "revenus";
+
+function filterCurrentMonthMovements(rawHistory) {
+  const today = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+  if (!today) return rawHistory || [];
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  return (rawHistory || []).filter(pt => {
+    const d = computeRealDate(currentGame.date_debut, pt.jour);
+    return d && d >= monthStart && d < nextMonth;
+  });
+}
+
+// Date in-game d'un mouvement (date_debut + jour), au lieu du compteur brut
+// "Jour X".
+function formatMovementDate(jour) {
+  const d = computeRealDate(currentGame?.date_debut, jour);
+  return d
+    ? new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" }).format(d)
+    : `Jour ${jour}`;
+}
 
 function renderFinMovementList(subtab) {
   const filtered = finCurrentMovements
@@ -2573,15 +2628,15 @@ function renderFinMovementList(subtab) {
         <div class="fin-movement-row">
           <div>
             <div class="fin-movement-motif">${escapeHtml(m.motif || (subtab === "revenus" ? "Entrée" : "Sortie"))}</div>
-            <div class="fin-movement-jour">Jour ${m.jour}</div>
+            <div class="fin-movement-jour">${formatMovementDate(m.jour)}</div>
           </div>
           <div class="fin-movement-amount ${subtab === "revenus" ? "gain" : "perte"}">${subtab === "revenus" ? "+" : "-"}${formatMoney(Math.abs(m.delta))}</div>
         </div>
       `).join("")
-    : `<div class="fin-empty">Aucun ${subtab === "revenus" ? "revenu" : "dépense"} enregistré pour le moment.</div>`;
+    : `<div class="fin-empty">Aucun ${subtab === "revenus" ? "revenu" : "dépense"} enregistré ce mois-ci.</div>`;
 
   return `
-    <div class="fin-subtab-total">${filtered.length} mouvement${filtered.length > 1 ? "s" : ""} · Total <b>${formatMoney(total)}</b></div>
+    <div class="fin-subtab-total">${filtered.length} mouvement${filtered.length > 1 ? "s" : ""} ce mois-ci · Total <b>${formatMoney(total)}</b></div>
     <div class="fin-movement-list">${rowsHtml}</div>
   `;
 }
@@ -2609,7 +2664,7 @@ async function openFinancesModal(club, isOwnClub) {
     fetchClubSalaryMass(club.game_club_id),
   ]);
   const hasHistory = history.length > 1;
-  finCurrentMovements = hasHistory ? history : [];
+  finCurrentMovements = hasHistory ? filterCurrentMonthMovements(history) : [];
   finActiveSubtab = "revenus";
   const chartHistory = buildFinanceMonthlySeries(history, club);
   const chartHasHistory = history.length >= 1;
@@ -2636,7 +2691,7 @@ async function openFinancesModal(club, isOwnClub) {
     <div class="fin-section-title">Répartition budget salarial / transfert</div>
     ${renderRepartitionCard(club, isOwnClub)}
 
-    <div class="fin-section-title">Mouvements</div>
+    <div class="fin-section-title">Mouvements (ce mois-ci)</div>
     <div class="fin-subtabs">
       <button type="button" class="fin-subtab-btn" data-subtab="revenus">Revenus</button>
       <button type="button" class="fin-subtab-btn" data-subtab="depenses">Dépenses</button>
@@ -3443,6 +3498,8 @@ async function loadAndRenderClubStats() {
     ...(data.top_cartons || []),
     ...(data.meilleures_notes || []),
     ...(data.plus_de_matchs || []),
+    ...(data.joueur_plus_jeune ? [data.joueur_plus_jeune] : []),
+    ...(data.joueur_plus_vieux ? [data.joueur_plus_vieux] : []),
   ].map(r => r.player_id);
   const photos = await compoFetchPlayerPhotos(allIds);
 
@@ -3455,6 +3512,8 @@ async function loadAndRenderClubStats() {
   const meilleureNote = (data.meilleures_notes || [])[0];
   const plusDeMatchs = (data.plus_de_matchs || [])[0];
   const plusSanctionne = (data.top_cartons || [])[0];
+  const plusJeune = data.joueur_plus_jeune;
+  const plusVieux = data.joueur_plus_vieux;
 
   el.innerHTML = `
     <div class="stats-section-title">Résumé (championnat, toutes saisons)</div>
@@ -3482,6 +3541,8 @@ async function loadAndRenderClubStats() {
       ${statsRecordCard("Meilleure note moyenne", meilleureNote, meilleureNote ? `${meilleureNote.note_moyenne} / 10 (${meilleureNote.matchs} matchs)` : "", photos)}
       ${statsRecordCard("Plus de matchs joués", plusDeMatchs, plusDeMatchs ? `${plusDeMatchs.matchs} matchs` : "", photos)}
       ${statsRecordCard("Joueur le plus sanctionné", plusSanctionne, plusSanctionne ? `${plusSanctionne.jaunes} 🟨${plusSanctionne.rouges ? ` · ${plusSanctionne.rouges} 🟥` : ""}` : "", photos)}
+      ${statsRecordCard("Joueur le plus jeune", plusJeune, plusJeune ? `${plusJeune.age} an${plusJeune.age > 1 ? "s" : ""}` : "", photos)}
+      ${statsRecordCard("Joueur le plus âgé", plusVieux, plusVieux ? `${plusVieux.age} an${plusVieux.age > 1 ? "s" : ""}` : "", photos)}
     </div>
 
     <div class="stats-section-title">Historique du classement au championnat (10 dernières saisons)</div>
