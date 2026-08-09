@@ -203,6 +203,29 @@ let userId = null;
 let currentGame = null;
 let isHost = false;
 
+// Reessaie un appel PostgREST (select/rpc, retourne {data, error}) en cas
+// d'erreur transitoire (503 pool de connexions sature, 57014 statement
+// timeout). chargerDonneesClub declenche 10 requetes en parallele par match
+// (5 tables x domicile/exterieur) ; sur ce projet (max_connections=60,
+// compute reduit), un rattrapage de plusieurs matchs de coupe en retard peut
+// momentanement saturer le pool -> 503 sans retry actuellement disponible.
+// Backoff court (150ms, 400ms) car l'erreur est generalement resolue en
+// quelques centaines de ms (le pool se libere des que les requetes en cours
+// se terminent).
+async function withRetry(fn, tentatives = 3) {
+  let derniereErreur;
+  for (let i = 0; i < tentatives; i++) {
+    const result = await fn();
+    if (!result.error) return result;
+    const status = result.error.status || result.error.code;
+    const transitoire = status === 503 || status === "503" || result.error.code === "57014";
+    if (!transitoire || i === tentatives - 1) return result;
+    derniereErreur = result.error;
+    await new Promise((r) => setTimeout(r, 150 * Math.pow(2, i)));
+  }
+  return { data: null, error: derniereErreur };
+}
+
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
   el.textContent = msg;
@@ -410,13 +433,18 @@ function matchRowHtml(m, clubNom) {
 // staff) et pas sur leur equivalent "en partie" (game_players, game_staff) :
 // on les recupere via une jointure PostgREST (player_ref / staff_ref).
 async function chargerDonneesClub(gameClubId) {
-  const [{ data: gc }, { data: joueursBruts }, { data: tactiqueRows }, { data: staffBruts }, { data: groupeRows }] = await Promise.all([
-    supabaseClient.from("game_clubs").select("id, nom, club_ref, clubs(reputation, niveau_pct, capacite_stade, affluence_moyenne)").eq("id", gameClubId).single(),
-    supabaseClient.from("game_players").select("*, players(regularite, tendance_blessure)").eq("game_club_id", gameClubId).eq("categorie", "equipe_a"),
-    supabaseClient.from("tactiques").select("*").eq("game_club_id", gameClubId),
-    supabaseClient.from("game_staff").select("*, staff(niveau_tactique, niveau_attaque, niveau_defense, adaptabilite)").eq("game_club_id", gameClubId).eq("equipe_assignee", "equipe_a"),
-    supabaseClient.from("dynamique_groupe").select("note_globale").eq("game_club_id", gameClubId),
+  const [{ data: gc, error: gcErr }, { data: joueursBruts, error: jErr }, { data: tactiqueRows, error: tErr }, { data: staffBruts, error: sErr }, { data: groupeRows, error: grErr }] = await Promise.all([
+    withRetry(() => supabaseClient.from("game_clubs").select("id, nom, club_ref, clubs(reputation, niveau_pct, capacite_stade, affluence_moyenne)").eq("id", gameClubId).single()),
+    withRetry(() => supabaseClient.from("game_players").select("*, players(regularite, tendance_blessure)").eq("game_club_id", gameClubId).eq("categorie", "equipe_a")),
+    withRetry(() => supabaseClient.from("tactiques").select("*").eq("game_club_id", gameClubId)),
+    withRetry(() => supabaseClient.from("game_staff").select("*, staff(niveau_tactique, niveau_attaque, niveau_defense, adaptabilite)").eq("game_club_id", gameClubId).eq("equipe_assignee", "equipe_a")),
+    withRetry(() => supabaseClient.from("dynamique_groupe").select("note_globale").eq("game_club_id", gameClubId)),
   ]);
+  if (gcErr) throw gcErr;
+  if (jErr) throw jErr;
+  if (tErr) throw tErr;
+  if (sErr) throw sErr;
+  if (grErr) throw grErr;
 
   // Aplatit players(regularite, tendance_blessure) directement sur chaque joueur
   const joueurs = (joueursBruts || []).map(({ players: statique, ...j }) => ({
@@ -427,8 +455,8 @@ async function chargerDonneesClub(gameClubId) {
 
   let tactique = (tactiqueRows && tactiqueRows[0]) || null;
   if (!tactique || !tactique.compositions || tactique.compositions.length === 0) {
-    const { data: compoDefaut, error: compoErr } = await supabaseClient
-      .rpc("composition_par_defaut", { p_game_club_id: gameClubId });
+    const { data: compoDefaut, error: compoErr } = await withRetry(() => supabaseClient
+      .rpc("composition_par_defaut", { p_game_club_id: gameClubId }));
     if (compoErr) throw compoErr;
     tactique = { compositions: compoDefaut || [], connaissance_tactique: 10 };
   }
@@ -483,12 +511,12 @@ async function simulerEtRecuperer(gameClubIdDom, nomDom, gameClubIdExt, nomExt, 
 // Simule et enregistre tous les matchs de championnat programmes a une date
 // donnee (statut = 'a_jouer').
 async function simulerMatchsDuJour(dateIso, onProgress) {
-  const { data: matches, error } = await supabaseClient
+  const { data: matches, error } = await withRetry(() => supabaseClient
     .from("calendrier")
     .select("id, club_domicile_id, club_exterieur_id")
     .eq("game_id", gameId)
     .eq("date_match", dateIso)
-    .eq("statut", "a_jouer");
+    .eq("statut", "a_jouer"));
   if (error) throw error;
   if (!matches || matches.length === 0) return 0;
 
@@ -498,12 +526,12 @@ async function simulerMatchsDuJour(dateIso, onProgress) {
 
     const resultat = await simulerEtRecuperer(m.club_domicile_id, null, m.club_exterieur_id, null, 0.3);
 
-    const { error: rpcErr } = await supabaseClient.rpc("enregistrer_resultat_match", {
+    const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match", {
       p_match_id: m.id,
       p_score_domicile: resultat.score_domicile,
       p_score_exterieur: resultat.score_exterieur,
       p_stats: resultat.stats,
-    });
+    }));
     if (rpcErr) throw rpcErr;
   }
 
@@ -515,11 +543,11 @@ async function simulerMatchsDuJour(dateIso, onProgress) {
 // meme convention que l'ancien simuler_match(sup,inf) / simuler_match(inf,sup)).
 // Enjeu plus eleve qu'un match de championnat classique (barrage = decisif).
 async function simulerBarragesDuJour(dateIso, onProgress) {
-  const { data: barrages, error } = await supabaseClient
+  const { data: barrages, error } = await withRetry(() => supabaseClient
     .from("game_barrages_promotion")
     .select("id, game_club_sup_id, game_club_inf_id, date_match_aller, date_match_retour, score_aller_sup, score_retour_sup, statut")
     .eq("game_id", gameId)
-    .neq("statut", "termine");
+    .neq("statut", "termine"));
   if (error) throw error;
 
   const aTraiter = (barrages || []).filter(b =>
@@ -537,13 +565,13 @@ async function simulerBarragesDuJour(dateIso, onProgress) {
       ? await simulerEtRecuperer(b.game_club_sup_id, null, b.game_club_inf_id, null, 0.7)
       : await simulerEtRecuperer(b.game_club_inf_id, null, b.game_club_sup_id, null, 0.7);
 
-    const { error: rpcErr } = await supabaseClient.rpc("enregistrer_resultat_barrage", {
+    const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_barrage", {
       p_barrage_id: b.id,
       p_manche: manche,
       p_score_domicile: resultat.score_domicile,
       p_score_exterieur: resultat.score_exterieur,
       p_stats: resultat.stats,
-    });
+    }));
     if (rpcErr) throw rpcErr;
   }
 
@@ -585,12 +613,12 @@ function simulerTirsAuBut(joueursDom, joueursExt) {
 // cours de saison. Match sec : tirs au but si egalite. Les byes sont deja
 // 'termine' a la generation du tour, donc jamais retournes ici.
 async function simulerCoupeDuJour(dateIso, onProgress) {
-  const { data: matches, error } = await supabaseClient
+  const { data: matches, error } = await withRetry(() => supabaseClient
     .from("game_coupe_nationale_tours")
     .select("id, game_club_id_1, game_club_id_2")
     .eq("game_id", gameId)
     .lte("date_match", dateIso)
-    .eq("statut", "a_jouer");
+    .eq("statut", "a_jouer"));
   if (error) throw error;
   if (!matches || matches.length === 0) return 0;
 
@@ -615,14 +643,14 @@ async function simulerCoupeDuJour(dateIso, onProgress) {
       tabExt = tab.scoreExt;
     }
 
-    const { error: rpcErr } = await supabaseClient.rpc("enregistrer_resultat_match_coupe", {
+    const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_coupe", {
       p_match_id: m.id,
       p_score_domicile: resultat.score_domicile,
       p_score_exterieur: resultat.score_exterieur,
       p_tab_penalty_domicile: tabDom,
       p_tab_penalty_exterieur: tabExt,
       p_stats: resultat.stats,
-    });
+    }));
     if (rpcErr) throw rpcErr;
   }
 
