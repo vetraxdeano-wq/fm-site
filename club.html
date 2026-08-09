@@ -408,6 +408,89 @@
   .palmares-item .trophy { font-size: 15px; }
   .palmares-item .count { margin-left: auto; color: var(--gold); font-weight: 800; font-size: 12px; }
 
+  /* ---- Sous-onglet "Statistiques" d'Infos club : petit toggle Aperçu /
+     Statistiques, tuiles de resume, cartes de records joueurs (avec
+     photo + nom cliquable vers la fiche) et module "Historique du
+     classement" en bas de page. ---- */
+  .infoclub-subtabs {
+    display: flex; gap: 6px; margin-bottom: 16px;
+  }
+  .infoclub-subtab {
+    padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+    color: var(--text-dim); background: var(--panel); border: 1px solid var(--border);
+    cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  }
+  .infoclub-subtab:hover { color: var(--text); }
+  .infoclub-subtab.active { color: var(--gold); border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.08); }
+
+  .stats-section-title {
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--gold); margin: 22px 0 12px;
+  }
+  .stats-section-title:first-child { margin-top: 0; }
+
+  .stats-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+  .stats-tile {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 12px; text-align: center;
+  }
+  .stats-tile .stats-tile-value { font-size: 22px; font-weight: 800; line-height: 1.1; }
+  .stats-tile .stats-tile-value.win { color: var(--accent); }
+  .stats-tile .stats-tile-value.loss { color: var(--danger); }
+  .stats-tile .stats-tile-value.gold { color: var(--gold); }
+  .stats-tile .stats-tile-label { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 4px; }
+
+  .stats-highlight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .stats-highlight-grid { grid-template-columns: 1fr; } }
+  .stats-highlight-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+  }
+  .stats-highlight-card .hl-label { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stats-highlight-card .hl-score { font-size: 24px; font-weight: 800; margin: 6px 0 2px; }
+  .stats-highlight-card.win .hl-score { color: var(--accent); }
+  .stats-highlight-card.loss .hl-score { color: var(--danger); }
+  .stats-highlight-card .hl-detail { font-size: 12.5px; color: var(--text-dim); }
+
+  .stats-record-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+  .stats-record-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+  }
+  .stats-record-avatar {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    background: #1c2029; border: 1px solid rgba(255,255,255,0.15);
+    font-size: 13px; font-weight: 800; color: #fff;
+  }
+  .stats-record-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .stats-record-body { min-width: 0; flex: 1; }
+  .stats-record-label { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stats-record-name {
+    font-size: 13.5px; font-weight: 700; color: var(--text); text-decoration: none;
+    display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .stats-record-name:hover { color: var(--gold); text-decoration: underline; }
+  .stats-record-value { font-size: 12.5px; color: var(--gold); font-weight: 700; margin-top: 1px; }
+
+  .stats-classement-history { display: flex; flex-direction: column; gap: 6px; }
+  .stats-classement-row {
+    display: grid; grid-template-columns: 70px 46px 1fr auto; align-items: center; gap: 10px;
+    padding: 9px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; font-size: 12.5px;
+  }
+  .stats-classement-row .ch-saison { color: var(--text-dim); font-weight: 700; }
+  .stats-classement-row .ch-pos { font-weight: 800; font-size: 15px; text-align: center; }
+  .stats-classement-row .ch-comp { color: var(--text-dim); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-classement-row .ch-record { color: var(--text-dim); }
+  .stats-classement-badge {
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .stats-classement-badge.champion { background: rgba(251,191,36,0.15); color: var(--gold); }
+  .stats-classement-badge.europe_c1, .stats-classement-badge.europe_c2, .stats-classement-badge.europe_c3 { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .stats-classement-badge.maintien { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+  .stats-classement-badge.promu { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .stats-classement-badge.relegue { background: rgba(239,68,68,0.15); color: var(--danger); }
+
   /* Terrain illustre pour la derniere composition */
   .pitch-caption { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5; }
   .pitch-wrap { width: 100%; }
@@ -1036,6 +1119,11 @@
       <div class="fm-subtabs" id="fmSubtabs"></div>
 
       <div class="fm-content-wrap">
+        <div class="infoclub-subtabs" id="infoclubSubtabs">
+          <div class="infoclub-subtab active" data-key="apercu">Aperçu</div>
+          <div class="infoclub-subtab" data-key="stats">📊 Statistiques</div>
+        </div>
+
         <div class="club-hero" id="clubHero">
           <div class="empty-state">Chargement...</div>
         </div>
@@ -1065,6 +1153,10 @@
             <div id="clubPitch"></div>
           </div>
         </div>
+      </div>
+
+      <div class="club-stats-view hidden" id="clubStatsView">
+        <div id="clubStatsContent"><div class="fm-empty">Chargement...</div></div>
       </div>
 
       <div class="staff-columns hidden" id="staffColumns"></div>
@@ -3159,6 +3251,8 @@ async function showStaffTab(viewedClubId) {
   document.getElementById("clubHero").classList.add("hidden");
   document.getElementById("clubGrid").style.display = "none";
   document.getElementById("clubError").classList.add("hidden");
+  document.getElementById("infoclubSubtabs").classList.add("hidden");
+  document.getElementById("clubStatsView").classList.add("hidden");
   document.getElementById("fmCompetitionsView").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.add("hidden");
   document.getElementById("staffColumns").classList.remove("hidden");
@@ -3184,9 +3278,226 @@ function showInfosClubTab() {
   document.getElementById("staffColumns").classList.add("hidden");
   document.getElementById("fmCompetitionsView").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.add("hidden");
-  document.getElementById("clubHero").classList.remove("hidden");
-  document.getElementById("clubGrid").style.display = "";
+  document.getElementById("infoclubSubtabs").classList.remove("hidden");
+  showInfoClubSubview("apercu");
 }
+
+// Toggle interne Aperçu / Statistiques a l'interieur du sous-onglet "Infos
+// club". Statistiques est calcule via la RPC get_club_statistiques (agrege
+// tout l'historique de matchs du club present dans `calendrier`), rendu une
+// seule fois par visite (clubStatsLoadedFor evite de refaire l'appel si on
+// va-et-vient entre Apercu et Statistiques sans changer de club).
+let infosClubSubview = "apercu";
+let clubStatsLoadedFor = null;
+
+function bindInfoClubSubtabs() {
+  document.querySelectorAll("#infoclubSubtabs .infoclub-subtab").forEach(el => {
+    el.addEventListener("click", () => showInfoClubSubview(el.getAttribute("data-key")));
+  });
+}
+
+function showInfoClubSubview(view) {
+  infosClubSubview = view;
+  document.querySelectorAll("#infoclubSubtabs .infoclub-subtab").forEach(t => {
+    t.classList.toggle("active", t.getAttribute("data-key") === view);
+  });
+
+  const hero = document.getElementById("clubHero");
+  const grid = document.getElementById("clubGrid");
+  const statsView = document.getElementById("clubStatsView");
+
+  if (view === "stats") {
+    hero.classList.add("hidden");
+    grid.style.display = "none";
+    statsView.classList.remove("hidden");
+    if (clubStatsLoadedFor !== gameClubId) {
+      loadAndRenderClubStats();
+    }
+  } else {
+    hero.classList.remove("hidden");
+    grid.style.display = "";
+    statsView.classList.add("hidden");
+  }
+}
+
+// ===================== STATISTIQUES (sous-onglet d'Infos club) =====================
+// Toutes les stats sont calculees cote serveur par la RPC
+// get_club_statistiques (agrege le contenu json de calendrier.stats sur
+// TOUT l'historique de matchs de championnat du club : buteurs, passeurs,
+// cartons, notes, plus grosse victoire/défaite...) + game_classement_historique
+// pour le module "Historique du classement" en bas de page.
+const RESULTAT_BADGE_LABEL = {
+  champion: "🏆 Champion",
+  europe_c1: "Europe",
+  europe_c2: "Europe",
+  europe_c3: "Europe",
+  maintien: "Maintien",
+  promu: "Promu",
+  relegue: "Relégué",
+};
+
+function statsPlayerAvatar(playerId, nom, photos) {
+  const url = playerId != null ? photos[playerId] : null;
+  const init = escapeHtml(initials(nom || "?"));
+  if (url) {
+    return `<div class="stats-record-avatar"><img src="${escapeHtml(url)}" alt="" onerror="this.parentElement.textContent='${init}'"></div>`;
+  }
+  return `<div class="stats-record-avatar" style="background:${colorFromName(nom || "")}">${init}</div>`;
+}
+
+function statsPlayerNameLink(playerId, nom) {
+  if (!nom) return `<span class="stats-record-name">-</span>`;
+  if (playerId == null) return `<span class="stats-record-name">${escapeHtml(nom)}</span>`;
+  return `<a href="${playerFicheLink(playerId)}" class="stats-record-name">${escapeHtml(nom)}</a>`;
+}
+
+function statsRecordCard(label, entry, valueLabel, photos) {
+  if (!entry) {
+    return `
+      <div class="stats-record-card">
+        <div class="stats-record-avatar" style="background:#2a2e38">-</div>
+        <div class="stats-record-body">
+          <div class="stats-record-label">${escapeHtml(label)}</div>
+          <div class="stats-record-name" style="color:var(--text-dim)">Aucune donnée</div>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="stats-record-card">
+      ${statsPlayerAvatar(entry.player_id, entry.player_nom, photos)}
+      <div class="stats-record-body">
+        <div class="stats-record-label">${escapeHtml(label)}</div>
+        ${statsPlayerNameLink(entry.player_id, entry.player_nom)}
+        <div class="stats-record-value">${escapeHtml(valueLabel)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function statsMatchHighlightCard(label, entry, kind) {
+  if (!entry) {
+    return `
+      <div class="stats-highlight-card">
+        <div class="hl-label">${escapeHtml(label)}</div>
+        <div class="hl-score" style="color:var(--text-dim)">-</div>
+        <div class="hl-detail">Aucune donnée pour l'instant.</div>
+      </div>
+    `;
+  }
+  const d = entry.date_match ? new Date(entry.date_match) : null;
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
+  return `
+    <div class="stats-highlight-card ${kind}">
+      <div class="hl-label">${escapeHtml(label)}</div>
+      <div class="hl-score">${entry.buts_pour} - ${entry.buts_contre}</div>
+      <div class="hl-detail">vs ${escapeHtml(entry.adversaire_nom || "?")}${dateLabel ? ` · ${dateLabel}` : ""}${entry.saison ? ` · Saison ${entry.saison}` : ""}</div>
+    </div>
+  `;
+}
+
+function statsClassementHistoryRow(row) {
+  const badgeKey = row.resultat || "";
+  const badgeLabel = RESULTAT_BADGE_LABEL[badgeKey] || null;
+  const badgeHtml = badgeLabel
+    ? `<span class="stats-classement-badge ${escapeHtml(badgeKey)}">${badgeLabel}</span>`
+    : "";
+  return `
+    <div class="stats-classement-row">
+      <div class="ch-saison">${escapeHtml(String(row.saison))}-${escapeHtml(String((row.saison || 0) + 1))}</div>
+      <div class="ch-pos">${row.position != null ? `${row.position}<sup>e</sup>` : "-"}</div>
+      <div class="ch-comp">
+        ${escapeHtml(row.competition_nom || "Championnat")}
+        <span class="ch-record">· ${row.victoires ?? 0}V ${row.nuls ?? 0}N ${row.defaites ?? 0}D · ${row.buts_pour ?? 0}-${row.buts_contre ?? 0} · ${row.points ?? 0} pts</span>
+      </div>
+      ${badgeHtml}
+    </div>
+  `;
+}
+
+async function loadAndRenderClubStats() {
+  const el = document.getElementById("clubStatsContent");
+  el.innerHTML = `<div class="fm-empty">Chargement des statistiques...</div>`;
+
+  const { data, error } = await supabaseClient.rpc("get_club_statistiques", {
+    p_game_club_id: Number(gameClubId),
+  });
+
+  if (error || !data) {
+    console.error(error);
+    el.innerHTML = `<div class="fm-empty">Impossible de charger les statistiques du club.</div>`;
+    return;
+  }
+
+  clubStatsLoadedFor = gameClubId;
+
+  const resume = data.resume || { matchs_joues: 0, victoires: 0, nuls: 0, defaites: 0, buts_pour: 0, buts_contre: 0 };
+  const diff = (resume.buts_pour || 0) - (resume.buts_contre || 0);
+
+  // Recupere en un seul aller-retour les photos de tous les joueurs cites
+  // dans les records (meme logique que compoFetchPlayerPhotos, reutilisee
+  // telle quelle : table publique `players`, jointe via game_players).
+  const allIds = [
+    ...(data.top_buteurs || []),
+    ...(data.top_passeurs || []),
+    ...(data.top_cartons || []),
+    ...(data.meilleures_notes || []),
+    ...(data.plus_de_matchs || []),
+  ].map(r => r.player_id);
+  const photos = await compoFetchPlayerPhotos(allIds);
+
+  const meilleurClassementTile = data.meilleur_classement
+    ? `${data.meilleur_classement.position}<sup>e</sup>`
+    : (currentClubClassementLabel || "-");
+
+  const buteur = (data.top_buteurs || [])[0];
+  const passeur = (data.top_passeurs || [])[0];
+  const meilleureNote = (data.meilleures_notes || [])[0];
+  const plusDeMatchs = (data.plus_de_matchs || [])[0];
+  const plusSanctionne = (data.top_cartons || [])[0];
+
+  el.innerHTML = `
+    <div class="stats-section-title">Résumé (championnat, toutes saisons)</div>
+    <div class="stats-tiles">
+      <div class="stats-tile"><div class="stats-tile-value">${resume.matchs_joues || 0}</div><div class="stats-tile-label">Matchs joués</div></div>
+      <div class="stats-tile"><div class="stats-tile-value win">${resume.victoires || 0}</div><div class="stats-tile-label">Victoires</div></div>
+      <div class="stats-tile"><div class="stats-tile-value">${resume.nuls || 0}</div><div class="stats-tile-label">Nuls</div></div>
+      <div class="stats-tile"><div class="stats-tile-value loss">${resume.defaites || 0}</div><div class="stats-tile-label">Défaites</div></div>
+      <div class="stats-tile"><div class="stats-tile-value">${resume.buts_pour || 0}</div><div class="stats-tile-label">Buts marqués</div></div>
+      <div class="stats-tile"><div class="stats-tile-value">${resume.buts_contre || 0}</div><div class="stats-tile-label">Buts encaissés</div></div>
+      <div class="stats-tile"><div class="stats-tile-value ${diff > 0 ? "win" : diff < 0 ? "loss" : ""}">${diff > 0 ? "+" : ""}${diff}</div><div class="stats-tile-label">Diff. de buts</div></div>
+      <div class="stats-tile"><div class="stats-tile-value gold">${meilleurClassementTile}</div><div class="stats-tile-label">Meilleur classement</div></div>
+    </div>
+
+    <div class="stats-section-title">Records de matchs</div>
+    <div class="stats-highlight-grid">
+      ${statsMatchHighlightCard("Plus grosse victoire", data.plus_large_victoire, "win")}
+      ${statsMatchHighlightCard("Plus lourde défaite", data.plus_lourde_defaite, "loss")}
+    </div>
+
+    <div class="stats-section-title">Records joueurs</div>
+    <div class="stats-record-grid">
+      ${statsRecordCard("Meilleur buteur du club", buteur, buteur ? `${buteur.total} but${buteur.total > 1 ? "s" : ""}` : "", photos)}
+      ${statsRecordCard("Meilleur passeur du club", passeur, passeur ? `${passeur.total} passe${passeur.total > 1 ? "s" : ""} décisive${passeur.total > 1 ? "s" : ""}` : "", photos)}
+      ${statsRecordCard("Meilleure note moyenne", meilleureNote, meilleureNote ? `${meilleureNote.note_moyenne} / 10 (${meilleureNote.matchs} matchs)` : "", photos)}
+      ${statsRecordCard("Plus de matchs joués", plusDeMatchs, plusDeMatchs ? `${plusDeMatchs.matchs} matchs` : "", photos)}
+      ${statsRecordCard("Joueur le plus sanctionné", plusSanctionne, plusSanctionne ? `${plusSanctionne.jaunes} 🟨${plusSanctionne.rouges ? ` · ${plusSanctionne.rouges} 🟥` : ""}` : "", photos)}
+    </div>
+
+    <div class="stats-section-title">Historique du classement au championnat (10 dernières saisons)</div>
+    <div class="stats-classement-history">
+      ${(data.classement_historique || []).length
+        ? (data.classement_historique || []).map(statsClassementHistoryRow).join("")
+        : `<div class="fm-empty">Pas encore de saison achevée pour ce club — l'historique se remplira à la fin de chaque saison.</div>`}
+    </div>
+  `;
+}
+
+// Libelle de repli affiche pour "Meilleur classement" quand aucune saison
+// n'est encore archivee dans game_classement_historique (partie encore en
+// cours de 1ere saison) : on retombe sur le classement courant du club,
+// renseigne depuis loadClub(), plus honnete que d'afficher un tiret.
+let currentClubClassementLabel = null;
 
 // ===================== COMPÉTITIONS (sous-onglet) =====================
 // Meme logique que le sous-onglet "Compétitions" de dashboard.html, mais
@@ -3601,6 +3912,8 @@ async function showCompetitionsTab(viewedClubId) {
   document.getElementById("clubHero").classList.add("hidden");
   document.getElementById("clubGrid").style.display = "none";
   document.getElementById("clubError").classList.add("hidden");
+  document.getElementById("infoclubSubtabs").classList.add("hidden");
+  document.getElementById("clubStatsView").classList.add("hidden");
   document.getElementById("staffColumns").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.add("hidden");
   document.getElementById("fmCompetitionsView").classList.remove("hidden");
@@ -3622,6 +3935,8 @@ async function showTactiqueTab(viewedClubId) {
   document.getElementById("clubHero").classList.add("hidden");
   document.getElementById("clubGrid").style.display = "none";
   document.getElementById("clubError").classList.add("hidden");
+  document.getElementById("infoclubSubtabs").classList.add("hidden");
+  document.getElementById("clubStatsView").classList.add("hidden");
   document.getElementById("staffColumns").classList.add("hidden");
   document.getElementById("fmCompetitionsView").classList.add("hidden");
   document.getElementById("fmTactiqueView").classList.remove("hidden");
@@ -3961,6 +4276,7 @@ async function loadClub() {
   }
   viewedClubNation = club.nation;
   viewedClubDivision = club.division;
+  currentClubClassementLabel = club.classement != null ? `${club.classement}e (en cours)` : null;
 
   // Requete complementaire "large" (select *) pour recuperer sans risque
   // d'erreur d'eventuels champs pas encore utilises ailleurs (logo, palmares...).
@@ -4001,6 +4317,7 @@ async function loadClub() {
   fmFetchClubColor(gameClubId).then(fmApplyTopbarColor);
   renderFmSidebar(myClubId, getClubLogoUrl(rawClub), club.nom);
   renderFmSubtabs(gameClubId);
+  bindInfoClubSubtabs();
   renderClubHero(club, rawClub);
   renderPitch();
   renderFinances(club);
