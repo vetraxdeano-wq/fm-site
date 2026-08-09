@@ -2001,12 +2001,24 @@ const TAC_FORMATIONS = {
 // ni son cote — mais l'ordre des titulaires correspond exactement a l'ordre
 // des postes de TAC_FORMATIONS[formation]. Renvoie null (repli sur l'ancien
 // rendu par bandes) si la formation est inconnue ou si les roles ne
-// correspondent pas exactement (match trop ancien, cas limite...).
+// correspondent pas (formation vraiment differente).
+//
+// MD et M sont traites comme interchangeables dans cette comparaison : ce
+// sont deux nuances d'un meme milieu axial (destructeur vs relayeur plus
+// equilibre), et un ajustement de catalogue (ex. 4-3-3 MD Jeu large,
+// corrige pour avoir 1 MD + 2 M au lieu de 3 MD) ne doit pas faire echouer
+// le repositionnement des matchs deja simules avant ce correctif — seul
+// l'ordre des postes compte ici, pas la nuance exacte du role.
+function tacRoleCompatiblePourSlot(roleCatalogue, roleNote) {
+  if (roleCatalogue === roleNote) return true;
+  const centreAxial = new Set(["MD", "M"]);
+  return centreAxial.has(roleCatalogue) && centreAxial.has(roleNote);
+}
 function slotsFromFormation(titulaires, formationName) {
   const slots = formationName && TAC_FORMATIONS[formationName];
   if (!slots || slots.length !== titulaires.length) return null;
   for (let i = 0; i < slots.length; i++) {
-    if (slots[i].role !== titulaires[i].role) return null;
+    if (!tacRoleCompatiblePourSlot(slots[i].role, titulaires[i].role)) return null;
   }
   return slots;
 }
