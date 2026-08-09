@@ -1913,6 +1913,104 @@ function renderClubBadge(club, rawClub) {
   return "";
 }
 
+// ===================== CATALOGUE DES FORMATIONS (positions x/y) =====================
+// Copie du catalogue TAC_FORMATIONS de dashboard.html (onglet Tactique) :
+// meme source de verite pour les coordonnees x/y de chaque poste, utilisee
+// ici pour repositionner correctement les titulaires sur le terrain
+// (dernniere compo + detail de match), cf. plus bas.
+function tacSlot(id, label, role, side, x, y) { return { id, label, role, side, x, y }; }
+const TAC_FORMATIONS = {
+  "4-4-2": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("mg", "MG", "M", "G", 14, 52), tacSlot("mc1", "MC", "M", "C", 38, 54), tacSlot("mc2", "MC", "M", "C", 62, 54), tacSlot("md", "MD", "M", "D", 86, 52),
+    tacSlot("bt1", "BU", "BT", "C", 38, 14), tacSlot("bt2", "BU", "BT", "C", 62, 14),
+  ],
+  "4-4-2 Diamant Axial": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("mdef", "MD", "MD", "C", 50, 66),
+    tacSlot("mg", "MC", "M", "C", 26, 50), tacSlot("md2", "MC", "M", "C", 74, 50),
+    tacSlot("moc", "MOC", "MO", "C", 50, 34),
+    tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12),
+  ],
+  "4-2-3-1 MD MO Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 38, 62), tacSlot("md2", "MD", "MD", "C", 62, 62),
+    tacSlot("mog", "MOG", "MO", "G", 18, 36), tacSlot("moc", "MOC", "MO", "C", 50, 32), tacSlot("mod", "MOD", "MO", "D", 82, 36),
+    tacSlot("bt1", "BU", "BT", "C", 50, 12),
+  ],
+  "4-2-2-2 MD MO Axial": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 38, 62), tacSlot("md2", "MD", "MD", "C", 62, 62),
+    tacSlot("moc1", "MOC", "MO", "C", 40, 34), tacSlot("moc2", "MOC", "MO", "C", 60, 34),
+    tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12),
+  ],
+  "4-2-4 MD Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 38, 58), tacSlot("md2", "MD", "MD", "C", 62, 58),
+    tacSlot("alg", "ALG", "MO", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12), tacSlot("ald", "ALD", "MO", "D", 86, 16),
+  ],
+  "4-3-2-1 MD MO Axial": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 25, 62), tacSlot("md2", "MD", "MD", "C", 50, 66), tacSlot("md3", "MD", "MD", "C", 75, 62),
+    tacSlot("moc1", "MOC", "MO", "C", 40, 34), tacSlot("moc2", "MOC", "MO", "C", 60, 34),
+    tacSlot("bt1", "BU", "BT", "C", 50, 12),
+  ],
+  "4-3-3 MD Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
+    tacSlot("md1", "MD", "MD", "C", 25, 60), tacSlot("md2", "MD", "MD", "C", 50, 64), tacSlot("md3", "MD", "MD", "C", 75, 60),
+    tacSlot("alg", "ALG", "MO", "G", 16, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "MO", "D", 84, 16),
+  ],
+  "5-2-1-2 MD MO": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("md1", "MD", "MD", "C", 35, 58), tacSlot("md2", "MD", "MD", "C", 65, 58),
+    tacSlot("moc", "MOC", "MO", "C", 50, 36),
+    tacSlot("bt1", "BU", "BT", "C", 38, 12), tacSlot("bt2", "BU", "BT", "C", 62, 12),
+  ],
+  "5-2-2-1 MD MO": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("md1", "MD", "MD", "C", 35, 58), tacSlot("md2", "MD", "MD", "C", 65, 58),
+    tacSlot("mog", "MOG", "MO", "G", 30, 34), tacSlot("mod", "MOD", "MO", "D", 70, 34),
+    tacSlot("bt1", "BU", "BT", "C", 50, 12),
+  ],
+  "5-2-3 MD Jeu large": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("dg", "DG", "D", "G", 10, 72), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("dd", "DD", "D", "D", 90, 72),
+    tacSlot("md1", "MD", "MD", "C", 35, 58), tacSlot("md2", "MD", "MD", "C", 65, 58),
+    tacSlot("alg", "ALG", "MO", "G", 14, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "MO", "D", 86, 16),
+  ],
+  "5-3-2 MD AL": [
+    tacSlot("gb", "GB", "GB", "C", 50, 94),
+    tacSlot("alg", "ALG", "AL", "G", 8, 62), tacSlot("dc1", "DC", "D", "C", 30, 80), tacSlot("dc2", "DC", "D", "C", 50, 82), tacSlot("dc3", "DC", "D", "C", 70, 80), tacSlot("ald", "ALD", "AL", "D", 92, 62),
+    tacSlot("mdef", "MD", "MD", "C", 50, 64), tacSlot("mg", "MC", "M", "C", 30, 54), tacSlot("md2", "MC", "M", "C", 70, 54),
+    tacSlot("bt1", "BU", "BT", "C", 38, 14), tacSlot("bt2", "BU", "BT", "C", 62, 14),
+  ],
+};
+
+// Reassocie positionnellement les titulaires (hors entrants) aux postes
+// exacts de la formation utilisee (meme logique que dashboard.html) :
+// stats.notes_joueurs ne stocke que le `role` de chaque joueur, pas son x/y
+// ni son cote — mais l'ordre des titulaires correspond exactement a l'ordre
+// des postes de TAC_FORMATIONS[formation]. Renvoie null (repli sur l'ancien
+// rendu par bandes) si la formation est inconnue ou si les roles ne
+// correspondent pas exactement (match trop ancien, cas limite...).
+function slotsFromFormation(titulaires, formationName) {
+  const slots = formationName && TAC_FORMATIONS[formationName];
+  if (!slots || slots.length !== titulaires.length) return null;
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i].role !== titulaires[i].role) return null;
+  }
+  return slots;
+}
+
 // ===================== TERRAIN ILLUSTRE (derniere composition) =====================
 // Alimente par calendrier.stats.notes_joueurs (jsonb ecrit par
 // moteur_match.js a chaque match simule) : on prend le dernier match joue
@@ -1965,40 +2063,58 @@ async function compoFetchPlayerPhotos(playerIds) {
   return photos;
 }
 
-function compoPitchSvg(titulaires, photos = {}) {
-  const rows = compoPitchRows(titulaires);
-  const MAX_R = 26;
-  const MIN_R = 14;
-  const GAP = 24; // écart minimum souhaité entre les bords de deux cercles voisins
-  const dots = rows.flatMap(row => {
-    const n = row.players.length;
-    const spacing = 400 / (n + 1);
-    const r = Math.max(MIN_R, Math.min(MAX_R, (spacing - GAP) / 2));
-    return row.players.map((p, i) => {
-      const x = ((i + 1) / (n + 1)) * 400 + 25;
-      const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
-      const initials = escapeHtml((p.player_nom || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase());
-      const attrs = p.player_id ? ` class="compo-pitch-player" data-player-id="${escapeHtml(String(p.player_id))}"` : "";
-      const photoUrl = p.player_id ? photos[p.player_id] : null;
-      const clipId = `compoClip-${p.player_id != null ? p.player_id : `${row.y}-${i}`}`;
-      const faceContent = photoUrl
-        ? `
-          <defs><clipPath id="${clipId}"><circle r="${r - 2}"/></clipPath></defs>
-          <image class="compo-pitch-face" href="${escapeHtml(photoUrl)}" x="${-r}" y="${-r}" width="${r * 2}" height="${r * 2}"
-            preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"
-            onerror="this.remove()"/>
-        `
-        : `<text text-anchor="middle" dy="5" font-size="${Math.max(11, r * 0.55)}" font-weight="800" fill="#fff">${initials}</text>`;
-      return `
-        <g${attrs} transform="translate(${x},${row.y})">
-          <circle r="${r}" fill="#1c2029" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
-          ${faceContent}
-          <circle r="${r}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
-          <text text-anchor="middle" y="${r + 18}" font-size="13" font-weight="700" fill="#fff" stroke="rgba(0,0,0,0.8)" stroke-width="3" paint-order="stroke">${escapeHtml(nomCourt)}</text>
-        </g>
-      `;
-    });
-  }).join("");
+function compoPitchSvg(titulaires, photos = {}, formationName) {
+  const exactSlots = slotsFromFormation(titulaires, formationName);
+
+  const dotHtml = (p, i, x, y, r) => {
+    const nomCourt = (p.player_nom || "?").trim().split(/\s+/).pop();
+    const initials = escapeHtml((p.player_nom || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase());
+    const attrs = p.player_id ? ` class="compo-pitch-player" data-player-id="${escapeHtml(String(p.player_id))}"` : "";
+    const photoUrl = p.player_id ? photos[p.player_id] : null;
+    const clipId = `compoClip-${p.player_id != null ? p.player_id : `${Math.round(y)}-${i}`}`;
+    const faceContent = photoUrl
+      ? `
+        <defs><clipPath id="${clipId}"><circle r="${r - 2}"/></clipPath></defs>
+        <image class="compo-pitch-face" href="${escapeHtml(photoUrl)}" x="${-r}" y="${-r}" width="${r * 2}" height="${r * 2}"
+          preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"
+          onerror="this.remove()"/>
+      `
+      : `<text text-anchor="middle" dy="5" font-size="${Math.max(11, r * 0.55)}" font-weight="800" fill="#fff">${initials}</text>`;
+    return `
+      <g${attrs} transform="translate(${x},${y})">
+        <circle r="${r}" fill="#1c2029" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
+        ${faceContent}
+        <circle r="${r}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <text text-anchor="middle" y="${r + 18}" font-size="13" font-weight="700" fill="#fff" stroke="rgba(0,0,0,0.8)" stroke-width="3" paint-order="stroke">${escapeHtml(nomCourt)}</text>
+      </g>
+    `;
+  };
+
+  let dots;
+  if (exactSlots) {
+    // Positions exactes du poste occupe (memes coordonnees x/y en % que
+    // l'onglet Tactique), converties dans le repere du terrain SVG
+    // (viewBox 450x650, zone jouable 9..441 / 9..641).
+    const R = 22;
+    dots = titulaires.map((p, i) => {
+      const x = 9 + (exactSlots[i].x / 100) * 432;
+      const y = 9 + (exactSlots[i].y / 100) * 632;
+      return dotHtml(p, i, x, y, R);
+    }).join("");
+  } else {
+    // Repli (formation inconnue/introuvable) : ancien rendu par bandes de role.
+    const rows = compoPitchRows(titulaires);
+    const MAX_R = 26;
+    const MIN_R = 14;
+    const GAP = 24; // écart minimum souhaité entre les bords de deux cercles voisins
+    dots = rows.flatMap(row => {
+      const n = row.players.length;
+      const spacing = 400 / (n + 1);
+      const r = Math.max(MIN_R, Math.min(MAX_R, (spacing - GAP) / 2));
+      return row.players.map((p, i) => dotHtml(p, i, ((i + 1) / (n + 1)) * 400 + 25, row.y, r));
+    }).join("");
+  }
+
   return `
     <div class="pitch-wrap">
       <svg class="pitch-svg" viewBox="0 0 450 650" xmlns="http://www.w3.org/2000/svg">
@@ -2049,7 +2165,7 @@ async function renderPitch() {
 
   el.innerHTML = `
     <div class="pitch-caption">${escapeHtml(captionParts.join(" · "))}</div>
-    ${compoPitchSvg(titulaires, photos)}
+    ${compoPitchSvg(titulaires, photos, formation)}
   `;
   el.querySelectorAll(".compo-pitch-player[data-player-id]").forEach(node => {
     node.addEventListener("click", () => window.mdetGoToPlayer(gameClubId, node.getAttribute("data-player-id")));
@@ -4717,7 +4833,15 @@ function mdetPitchPlayerHtml(p, hommeDuMatch, clubId, xPct, yPct) {
   `;
 }
 
-function mdetRenderPitch(titulaires, hommeDuMatch, clubId) {
+// Positions exactes du poste occupe (memes coordonnees x/y que l'onglet
+// Tactique) quand la formation est connue et coherente avec les roles ;
+// repli sur l'ancien rendu par bandes sinon (cf. slotsFromFormation).
+function mdetRenderPitch(titulaires, hommeDuMatch, clubId, formationName) {
+  const slots = slotsFromFormation(titulaires, formationName);
+  if (slots) {
+    const dots = titulaires.map((p, i) => mdetPitchPlayerHtml(p, hommeDuMatch, clubId, slots[i].x, slots[i].y)).join("");
+    return `<div class="mdet-pitch">${dots}</div>`;
+  }
   const rows = mdetPitchRows(titulaires);
   const dots = rows.flatMap(row => {
     const n = row.players.length;
@@ -4726,7 +4850,7 @@ function mdetRenderPitch(titulaires, hommeDuMatch, clubId) {
   return `<div class="mdet-pitch">${dots}</div>`;
 }
 
-function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId) {
+function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId, formationName) {
   const titulaires = (notes || []).filter(n => !n.entrant);
   const remplacants = (notes || []).filter(n => n.entrant);
   // Associe chaque entrant a son sortant (par nom), a partir de stats.remplacements.
@@ -4734,7 +4858,7 @@ function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacem
   (remplacements || []).forEach(r => { sortantParEntrant[r.entrant_nom] = r; });
   const aDesPostes = titulaires.some(n => n.role);
   const titulairesHtml = aDesPostes
-    ? mdetRenderPitch(titulaires, hommeDuMatch, clubId)
+    ? mdetRenderPitch(titulaires, hommeDuMatch, clubId, formationName)
     : (titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`);
   return `
     <div class="mdet-roster-col">
@@ -4745,12 +4869,12 @@ function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacem
   `;
 }
 
-function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt, clubDomId, clubExtId) {
+function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt, clubDomId, clubExtId, formationDom, formationExt) {
   if (!notesJoueurs) return "";
   return `
     <div class="mdet-roster-grid">
-      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom, clubDomId)}
-      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt, clubExtId)}
+      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom, clubDomId, formationDom)}
+      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt, clubExtId, formationExt)}
     </div>
   `;
 }
@@ -5101,7 +5225,7 @@ async function openMatchDetails(matchId) {
     ${mdetRenderEvenements(stats, m.club_domicile_id, nomDom, nomExt)}
 
     <div class="mdet-section-title">Compositions</div>
-    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, m.club_domicile_id, m.club_exterieur_id) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, m.club_domicile_id, m.club_exterieur_id, stats.formation?.domicile, stats.formation?.exterieur) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
   `;
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
