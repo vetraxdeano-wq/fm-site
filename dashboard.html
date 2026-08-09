@@ -1032,6 +1032,10 @@
   .mdet-header-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mdet-header-team-name.dom { text-align: right; }
   .mdet-header-team-name.ext { text-align: left; }
+  .mdet-header-team-name.clickable { cursor: pointer; }
+  .mdet-header-team-name.clickable:hover { color: var(--gold); text-decoration: underline; }
+  .mdet-header-team-link { display: inline-flex; cursor: pointer; border-radius: 50%; transition: opacity 0.12s ease; }
+  .mdet-header-team-link:hover { opacity: 0.8; }
   .mdet-close {
     background: none; border: none; color: var(--text-dim); font-size: 18px;
     cursor: pointer; line-height: 1; padding: 4px; flex-shrink: 0;
@@ -3680,7 +3684,7 @@ const TAC_FORMATIONS = {
   "4-3-3 MD Jeu large": [
     tacSlot("gb", "GB", "GB", "C", 50, 94),
     tacSlot("dg", "DG", "D", "G", 14, 78), tacSlot("dc1", "DC", "D", "C", 38, 80), tacSlot("dc2", "DC", "D", "C", 62, 80), tacSlot("dd", "DD", "D", "D", 86, 78),
-    tacSlot("md1", "MD", "MD", "C", 25, 60), tacSlot("md2", "MD", "MD", "C", 50, 64), tacSlot("md3", "MD", "MD", "C", 75, 60),
+    tacSlot("mdef", "MD", "MD", "C", 50, 66), tacSlot("mc1", "MC", "M", "C", 25, 56), tacSlot("mc2", "MC", "M", "C", 75, 56),
     tacSlot("alg", "ALG", "MO", "G", 16, 16), tacSlot("bt1", "BU", "BT", "C", 50, 12), tacSlot("ald", "ALD", "MO", "D", 84, 16),
   ],
   "5-2-1-2 MD MO": [
@@ -10790,6 +10794,13 @@ window.mdetGoToPlayer = function (clubId, playerId) {
   window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId || "")}&player=${encodeURIComponent(playerId)}`;
 };
 
+// Ouvre la page infos club (meme motif que les autres liens club.html du
+// dashboard : game + club en query string).
+window.mdetGoToClub = function (clubId) {
+  if (!clubId) return;
+  window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+};
+
 function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
   const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
@@ -11105,11 +11116,11 @@ async function mdetRenderCoupeMatch(rowId) {
   content.innerHTML = `
     <div class="mdet-header">
       <div class="mdet-header-teams">
-        ${logoDom}
-        <div class="mdet-header-team-name dom">${escapeHtml(nomDom)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_1))}')">${logoDom}</span>
+        <div class="mdet-header-team-name dom clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_1))}')">${escapeHtml(nomDom)}</div>
         <span class="score">${scoreText}</span>
-        <div class="mdet-header-team-name ext">${escapeHtml(nomExt)}</div>
-        ${logoExt}
+        <div class="mdet-header-team-name ext clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_2))}')">${escapeHtml(nomExt)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_2))}')">${logoExt}</span>
       </div>
       <button class="mdet-close" id="mdetCloseBtn">✕</button>
     </div>
@@ -11166,11 +11177,11 @@ async function openMatchDetails(matchId) {
   content.innerHTML = `
     <div class="mdet-header">
       <div class="mdet-header-teams">
-        ${logoDom}
-        <div class="mdet-header-team-name dom">${escapeHtml(nomDom)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_domicile_id))}')">${logoDom}</span>
+        <div class="mdet-header-team-name dom clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_domicile_id))}')">${escapeHtml(nomDom)}</div>
         <span class="score">${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}</span>
-        <div class="mdet-header-team-name ext">${escapeHtml(nomExt)}</div>
-        ${logoExt}
+        <div class="mdet-header-team-name ext clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_exterieur_id))}')">${escapeHtml(nomExt)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_exterieur_id))}')">${logoExt}</span>
       </div>
       <button class="mdet-close" id="mdetCloseBtn">✕</button>
     </div>
