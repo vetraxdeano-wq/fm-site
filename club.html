@@ -222,6 +222,11 @@
     border-radius: 6px; padding: 3px 9px; cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease;
   }
   .ameliorer-btn:hover { background: rgba(251,191,36,0.16); border-color: rgba(251,191,36,0.55); }
+  .infra-chantier-badge {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    color: #fbbf24; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 6px; padding: 3px 9px; cursor: default; white-space: nowrap;
+  }
 
   /* Graphique d'historique financier : axes + remplissage sous la courbe
      (repris de dashboard.html pour garder le meme rendu partout). */
@@ -2752,6 +2757,43 @@ const AMELIORER_INFRA_LABELS = {
   jeunes: "Recrutement des jeunes",
 };
 
+// Cache du dernier etat infra charge (niveau + cooldown par infra, et
+// eventuel chantier en cours), rempli par loadInfraState() et reutilise par
+// renderReputation() / openAmeliorerModal() sans refaire de requete.
+let infraEtatCache = {};    // { entrainement: {niveau, cooldown_fin}, ... }
+let infraTravauxCache = {}; // { entrainement: {id, date_debut, date_fin_prevue, cout, niveau_depart} | undefined, ... }
+let infraReputationCache = null;
+let lastLoadedPlayers = [];
+
+async function loadInfraState(gid, gcid) {
+  const [{ data: etats }, { data: travaux }] = await Promise.all([
+    supabaseClient.from("game_club_infra").select("infra_key, niveau, cooldown_fin").eq("game_id", gid).eq("game_club_id", gcid),
+    supabaseClient.from("game_infra_travaux").select("id, infra_key, date_debut, date_fin_prevue, cout, niveau_depart")
+      .eq("game_id", gid).eq("game_club_id", gcid).eq("statut", "en_cours"),
+  ]);
+  infraEtatCache = {};
+  (etats || []).forEach(e => { infraEtatCache[e.infra_key] = e; });
+  infraTravauxCache = {};
+  (travaux || []).forEach(t => { infraTravauxCache[t.infra_key] = t; });
+}
+
+// Reproduit cote client la formule SQL infra_niveau_max() : plafond de
+// niveau atteignable selon la reputation (statique, ~1 a 9400) du club.
+function infraNiveauMaxClient(reputation) {
+  const rep = Math.max(Number(reputation) || 1, 1);
+  return Math.min(20, Math.max(4, Math.round(4 + 16 * Math.sqrt(rep / 9400))));
+}
+// Reproduit infra_cout_amelioration()
+function infraCoutClient(niveau) {
+  const n = Math.max(Number(niveau) || 0, 0);
+  return Math.max(50000, Math.round((90 * Math.pow(n, 4)) / 10000) * 10000);
+}
+// Reproduit infra_duree_mois()
+function infraDureeMoisClient(niveau) {
+  const n = Math.max(Number(niveau) || 0, 0);
+  return Math.min(8, Math.max(1, Math.round(1 + (7 * n) / 19)));
+}
+
 function renderReputation(club, players, isOwnClub) {
   const el = document.getElementById("clubReputation");
 
@@ -2761,17 +2803,23 @@ function renderReputation(club, players, isOwnClub) {
     : null;
   const repStars = avgRep !== null ? starsFromReputation(avgRep) : null;
 
-  const entrainementStars = club.niveau_entrainement ? starsFromScale(club.niveau_entrainement) : null;
-  const formationStars = club.centre_formation && club.centre_formation > 0 ? starsFromScale(club.centre_formation) : null;
-  const jeunesStars = club.jeunes_centre && club.jeunes_centre > 0 ? starsFromScale(club.jeunes_centre) : null;
+  const niveauxAffiches = {
+    entrainement: infraEtatCache.entrainement?.niveau ?? club.niveau_entrainement,
+    formation: infraEtatCache.formation?.niveau ?? club.centre_formation,
+    jeunes: infraEtatCache.jeunes?.niveau ?? club.jeunes_centre,
+  };
+  const starsFor = (n) => (n !== null && n !== undefined && n > 0) ? starsFromScale(n) : null;
 
   // Bouton "Améliorer" reserve au manager du club consulte (pas affiche en
-  // consultation d'un club adverse). Le contenu detaille de la popup sera
-  // construit plus tard : pour l'instant elle affiche juste le niveau
-  // actuel de l'infra concernee.
-  const ameliorerBtn = (key) => isOwnClub
-    ? `<button type="button" class="ameliorer-btn" data-infra="${key}">Améliorer</button>`
-    : "";
+  // consultation d'un club adverse). Un badge "en travaux" remplace le
+  // bouton tant qu'un chantier est en cours sur cette infra.
+  const infraRowExtra = (key) => {
+    const travaux = infraTravauxCache[key];
+    if (travaux) {
+      return `<span class="infra-chantier-badge" title="Fin prévue le ${formatRealDate(new Date(travaux.date_fin_prevue + 'T00:00:00'))}">🚧 en travaux</span>`;
+    }
+    return isOwnClub ? `<button type="button" class="ameliorer-btn" data-infra="${key}">Améliorer</button>` : "";
+  };
 
   el.innerHTML = `
     <div class="stat-row">
@@ -2780,15 +2828,15 @@ function renderReputation(club, players, isOwnClub) {
     </div>
     <div class="stat-row">
       <span class="label">${AMELIORER_INFRA_LABELS.entrainement}</span>
-      <span class="stat-row-value-wrap"><span class="value">${entrainementStars !== null ? starsHtml(entrainementStars) : "-"}</span>${ameliorerBtn("entrainement")}</span>
+      <span class="stat-row-value-wrap"><span class="value">${starsFor(niveauxAffiches.entrainement) !== null ? starsHtml(starsFor(niveauxAffiches.entrainement)) : "-"}</span>${infraRowExtra("entrainement")}</span>
     </div>
     <div class="stat-row">
       <span class="label">${AMELIORER_INFRA_LABELS.formation}</span>
-      <span class="stat-row-value-wrap"><span class="value">${formationStars !== null ? starsHtml(formationStars) : "Aucun"}</span>${ameliorerBtn("formation")}</span>
+      <span class="stat-row-value-wrap"><span class="value">${starsFor(niveauxAffiches.formation) !== null ? starsHtml(starsFor(niveauxAffiches.formation)) : "Aucun"}</span>${infraRowExtra("formation")}</span>
     </div>
     <div class="stat-row">
       <span class="label">${AMELIORER_INFRA_LABELS.jeunes}</span>
-      <span class="stat-row-value-wrap"><span class="value">${jeunesStars !== null ? starsHtml(jeunesStars) : "Aucun"}</span>${ameliorerBtn("jeunes")}</span>
+      <span class="stat-row-value-wrap"><span class="value">${starsFor(niveauxAffiches.jeunes) !== null ? starsHtml(starsFor(niveauxAffiches.jeunes)) : "Aucun"}</span>${infraRowExtra("jeunes")}</span>
     </div>
     <div class="stat-row">
       <span class="label">Stade</span>
@@ -2806,27 +2854,84 @@ function renderReputation(club, players, isOwnClub) {
 }
 
 // Popup "Améliorer" une infrastructure (centre d'entraînement / formation /
-// recrutement des jeunes). Contenu volontairement minimal pour l'instant :
-// le detail (cout, effets, palier suivant...) sera ajoute plus tard.
+// recrutement des jeunes) : affiche le niveau actuel, le plafond lié à la
+// réputation, le coût/durée du prochain palier, ou l'état d'un chantier en
+// cours / d'un cooldown, avec un bouton pour lancer les travaux.
 function openAmeliorerModal(infraKey, club) {
   const label = AMELIORER_INFRA_LABELS[infraKey] || "Infrastructure";
-  const rawByKey = { entrainement: club.niveau_entrainement, formation: club.centre_formation, jeunes: club.jeunes_centre };
-  const niveauActuel = rawByKey[infraKey];
+  const etat = infraEtatCache[infraKey];
+  const niveauActuel = etat?.niveau ?? { entrainement: club.niveau_entrainement, formation: club.centre_formation, jeunes: club.jeunes_centre }[infraKey];
+  const niveauMax = infraNiveauMaxClient(infraReputationCache ?? club.reputation);
+  const travaux = infraTravauxCache[infraKey];
+  const cooldownFin = etat?.cooldown_fin ? new Date(etat.cooldown_fin + "T00:00:00") : null;
+  const now = computeRealDate(currentGame?.date_debut, currentGame?.jour_actuel);
+
   const overlay = document.getElementById("ameliorerOverlay");
   const modal = document.getElementById("ameliorerModal");
   if (!overlay || !modal) return;
+
+  let body;
+  if (travaux) {
+    body = `
+      <div class="fm-empty">🚧 Chantier en cours, démarré le ${formatRealDate(new Date(travaux.date_debut + "T00:00:00"))}.</div>
+      <div class="stat-row"><span class="label">Fin prévue</span><span class="value">${formatRealDate(new Date(travaux.date_fin_prevue + "T00:00:00"))}</span></div>
+      <div class="stat-row"><span class="label">Coût investi</span><span class="value">${formatInt(travaux.cout)} €</span></div>
+      <div class="stat-row"><span class="label">Gain</span><span class="value">+1 ou +2 (révélé à la fin des travaux)</span></div>
+    `;
+  } else if (niveauActuel !== null && niveauActuel !== undefined && niveauActuel >= niveauMax) {
+    body = `<div class="fm-empty">La réputation actuelle du club ne permet pas d'aller au-delà de ${niveauMax}/20 pour cette infrastructure.</div>`;
+  } else if (cooldownFin && now && cooldownFin > now) {
+    body = `<div class="fm-empty">Chantier terminé récemment sur cette infrastructure : prochains travaux possibles à partir du ${formatRealDate(cooldownFin)}.</div>`;
+  } else {
+    const niveauBase = Math.max(niveauActuel ?? 0, 0);
+    const cout = infraCoutClient(niveauBase);
+    const duree = infraDureeMoisClient(niveauBase);
+    body = `
+      <div class="stat-row"><span class="label">Plafond (réputation du club)</span><span class="value">${niveauMax}/20</span></div>
+      <div class="stat-row"><span class="label">Prochain palier</span><span class="value">+1 ou +2 (aléatoire)</span></div>
+      <div class="stat-row"><span class="label">Coût estimé</span><span class="value">${formatInt(cout)} €</span></div>
+      <div class="stat-row"><span class="label">Durée estimée</span><span class="value">${duree} mois</span></div>
+      <div class="stat-row"><span class="label">Budget disponible</span><span class="value">${formatInt(club.budget_actuel)} €</span></div>
+      <button type="button" class="ameliorer-btn" id="ameliorerLancerBtn" style="margin-top:14px;width:100%;">Lancer les travaux</button>
+      <div id="ameliorerError" class="fm-empty hidden" style="color:var(--danger);"></div>
+    `;
+  }
+
   modal.innerHTML = `
     <div class="fin-header">
       <div>
         <div class="fin-header-title">Améliorer — ${escapeHtml(label)}</div>
-        <div class="fin-header-sub">Niveau actuel : ${niveauActuel ? `${niveauActuel}/20` : "Aucun"}</div>
+        <div class="fin-header-sub">Niveau actuel : ${niveauActuel !== null && niveauActuel !== undefined && niveauActuel >= 0 ? `${niveauActuel}/20` : "Aucun"}</div>
       </div>
       <button class="fin-close" id="ameliorerCloseBtn">✕</button>
     </div>
-    <div class="fm-empty">Détails à venir.</div>
+    ${body}
   `;
   overlay.classList.remove("hidden");
   document.getElementById("ameliorerCloseBtn").addEventListener("click", closeAmeliorerModal);
+
+  const lancerBtn = document.getElementById("ameliorerLancerBtn");
+  if (lancerBtn) {
+    lancerBtn.addEventListener("click", async () => {
+      lancerBtn.disabled = true;
+      lancerBtn.textContent = "Lancement...";
+      const { error } = await supabaseClient.rpc("demarrer_amelioration_infra", {
+        p_game_id: gameId, p_game_club_id: gameClubId, p_infra_key: infraKey,
+      });
+      if (error) {
+        const errEl = document.getElementById("ameliorerError");
+        errEl.textContent = error.message || "Impossible de lancer les travaux.";
+        errEl.classList.remove("hidden");
+        lancerBtn.disabled = false;
+        lancerBtn.textContent = "Lancer les travaux";
+        return;
+      }
+      toast("Travaux lancés.");
+      closeAmeliorerModal();
+      await loadInfraState(gameId, gameClubId);
+      renderReputation(club, lastLoadedPlayers || [], true);
+    });
+  }
 }
 
 function closeAmeliorerModal() {
@@ -4393,7 +4498,7 @@ async function loadClub() {
     .select(`
       game_club_id, nom, budget_actuel, classement, statut, nation, division,
       niveau_entrainement, centre_formation, jeunes_centre, capacite_stade, affluence_moyenne,
-      nb_joueurs, meilleur_joueur_nom, user_id,
+      reputation, nb_joueurs, meilleur_joueur_nom, user_id,
       budget_salarial_actuel, budget_transfert_actuel, masse_salariale_reference,
       budget_allouable_saison, marge_securite_saison, ratio_repartition_manuel
     `)
@@ -4453,6 +4558,9 @@ async function loadClub() {
   renderPitch();
   renderFinances(club);
   makeCardClickable("clubFinances", () => openFinancesModal(club, isOwnClub));
+  infraReputationCache = club.reputation;
+  lastLoadedPlayers = players || [];
+  await loadInfraState(gameId, gameClubId);
   renderReputation(club, players || [], isOwnClub);
   renderKeyPeople(club, players || [], rawClub);
   loadAndRenderPalmares(gameId, gameClubId);
