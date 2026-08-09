@@ -10811,6 +10811,28 @@ function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
 // ecrit par moteur_match.js dans stats.notes_joueurs. Les matchs simules
 // avant cette evolution n'ont pas ce champ : on retombe alors sur la liste
 // simple (mdetPlayerRow) plutot que d'afficher un terrain incomplet.
+//
+// Positionnement precis : stats.notes_joueurs ne stocke que le `role`
+// (GB/D/AL/MD/MO/BT) de chaque titulaire, pas son x/y ni son cote
+// (gauche/centre/droite) — d'ou l'ancien rendu "a plat" (tous les joueurs
+// d'un meme role alignes sur la meme ligne, lateraux au meme niveau que les
+// centraux, MOG/MOD au meme niveau que le MOC). En revanche l'ordre des
+// titulaires (hors entrants) correspond exactement a l'ordre des postes de
+// la formation utilisee (stats.formation.domicile/exterieur) tel que defini
+// dans TAC_FORMATIONS — meme catalogue que l'onglet Tactique — puisque les
+// notes sont ecrites dans le meme ordre que la composition assignee. On
+// peut donc reassocier chaque titulaire au bon x/y (et donc au bon "niveau"
+// sur le terrain) en zippant positionnellement les deux listes, avec
+// verification de coherence des roles avant d'appliquer.
+function mdetSlotsFromFormation(titulaires, formationName) {
+  const slots = formationName && TAC_FORMATIONS[formationName];
+  if (!slots || slots.length !== titulaires.length) return null;
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i].role !== titulaires[i].role) return null;
+  }
+  return slots;
+}
+
 function mdetPitchRows(titulaires) {
   const bands = { GB: [], DEF: [], MD: [], MO: [], BT: [] };
   titulaires.forEach(p => {
@@ -10851,7 +10873,14 @@ function mdetPitchPlayerHtml(p, hommeDuMatch, clubId, xPct, yPct) {
   `;
 }
 
-function mdetRenderPitch(titulaires, hommeDuMatch, clubId) {
+function mdetRenderPitch(titulaires, hommeDuMatch, clubId, formationName) {
+  const slots = mdetSlotsFromFormation(titulaires, formationName);
+  if (slots) {
+    const dots = titulaires.map((p, i) => mdetPitchPlayerHtml(p, hommeDuMatch, clubId, slots[i].x, slots[i].y)).join("");
+    return `<div class="mdet-pitch">${dots}</div>`;
+  }
+  // Repli (formation inconnue/introuvable, ou match trop ancien) : ancien
+  // rendu par bandes de role, mieux qu'un terrain vide.
   const rows = mdetPitchRows(titulaires);
   const dots = rows.flatMap(row => {
     const n = row.players.length;
@@ -10860,7 +10889,7 @@ function mdetRenderPitch(titulaires, hommeDuMatch, clubId) {
   return `<div class="mdet-pitch">${dots}</div>`;
 }
 
-function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId) {
+function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacements, clubId, formationName) {
   const titulaires = (notes || []).filter(n => !n.entrant);
   const remplacants = (notes || []).filter(n => n.entrant);
   // Associe chaque entrant a son sortant (par nom), a partir de stats.remplacements.
@@ -10868,7 +10897,7 @@ function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacem
   (remplacements || []).forEach(r => { sortantParEntrant[r.entrant_nom] = r; });
   const aDesPostes = titulaires.some(n => n.role);
   const titulairesHtml = aDesPostes
-    ? mdetRenderPitch(titulaires, hommeDuMatch, clubId)
+    ? mdetRenderPitch(titulaires, hommeDuMatch, clubId, formationName)
     : (titulaires.length ? titulaires.map(n => mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId)).join("") : `<div class="mdet-empty">Aucun titulaire noté.</div>`);
   return `
     <div class="mdet-roster-col">
@@ -10879,12 +10908,12 @@ function mdetRenderRosterCol(notes, hommeDuMatch, logoHtml, nomEquipe, remplacem
   `;
 }
 
-function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt, clubDomId, clubExtId) {
+function mdetRenderNotes(notesJoueurs, hommeDuMatch, logoDomHtml, logoExtHtml, nomDom, nomExt, remplacementsDom, remplacementsExt, clubDomId, clubExtId, formationDom, formationExt) {
   if (!notesJoueurs) return "";
   return `
     <div class="mdet-roster-grid">
-      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom, clubDomId)}
-      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt, clubExtId)}
+      ${mdetRenderRosterCol(notesJoueurs.domicile, hommeDuMatch, logoDomHtml, nomDom, remplacementsDom, clubDomId, formationDom)}
+      ${mdetRenderRosterCol(notesJoueurs.exterieur, hommeDuMatch, logoExtHtml, nomExt, remplacementsExt, clubExtId, formationExt)}
     </div>
   `;
 }
@@ -11167,7 +11196,7 @@ async function openMatchDetails(matchId) {
     ${mdetRenderEvenements(stats, m.club_domicile_id, nomDom, nomExt)}
 
     <div class="mdet-section-title">Compositions</div>
-    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, m.club_domicile_id, m.club_exterieur_id) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, m.club_domicile_id, m.club_exterieur_id, stats.formation?.domicile, stats.formation?.exterieur) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
   `;
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
