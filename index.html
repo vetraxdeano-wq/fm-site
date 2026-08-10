@@ -145,6 +145,7 @@
   .pres-face-item:hover { border-color: var(--text-dim); }
   .pres-face-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(74,222,128,0.25); }
   .pres-face-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.4; }
+  .pres-face-loading { grid-column: 1 / -1; color: var(--text-dim); font-size: 13px; text-align: center; padding: 16px 0; }
   .pres-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 </style>
 </head>
@@ -393,17 +394,27 @@ function onAuthSuccess(user) {
 }
 
 // ============================================================
-// PROFIL PRESIDENT — grille de visages, calcul d'age, modal
+// PROFIL PRESIDENT — grille de visages (chargee depuis Supabase,
+// table president_faces alimentee par upload_prez.py), calcul d'age, modal
 // (reutilise aussi dans dashboard.html, onglet Accueil > Mon profil)
 // ============================================================
-const PRES_FACE_SEEDS = [
-  "Felix", "Aneka", "Milo", "Zoe", "Leo", "Nina",
-  "Oscar", "Ines", "Adam", "Maya", "Tom", "Chloe",
-  "Hugo", "Sara", "Nils", "Iris", "Marco", "Elena",
-];
+let presFacesCache = null; // [{filename, url}] charge une seule fois depuis Supabase
 
-function presFaceUrl(seed) {
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&backgroundColor=1f6b42,262a33,0d0f13`;
+async function loadPresidentFaces() {
+  if (presFacesCache) return presFacesCache;
+  try {
+    const { data, error } = await supabaseClient
+      .from("president_faces")
+      .select("filename, url")
+      .eq("actif", true)
+      .order("filename");
+    if (error) throw error;
+    presFacesCache = data || [];
+  } catch (e) {
+    console.error("loadPresidentFaces:", e);
+    presFacesCache = [];
+  }
+  return presFacesCache;
 }
 
 function computeAgeFromDob(dobStr) {
@@ -416,19 +427,32 @@ function computeAgeFromDob(dobStr) {
   return age;
 }
 
-let presSelectedFace = PRES_FACE_SEEDS[0];
+let presSelectedFaceUrl = null;
 let presPendingAction = null; // { type: "create", name } | { type: "join", gameId, gameName }
 
-function renderPresFaceGrid() {
+async function renderPresFaceGrid() {
   const grid = document.getElementById("presFaceGrid");
-  grid.innerHTML = PRES_FACE_SEEDS.map(seed => `
-    <button type="button" class="pres-face-item ${seed === presSelectedFace ? "selected" : ""}" data-seed="${seed}">
-      <img src="${presFaceUrl(seed)}" alt="Visage ${seed}" loading="lazy">
+  grid.innerHTML = `<div class="pres-face-loading">Chargement des visages...</div>`;
+  const faces = await loadPresidentFaces();
+
+  if (!faces.length) {
+    grid.innerHTML = `<div class="pres-face-loading">Aucun visage disponible pour l'instant.</div>`;
+    presSelectedFaceUrl = null;
+    return;
+  }
+
+  if (!presSelectedFaceUrl || !faces.some(f => f.url === presSelectedFaceUrl)) {
+    presSelectedFaceUrl = faces[Math.floor(Math.random() * faces.length)].url;
+  }
+
+  grid.innerHTML = faces.map(f => `
+    <button type="button" class="pres-face-item ${f.url === presSelectedFaceUrl ? "selected" : ""}" data-url="${escapeHtml(f.url)}">
+      <img src="${escapeHtml(f.url)}" alt="${escapeHtml(f.filename)}" loading="lazy">
     </button>
   `).join("");
   grid.querySelectorAll(".pres-face-item").forEach(btn => {
     btn.addEventListener("click", () => {
-      presSelectedFace = btn.getAttribute("data-seed");
+      presSelectedFaceUrl = btn.getAttribute("data-url");
       grid.querySelectorAll(".pres-face-item").forEach(b => b.classList.toggle("selected", b === btn));
     });
   });
@@ -445,7 +469,7 @@ document.getElementById("presDobInput").addEventListener("input", updatePresAgeH
 
 function openPresidentModal(action, title, sub) {
   presPendingAction = action;
-  presSelectedFace = PRES_FACE_SEEDS[Math.floor(Math.random() * PRES_FACE_SEEDS.length)];
+  presSelectedFaceUrl = null;
   document.getElementById("presModalTitle").textContent = title;
   document.getElementById("presModalSub").textContent = sub;
   document.getElementById("presNomInput").value = "";
@@ -474,13 +498,14 @@ document.getElementById("presConfirmBtn").addEventListener("click", async () => 
   if (!dob) { toast("Entre une date de naissance", true); return; }
   const age = computeAgeFromDob(dob);
   if (age === null || age < 18 || age > 90) { toast("Date de naissance invalide (18 a 90 ans)", true); return; }
+  if (!presSelectedFaceUrl) { toast("Choisis un visage", true); return; }
   if (!presPendingAction) { closePresidentModal(); return; }
 
   const presidentData = {
     president_nom: nom,
     president_prenom: prenom,
     president_date_naissance: dob,
-    president_visage_url: presFaceUrl(presSelectedFace),
+    president_visage_url: presSelectedFaceUrl,
   };
 
   const btn = document.getElementById("presConfirmBtn");
