@@ -397,6 +397,79 @@
   .fm-card-title .chev { color: var(--text-dim); font-size: 11px; font-weight: 400; }
   .fm-empty { color: var(--text-dim); font-size: 13px; padding: 6px 0 2px; line-height: 1.5; }
 
+  /* ---- Mon profil (sous-onglet d'Accueil) : carte president ---- */
+  .mp-wrap { max-width: 520px; margin: 4px auto 0; width: 100%; }
+  .mp-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 26px; text-align: center;
+  }
+  .mp-avatar {
+    width: 120px; height: 120px; border-radius: 50%; margin: 0 auto 16px;
+    border: 3px solid var(--gold); overflow: hidden; background: #0d0f13;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mp-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .mp-name { font-size: 19px; font-weight: 800; margin-bottom: 2px; }
+  .mp-role { color: var(--gold); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 18px; }
+  .mp-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; margin-bottom: 20px; }
+  .mp-info-item {
+    background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  .mp-info-label { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .mp-info-value { font-size: 14px; font-weight: 700; }
+  .mp-edit-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text);
+    padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .mp-edit-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .mp-empty-hint { color: var(--text-dim); font-size: 13px; text-align: center; padding: 30px 0; }
+
+  /* ============ Modal "Profil president" (creation / edition) ============ */
+  .pres-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 400; padding: 16px; overflow-y: auto;
+  }
+  .pres-overlay.hidden { display: none; }
+  .pres-modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  }
+  .pres-modal h2 { font-size: 17px; margin: 0 0 4px; }
+  .pres-sub { color: var(--text-dim); font-size: 13px; margin-bottom: 18px; line-height: 1.4; }
+  .pres-field { margin-bottom: 14px; }
+  .pres-field label {
+    display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+  }
+  .pres-field input {
+    width: 100%; background: #0d0f13; border: 1px solid var(--border); color: var(--text);
+    padding: 10px 12px; border-radius: 8px; font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  .pres-field input:focus { outline: none; border-color: var(--accent); }
+  .pres-row2 { display: flex; gap: 10px; }
+  .pres-row2 .pres-field { flex: 1; }
+  .pres-age-hint { font-size: 12px; color: var(--accent); margin-top: 6px; min-height: 14px; }
+  .pres-face-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 4px; }
+  .pres-face-item {
+    border: 2px solid var(--border); border-radius: 10px; background: #0d0f13; cursor: pointer;
+    padding: 3px; display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 1; transition: border-color 0.15s;
+  }
+  .pres-face-item img { width: 100%; height: 100%; border-radius: 7px; display: block; }
+  .pres-face-item:hover { border-color: var(--text-dim); }
+  .pres-face-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(74,222,128,0.25); }
+  .pres-face-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.4; }
+  .pres-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .pres-actions button {
+    padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 13px;
+    cursor: pointer; font-family: inherit; border: none;
+  }
+  .pres-actions .secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .pres-actions .primary { background: var(--accent); color: #06210f; }
+  .pres-actions button:disabled { opacity: 0.5; cursor: default; }
+
   .fm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .fm-table th {
     text-align: left; color: var(--text-dim); font-weight: 600; font-size: 10.5px;
@@ -856,20 +929,21 @@
 
   /* ---- Staff (sous-onglet) : 3 colonnes departement + fiches membres ---- */
   .fm-staff-view { width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; gap: 0; }
-  .staff-subtab-bar, .tac-subtab-bar {
+  .staff-subtab-bar, .tac-subtab-bar, .home-subtab-bar {
     display: flex; gap: 4px; flex: 0 0 auto; background: #14171d;
     border-bottom: 1px solid var(--border); padding: 0 24px; margin: -16px -24px 18px;
   }
-  .staff-subtab-btn, .tac-subtab-btn {
+  .staff-subtab-btn, .tac-subtab-btn, .home-subtab-btn {
     display: flex; align-items: center; gap: 8px; background: transparent; border: none;
     border-bottom: 3px solid transparent; color: var(--text-dim);
     padding: 14px 16px 11px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
   }
-  .staff-subtab-icon, .tac-subtab-icon { font-size: 15px; line-height: 1; }
-  .staff-subtab-btn:hover, .tac-subtab-btn:hover { color: var(--text); }
-  .staff-subtab-btn.active, .tac-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
-  .staff-subtab-panel, .tac-subtab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .staff-subtab-panel.hidden, .tac-subtab-panel.hidden { display: none; }
+  .staff-subtab-icon, .tac-subtab-icon, .home-subtab-icon { font-size: 15px; line-height: 1; }
+  .staff-subtab-btn:hover, .tac-subtab-btn:hover, .home-subtab-btn:hover { color: var(--text); }
+  .staff-subtab-btn.active, .tac-subtab-btn.active, .home-subtab-btn.active { background: transparent; border-bottom-color: var(--gold); color: var(--gold); }
+  .staff-subtab-panel, .tac-subtab-panel, .home-subtab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .staff-subtab-panel.hidden, .tac-subtab-panel.hidden, .home-subtab-panel.hidden { display: none; }
+  .fm-home-view { width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; }
   .staff-columns {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start;
   }
@@ -2011,34 +2085,49 @@
     <div class="fm-sidebar" id="fmSidebar"></div>
 
     <div class="fm-content-wrap">
-      <div class="fm-content" id="fmHomeView">
-        <div class="fm-col">
-          <div class="card fm-next-fixture-card">
-            <div class="fm-card-title"><span>Prochaine rencontre</span></div>
-            <div id="fmNextMatch" class="fm-empty">Chargement...</div>
-          </div>
-          <div class="card card-fit">
-            <div class="fm-card-title"><span>Derniers matchs</span></div>
-            <div id="fmLastMatches" class="fm-empty">Chargement...</div>
-          </div>
-          <div class="card card-fit">
-            <div class="fm-card-title"><span>Finances</span></div>
-            <div id="fmFinances" class="fm-empty">Chargement...</div>
+      <div class="fm-home-view" id="fmHomeView">
+        <div class="home-subtab-bar" id="homeSubtabBar">
+          <button type="button" class="home-subtab-btn active" data-subtab="accueil"><span class="home-subtab-icon">🏠</span>Accueil</button>
+          <button type="button" class="home-subtab-btn" data-subtab="monprofil"><span class="home-subtab-icon">🪪</span>Mon profil</button>
+        </div>
+
+        <div class="home-subtab-panel" id="homeAccueilPanel">
+          <div class="fm-content">
+            <div class="fm-col">
+              <div class="card fm-next-fixture-card">
+                <div class="fm-card-title"><span>Prochaine rencontre</span></div>
+                <div id="fmNextMatch" class="fm-empty">Chargement...</div>
+              </div>
+              <div class="card card-fit">
+                <div class="fm-card-title"><span>Derniers matchs</span></div>
+                <div id="fmLastMatches" class="fm-empty">Chargement...</div>
+              </div>
+              <div class="card card-fit">
+                <div class="fm-card-title"><span>Finances</span></div>
+                <div id="fmFinances" class="fm-empty">Chargement...</div>
+              </div>
+            </div>
+
+            <div class="fm-col">
+              <div class="card">
+                <div class="fm-card-title"><span>Classement</span> <span class="chev">▾</span></div>
+                <div id="fmStandings" class="fm-empty">Chargement...</div>
+              </div>
+              <div class="card card-fit">
+                <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
+                <div id="fmTeamStats" class="fm-empty">Chargement...</div>
+              </div>
+              <div class="card card-fit">
+                <div class="fm-card-title"><span>Dynamique de groupe</span></div>
+                <div id="fmGroupDynamics" class="fm-empty">Chargement...</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="fm-col">
-          <div class="card">
-            <div class="fm-card-title"><span>Classement</span> <span class="chev">▾</span></div>
-            <div id="fmStandings" class="fm-empty">Chargement...</div>
-          </div>
-          <div class="card card-fit">
-            <div class="fm-card-title"><span>Stats de l'équipe</span> <span class="chev">▾</span></div>
-            <div id="fmTeamStats" class="fm-empty">Chargement...</div>
-          </div>
-          <div class="card card-fit">
-            <div class="fm-card-title"><span>Dynamique de groupe</span></div>
-            <div id="fmGroupDynamics" class="fm-empty">Chargement...</div>
+        <div class="home-subtab-panel hidden" id="homeProfilPanel">
+          <div class="mp-wrap" id="mpWrap">
+            <div class="mp-empty-hint">Chargement...</div>
           </div>
         </div>
       </div>
@@ -2408,6 +2497,41 @@
   <div class="fin-modal" id="finModal"></div>
 </div>
 
+<!-- ============ MODAL EDITION DU PROFIL PRESIDENT ============ -->
+<div class="pres-overlay hidden" id="presOverlay">
+  <div class="pres-modal">
+    <h2 id="presModalTitle">Modifier mon profil</h2>
+    <div class="pres-sub" id="presModalSub">Le president que tu incarnes dans cette partie.</div>
+
+    <div class="pres-row2">
+      <div class="pres-field">
+        <label for="presNomInput">Nom</label>
+        <input type="text" id="presNomInput" placeholder="Ex : Dupont" autocomplete="off">
+      </div>
+      <div class="pres-field">
+        <label for="presPrenomInput">Prenom</label>
+        <input type="text" id="presPrenomInput" placeholder="Ex : Jean" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="pres-field">
+      <label for="presDobInput">Date de naissance</label>
+      <input type="date" id="presDobInput">
+      <div class="pres-age-hint" id="presAgeHint"></div>
+    </div>
+
+    <div class="pres-field">
+      <label>Visage</label>
+      <div class="pres-face-grid" id="presFaceGrid"></div>
+    </div>
+
+    <div class="pres-actions">
+      <button class="secondary" id="presCancelBtn" type="button">Annuler</button>
+      <button class="primary" id="presConfirmBtn" type="button">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = "https://occesdpptttbwwjyuaja.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2VzZHBwdHR0Ynd3anl1YWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MjQ1MTAsImV4cCI6MjA5ODUwMDUxMH0.iQxZFp1wIs9TzCqC7j-DjEUuxPBqK0Hgp6N_9aq7wss";
@@ -2432,6 +2556,178 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ============================================================
+// PROFIL PRESIDENT — grille de visages, calcul d'age, modal d'edition
+// (onglet Accueil > Mon profil). Les donnees vivent dans game_participants
+// (president_nom / president_prenom / president_date_naissance /
+// president_visage_url), une ligne par (game_id, user_id).
+// ============================================================
+const PRES_FACE_SEEDS = [
+  "Felix", "Aneka", "Milo", "Zoe", "Leo", "Nina",
+  "Oscar", "Ines", "Adam", "Maya", "Tom", "Chloe",
+  "Hugo", "Sara", "Nils", "Iris", "Marco", "Elena",
+];
+
+function presFaceUrl(seed) {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&backgroundColor=1f6b42,262a33,0d0f13`;
+}
+
+function presSeedFromUrl(url) {
+  if (!url) return null;
+  const m = url.match(/[?&]seed=([^&]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function computeAgeFromDob(dobStr) {
+  const dob = new Date(dobStr);
+  if (isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+function formatDobDisplay(dobStr) {
+  if (!dobStr) return "—";
+  const d = new Date(dobStr);
+  if (isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" }).format(d);
+}
+
+let myPresident = null; // derniere ligne game_participants (avec champs president_*) de l'utilisateur
+let presSelectedFace = PRES_FACE_SEEDS[0];
+
+function renderPresFaceGrid() {
+  const grid = document.getElementById("presFaceGrid");
+  grid.innerHTML = PRES_FACE_SEEDS.map(seed => `
+    <button type="button" class="pres-face-item ${seed === presSelectedFace ? "selected" : ""}" data-seed="${seed}">
+      <img src="${presFaceUrl(seed)}" alt="Visage ${seed}" loading="lazy">
+    </button>
+  `).join("");
+  grid.querySelectorAll(".pres-face-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      presSelectedFace = btn.getAttribute("data-seed");
+      grid.querySelectorAll(".pres-face-item").forEach(b => b.classList.toggle("selected", b === btn));
+    });
+  });
+}
+
+function updatePresAgeHint() {
+  const val = document.getElementById("presDobInput").value;
+  const hint = document.getElementById("presAgeHint");
+  if (!val) { hint.textContent = ""; return; }
+  const age = computeAgeFromDob(val);
+  hint.textContent = age !== null ? `${age} ans` : "";
+}
+document.getElementById("presDobInput").addEventListener("input", updatePresAgeHint);
+
+function openPresidentModal() {
+  presSelectedFace = presSeedFromUrl(myPresident?.president_visage_url) || PRES_FACE_SEEDS[0];
+  document.getElementById("presModalTitle").textContent = "Modifier mon profil";
+  document.getElementById("presModalSub").textContent = "Le president que tu incarnes dans cette partie.";
+  document.getElementById("presNomInput").value = myPresident?.president_nom || "";
+  document.getElementById("presPrenomInput").value = myPresident?.president_prenom || "";
+  document.getElementById("presDobInput").value = myPresident?.president_date_naissance || "";
+  updatePresAgeHint();
+  renderPresFaceGrid();
+  document.getElementById("presOverlay").classList.remove("hidden");
+  document.getElementById("presNomInput").focus();
+}
+
+function closePresidentModal() {
+  document.getElementById("presOverlay").classList.add("hidden");
+}
+
+document.getElementById("presCancelBtn").addEventListener("click", closePresidentModal);
+
+document.getElementById("presConfirmBtn").addEventListener("click", async () => {
+  const nom = document.getElementById("presNomInput").value.trim();
+  const prenom = document.getElementById("presPrenomInput").value.trim();
+  const dob = document.getElementById("presDobInput").value;
+
+  if (!nom) { toast("Entre un nom", true); return; }
+  if (!prenom) { toast("Entre un prenom", true); return; }
+  if (!dob) { toast("Entre une date de naissance", true); return; }
+  const age = computeAgeFromDob(dob);
+  if (age === null || age < 18 || age > 90) { toast("Date de naissance invalide (18 a 90 ans)", true); return; }
+
+  const btn = document.getElementById("presConfirmBtn");
+  btn.disabled = true;
+  try {
+    const presidentData = {
+      president_nom: nom,
+      president_prenom: prenom,
+      president_date_naissance: dob,
+      president_visage_url: presFaceUrl(presSelectedFace),
+    };
+
+    const { error } = await supabaseClient
+      .from("game_participants")
+      .update(presidentData)
+      .eq("game_id", gameId)
+      .eq("user_id", userId);
+
+    if (error) throw error;
+
+    myPresident = { ...(myPresident || {}), ...presidentData };
+    renderMonProfilPanel();
+    toast("Profil mis a jour");
+    closePresidentModal();
+  } catch (e) {
+    console.error(e);
+    toast("Erreur : " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function renderMonProfilPanel() {
+  const wrap = document.getElementById("mpWrap");
+  if (!wrap) return;
+
+  if (!myPresident) {
+    wrap.innerHTML = `<div class="mp-empty-hint">Chargement du profil...</div>`;
+    return;
+  }
+
+  const nom = myPresident.president_nom || "";
+  const prenom = myPresident.president_prenom || "";
+  const fullName = (prenom || nom) ? `${prenom} ${nom}`.trim() : (myPresident.pseudo || "President");
+  const age = myPresident.president_date_naissance ? computeAgeFromDob(myPresident.president_date_naissance) : null;
+  const faceUrl = myPresident.president_visage_url || presFaceUrl(PRES_FACE_SEEDS[0]);
+
+  wrap.innerHTML = `
+    <div class="mp-card">
+      <div class="mp-avatar"><img src="${escapeHtml(faceUrl)}" alt=""></div>
+      <div class="mp-name">${escapeHtml(fullName)}</div>
+      <div class="mp-role">Président</div>
+      <div class="mp-info-grid">
+        <div class="mp-info-item">
+          <div class="mp-info-label">Nom</div>
+          <div class="mp-info-value">${nom ? escapeHtml(nom) : "—"}</div>
+        </div>
+        <div class="mp-info-item">
+          <div class="mp-info-label">Prénom</div>
+          <div class="mp-info-value">${prenom ? escapeHtml(prenom) : "—"}</div>
+        </div>
+        <div class="mp-info-item">
+          <div class="mp-info-label">Âge</div>
+          <div class="mp-info-value">${age !== null ? age + " ans" : "—"}</div>
+        </div>
+        <div class="mp-info-item">
+          <div class="mp-info-label">Date de naissance</div>
+          <div class="mp-info-value">${escapeHtml(formatDobDisplay(myPresident.president_date_naissance))}</div>
+        </div>
+      </div>
+      <button type="button" class="mp-edit-btn" id="mpEditBtn">✏️ Modifier mon profil</button>
+    </div>
+  `;
+
+  const editBtn = document.getElementById("mpEditBtn");
+  if (editBtn) editBtn.addEventListener("click", openPresidentModal);
 }
 
 // Drapeaux : Angleterre / Ecosse / Pays de Galles utilisent les codes de subdivision
@@ -2698,11 +2994,13 @@ async function loadDashboard() {
 
   const { data: participants } = await supabaseClient
     .from("game_participants")
-    .select("pseudo, is_host, user_id, game_club_id")
+    .select("pseudo, is_host, user_id, game_club_id, president_nom, president_prenom, president_date_naissance, president_visage_url")
     .eq("game_id", gameId);
 
   const me = (participants || []).find(p => p.user_id === userId);
   const isHost = me?.is_host === true;
+  myPresident = me || null;
+  renderMonProfilPanel();
 
   if (isHost && game.statut === "lobby") {
     document.getElementById("floatingStart").classList.remove("hidden");
@@ -3195,6 +3493,7 @@ async function renderFmSidebar(gameClubId) {
         el.querySelectorAll(".fm-nav-item").forEach(r => r.classList.remove("active"));
         row.classList.add("active");
         showFmHomeView();
+        showFmHomeSubtab("accueil");
         return;
       }
       if (item.key === "basejoueurs") {
@@ -3252,6 +3551,23 @@ function showFmHomeView() {
   document.getElementById("fmCompetitionsView").classList.add("hidden");
   const input = document.getElementById("fmSearchInput");
   if (input) input.placeholder = "PAGE D'ACCUEIL";
+
+  const subtabBar = document.getElementById("homeSubtabBar");
+  if (!subtabBar.dataset.wired) {
+    subtabBar.dataset.wired = "1";
+    subtabBar.querySelectorAll(".home-subtab-btn").forEach(b => {
+      b.addEventListener("click", () => showFmHomeSubtab(b.getAttribute("data-subtab")));
+    });
+  }
+}
+
+// Sous-onglets de l'onglet Accueil : "Accueil" (widgets classiques) et
+// "Mon profil" (fiche du president incarne dans cette partie).
+function showFmHomeSubtab(key) {
+  document.querySelectorAll(".home-subtab-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-subtab") === key));
+  document.getElementById("homeAccueilPanel").classList.toggle("hidden", key !== "accueil");
+  document.getElementById("homeProfilPanel").classList.toggle("hidden", key !== "monprofil");
+  if (key === "monprofil") renderMonProfilPanel();
 }
 
 // Onglet Data Center : accessible depuis le menu, contenu a construire
