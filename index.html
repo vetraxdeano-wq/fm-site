@@ -106,6 +106,46 @@
     padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 16px;
     font-family: monospace; white-space: pre-wrap; word-break: break-word;
   }
+
+  /* ============ Modal "Creation du profil president" ============ */
+  .pres-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; padding: 16px; overflow-y: auto;
+  }
+  .pres-overlay.hidden { display: none; }
+  .pres-modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  }
+  .pres-modal h2 { font-size: 17px; margin: 0 0 4px; }
+  .pres-sub { color: var(--text-dim); font-size: 13px; margin-bottom: 18px; line-height: 1.4; }
+  .pres-field { margin-bottom: 14px; }
+  .pres-field label {
+    display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+  }
+  .pres-field input {
+    width: 100%; background: #0d0f13; border: 1px solid var(--border); color: var(--text);
+    padding: 10px 12px; border-radius: 8px; font-size: 14px; font-family: inherit;
+  }
+  .pres-field input:focus { outline: none; border-color: var(--accent); }
+  .pres-row2 { display: flex; gap: 10px; }
+  .pres-row2 .pres-field { flex: 1; }
+  .pres-age-hint { font-size: 12px; color: var(--accent); margin-top: 6px; min-height: 14px; }
+  .pres-face-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 4px;
+  }
+  .pres-face-item {
+    border: 2px solid var(--border); border-radius: 10px; background: #0d0f13; cursor: pointer;
+    padding: 3px; display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 1; transition: border-color 0.15s, transform 0.1s;
+  }
+  .pres-face-item img { width: 100%; height: 100%; border-radius: 7px; display: block; }
+  .pres-face-item:hover { border-color: var(--text-dim); }
+  .pres-face-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(74,222,128,0.25); }
+  .pres-face-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.4; }
+  .pres-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 </style>
 </head>
 <body>
@@ -173,6 +213,42 @@
     </div>
   </div>
 
+</div>
+
+<!-- ============ MODAL CREATION DU PROFIL PRESIDENT ============ -->
+<div class="pres-overlay hidden" id="presOverlay">
+  <div class="pres-modal">
+    <h2 id="presModalTitle">Cree ton president</h2>
+    <div class="pres-sub" id="presModalSub">Ce sera le president que tu incarneras dans cette partie.</div>
+
+    <div class="pres-row2">
+      <div class="pres-field">
+        <label for="presNomInput">Nom</label>
+        <input type="text" id="presNomInput" placeholder="Ex : Dupont" autocomplete="off">
+      </div>
+      <div class="pres-field">
+        <label for="presPrenomInput">Prenom</label>
+        <input type="text" id="presPrenomInput" placeholder="Ex : Jean" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="pres-field">
+      <label for="presDobInput">Date de naissance</label>
+      <input type="date" id="presDobInput">
+      <div class="pres-age-hint" id="presAgeHint"></div>
+    </div>
+
+    <div class="pres-field">
+      <label>Visage</label>
+      <div class="pres-face-grid" id="presFaceGrid"></div>
+      <div class="pres-face-hint">Tu pourras en changer plus tard depuis l'onglet "Mon profil".</div>
+    </div>
+
+    <div class="pres-actions">
+      <button class="secondary" id="presCancelBtn" type="button">Annuler</button>
+      <button id="presConfirmBtn" type="button">Valider</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -317,42 +393,148 @@ function onAuthSuccess(user) {
 }
 
 // ============================================================
-// CREER UNE ROOM
+// PROFIL PRESIDENT — grille de visages, calcul d'age, modal
+// (reutilise aussi dans dashboard.html, onglet Accueil > Mon profil)
 // ============================================================
-document.getElementById("createRoomBtn").addEventListener("click", async () => {
-  const name = document.getElementById("roomNameInput").value.trim();
-  if (!name) { toast("Donne un nom a la room", true); return; }
+const PRES_FACE_SEEDS = [
+  "Felix", "Aneka", "Milo", "Zoe", "Leo", "Nina",
+  "Oscar", "Ines", "Adam", "Maya", "Tom", "Chloe",
+  "Hugo", "Sara", "Nils", "Iris", "Marco", "Elena",
+];
 
-  const btn = document.getElementById("createRoomBtn");
+function presFaceUrl(seed) {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&backgroundColor=1f6b42,262a33,0d0f13`;
+}
+
+function computeAgeFromDob(dobStr) {
+  const dob = new Date(dobStr);
+  if (isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+let presSelectedFace = PRES_FACE_SEEDS[0];
+let presPendingAction = null; // { type: "create", name } | { type: "join", gameId, gameName }
+
+function renderPresFaceGrid() {
+  const grid = document.getElementById("presFaceGrid");
+  grid.innerHTML = PRES_FACE_SEEDS.map(seed => `
+    <button type="button" class="pres-face-item ${seed === presSelectedFace ? "selected" : ""}" data-seed="${seed}">
+      <img src="${presFaceUrl(seed)}" alt="Visage ${seed}" loading="lazy">
+    </button>
+  `).join("");
+  grid.querySelectorAll(".pres-face-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      presSelectedFace = btn.getAttribute("data-seed");
+      grid.querySelectorAll(".pres-face-item").forEach(b => b.classList.toggle("selected", b === btn));
+    });
+  });
+}
+
+function updatePresAgeHint() {
+  const val = document.getElementById("presDobInput").value;
+  const hint = document.getElementById("presAgeHint");
+  if (!val) { hint.textContent = ""; return; }
+  const age = computeAgeFromDob(val);
+  hint.textContent = age !== null ? `${age} ans` : "";
+}
+document.getElementById("presDobInput").addEventListener("input", updatePresAgeHint);
+
+function openPresidentModal(action, title, sub) {
+  presPendingAction = action;
+  presSelectedFace = PRES_FACE_SEEDS[Math.floor(Math.random() * PRES_FACE_SEEDS.length)];
+  document.getElementById("presModalTitle").textContent = title;
+  document.getElementById("presModalSub").textContent = sub;
+  document.getElementById("presNomInput").value = "";
+  document.getElementById("presPrenomInput").value = "";
+  document.getElementById("presDobInput").value = "";
+  document.getElementById("presAgeHint").textContent = "";
+  renderPresFaceGrid();
+  document.getElementById("presOverlay").classList.remove("hidden");
+  document.getElementById("presNomInput").focus();
+}
+
+function closePresidentModal() {
+  document.getElementById("presOverlay").classList.add("hidden");
+  presPendingAction = null;
+}
+
+document.getElementById("presCancelBtn").addEventListener("click", closePresidentModal);
+
+document.getElementById("presConfirmBtn").addEventListener("click", async () => {
+  const nom = document.getElementById("presNomInput").value.trim();
+  const prenom = document.getElementById("presPrenomInput").value.trim();
+  const dob = document.getElementById("presDobInput").value;
+
+  if (!nom) { toast("Entre un nom", true); return; }
+  if (!prenom) { toast("Entre un prenom", true); return; }
+  if (!dob) { toast("Entre une date de naissance", true); return; }
+  const age = computeAgeFromDob(dob);
+  if (age === null || age < 18 || age > 90) { toast("Date de naissance invalide (18 a 90 ans)", true); return; }
+  if (!presPendingAction) { closePresidentModal(); return; }
+
+  const presidentData = {
+    president_nom: nom,
+    president_prenom: prenom,
+    president_date_naissance: dob,
+    president_visage_url: presFaceUrl(presSelectedFace),
+  };
+
+  const btn = document.getElementById("presConfirmBtn");
   btn.disabled = true;
-
   try {
-    const code = generateRoomCode();
-    const { data: game, error: gameErr } = await supabaseClient
-      .from("games")
-      .insert({ nom: name, code_invitation: code, created_by: userId })
-      .select()
-      .single();
-
-    if (gameErr) throw gameErr;
-
-    const { error: memberErr } = await supabaseClient
-      .from("game_participants")
-      .insert({ game_id: game.id, user_id: userId, is_host: true, pseudo: userPseudo });
-
-    if (memberErr) throw memberErr;
-
-    toast(`Room creee ! Generation du monde en cours (jusqu'a ~2 min)...`);
-    document.getElementById("roomNameInput").value = "";
-    loadRooms();
-    startGenerationPolling();
+    if (presPendingAction.type === "create") {
+      await actuallyCreateRoom(presPendingAction.name, presidentData);
+    } else if (presPendingAction.type === "join") {
+      await actuallyJoinRoom(presPendingAction.gameId, presPendingAction.gameName, presidentData);
+    }
+    closePresidentModal();
   } catch (e) {
     console.error(e);
-    toast("Erreur lors de la creation : " + e.message, true);
+    toast("Erreur : " + e.message, true);
   } finally {
     btn.disabled = false;
   }
 });
+
+// ============================================================
+// CREER UNE ROOM
+// ============================================================
+document.getElementById("createRoomBtn").addEventListener("click", () => {
+  const name = document.getElementById("roomNameInput").value.trim();
+  if (!name) { toast("Donne un nom a la room", true); return; }
+
+  openPresidentModal(
+    { type: "create", name },
+    "Cree ton president",
+    `Tu vas creer la room "${name}". Cree le president que tu incarneras dans cette partie.`
+  );
+});
+
+async function actuallyCreateRoom(name, presidentData) {
+  const code = generateRoomCode();
+  const { data: game, error: gameErr } = await supabaseClient
+    .from("games")
+    .insert({ nom: name, code_invitation: code, created_by: userId })
+    .select()
+    .single();
+
+  if (gameErr) throw gameErr;
+
+  const { error: memberErr } = await supabaseClient
+    .from("game_participants")
+    .insert({ game_id: game.id, user_id: userId, is_host: true, pseudo: userPseudo, ...presidentData });
+
+  if (memberErr) throw memberErr;
+
+  toast(`Room creee ! Generation du monde en cours (jusqu'a ~2 min)...`);
+  document.getElementById("roomNameInput").value = "";
+  loadRooms();
+  startGenerationPolling();
+}
 
 // ============================================================
 // REJOINDRE UNE ROOM
@@ -380,17 +562,19 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (!existing) {
-      const { error: memberErr } = await supabaseClient
-        .from("game_participants")
-        .insert({ game_id: game.id, user_id: userId, is_host: false, pseudo: userPseudo });
-
-      if (memberErr) throw memberErr;
+    if (existing) {
+      toast(`Room "${game.nom}" deja rejointe !`);
+      document.getElementById("joinCodeInput").value = "";
+      loadRooms();
+      return;
     }
 
-    toast(`Room "${game.nom}" rejointe !`);
     document.getElementById("joinCodeInput").value = "";
-    loadRooms();
+    openPresidentModal(
+      { type: "join", gameId: game.id, gameName: game.nom },
+      "Cree ton president",
+      `Tu vas rejoindre la room "${game.nom}". Cree le president que tu incarneras dans cette partie.`
+    );
   } catch (e) {
     console.error(e);
     toast("Erreur en rejoignant : " + e.message, true);
@@ -398,6 +582,17 @@ document.getElementById("joinRoomBtn").addEventListener("click", async () => {
     btn.disabled = false;
   }
 });
+
+async function actuallyJoinRoom(gameId, gameName, presidentData) {
+  const { error: memberErr } = await supabaseClient
+    .from("game_participants")
+    .insert({ game_id: gameId, user_id: userId, is_host: false, pseudo: userPseudo, ...presidentData });
+
+  if (memberErr) throw memberErr;
+
+  toast(`Room "${gameName}" rejointe !`);
+  loadRooms();
+}
 
 // ============================================================
 // DEMARRER LA PARTIE (host uniquement)
