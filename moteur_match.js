@@ -441,7 +441,9 @@ function calculerForceEquipe({ compositions, joueurs, tactique, coach, club, gro
   // relevés, et le plancher extérieur abaissé (0.9 -> 0.84) pour qu'un
   // déplacement difficile (vestiaire fragile, faible ferveur adverse) pèse
   // vraiment sur une équipe déjà moins bien classée.
-  const bonusDomicile = contexte?.domicile
+  const bonusDomicile = contexte?.neutre
+    ? 1
+    : contexte?.domicile
     ? clamp(1 + 0.075 * ferveurPublique + 0.04 * (contexte?.enjeu ?? 0) + 0.04 * (dynGroupe - 0.7), 1.03, 1.22)
     : clamp(0.97 - 0.045 * (1 - dynGroupe), 0.84, 0.98);
   const facteurEnjeu = 1 - (contexte?.enjeu ?? 0) * 0.04; // grosse pression = petite baisse de rendement moyen
