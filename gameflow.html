@@ -433,7 +433,7 @@ function matchRowHtml(m, clubNom) {
 // staff) et pas sur leur equivalent "en partie" (game_players, game_staff) :
 // on les recupere via une jointure PostgREST (player_ref / staff_ref).
 async function chargerDonneesClub(gameClubId) {
-  const [{ data: gc, error: gcErr }, { data: joueursBruts, error: jErr }, { data: tactiqueRows, error: tErr }, { data: staffBruts, error: sErr }, { data: groupeRows, error: grErr }] = await Promise.all([
+  let [{ data: gc, error: gcErr }, { data: joueursBruts, error: jErr }, { data: tactiqueRows, error: tErr }, { data: staffBruts, error: sErr }, { data: groupeRows, error: grErr }] = await Promise.all([
     withRetry(() => supabaseClient.from("game_clubs").select("id, nom, club_ref, clubs(reputation, niveau_pct, capacite_stade, affluence_moyenne)").eq("id", gameClubId).single()),
     withRetry(() => supabaseClient.from("game_players").select("*, players(regularite, tendance_blessure)").eq("game_club_id", gameClubId).eq("categorie", "equipe_a")),
     withRetry(() => supabaseClient.from("tactiques").select("*").eq("game_club_id", gameClubId)),
@@ -447,11 +447,44 @@ async function chargerDonneesClub(gameClubId) {
   if (grErr) throw grErr;
 
   // Aplatit players(regularite, tendance_blessure) directement sur chaque joueur
-  const joueurs = (joueursBruts || []).map(({ players: statique, ...j }) => ({
+  let joueurs = (joueursBruts || []).map(({ players: statique, ...j }) => ({
     ...j,
     regularite: statique?.regularite,
     tendance_blessure: statique?.tendance_blessure,
   }));
+
+  // Club sans effectif genere (typiquement un club amateur pioche au 1er tour
+  // de la coupe nationale, cf. assembler_pool_amateurs_coupe_nationale) : le
+  // moteur ne peut rien simuler sur un effectif vide. On genere ici un
+  // effectif rapide, calibre sur la reputation/niveau_pct du club statique,
+  // pour que ce match utilise EXACTEMENT le meme moteur (simulerMatch) que le
+  // championnat, avec de vraies stats. La generation est idempotente cote
+  // serveur (assurer_effectif_amateur_coupe) : une fois cree, l'effectif ne
+  // change plus, donc reste le meme pour toute la duree de la coupe.
+  if (joueurs.length === 0) {
+    const { error: genErr } = await withRetry(() => supabaseClient
+      .rpc("assurer_effectif_amateur_coupe", { p_game_id: gameId, p_game_club_id: gameClubId }));
+    if (genErr) throw genErr;
+
+    const { data: joueursGeneres, error: jGenErr } = await withRetry(() => supabaseClient
+      .from("game_players").select("*, players(regularite, tendance_blessure)")
+      .eq("game_club_id", gameClubId).eq("categorie", "equipe_a"));
+    if (jGenErr) throw jGenErr;
+
+    joueurs = (joueursGeneres || []).map(({ players: statique, ...j }) => ({
+      ...j,
+      regularite: statique?.regularite,
+      tendance_blessure: statique?.tendance_blessure,
+    }));
+
+    // La tactique par defaut vient d'etre creee cote serveur (assurer_tactique_par_defaut,
+    // appelee par assurer_effectif_amateur_coupe) : on la recharge pour ne pas
+    // repartir sur composition_par_defaut() avec un effectif encore vide en cache.
+    const { data: tactiqueGeneree, error: tGenErr } = await withRetry(() => supabaseClient
+      .from("tactiques").select("*").eq("game_club_id", gameClubId));
+    if (tGenErr) throw tGenErr;
+    tactiqueRows = tactiqueGeneree;
+  }
 
   let tactique = (tactiqueRows && tactiqueRows[0]) || null;
   if (!tactique || !tactique.compositions || tactique.compositions.length === 0) {
