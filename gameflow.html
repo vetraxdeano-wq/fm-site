@@ -661,6 +661,141 @@ async function simulerCoupeDuJour(dateIso, onProgress) {
 // barrages/coupe du jour a venir, puis RPC avancer_jour). Factorisee pour
 // etre appelee soit une fois (bouton Continuer), soit en boucle (Simuler
 // jusqu'a une date). onProgress(type, fait, total) est optionnel.
+// ---- Coupes d'Europe : tours qualificatifs (aller-retour, taux reduit) ----
+// N'appelle PAS de resolution/avancement de tour ici : traiter_tours_qualificatifs_europe_du_jour
+// (cote serveur, dans finaliser_journee) s'en charge une fois la date_match_retour atteinte.
+async function simulerTourQualifEuropeDuJour(dateIso, onProgress) {
+  const { data: allerDus, error: e1 } = await withRetry(() => supabaseClient
+    .from("game_tours_qualificatifs_europe")
+    .select("id, game_club_id_1, game_club_id_2")
+    .eq("game_id", gameId).lte("date_match_aller", dateIso).eq("statut", "a_jouer"));
+  if (e1) throw e1;
+
+  const { data: retoursDus, error: e2 } = await withRetry(() => supabaseClient
+    .from("game_tours_qualificatifs_europe")
+    .select("id, game_club_id_1, game_club_id_2, score_aller_1, score_aller_2")
+    .eq("game_id", gameId).lte("date_match_retour", dateIso).eq("statut", "aller_joue"));
+  if (e2) throw e2;
+
+  const matches = [...(allerDus || []).map(m => ({ ...m, leg: "aller" })), ...(retoursDus || []).map(m => ({ ...m, leg: "retour" }))];
+  if (!matches.length) return 0;
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (onProgress) onProgress("europe", i + 1, matches.length);
+
+    // club_1 recoit l'aller, club_2 recoit le retour
+    const recoitAller = m.leg === "aller";
+    const idDom = recoitAller ? m.game_club_id_1 : m.game_club_id_2;
+    const idExt = recoitAller ? m.game_club_id_2 : m.game_club_id_1;
+    const resultat = await simulerEtRecuperer(idDom, null, idExt, null, 0.7);
+
+    const score1 = recoitAller ? resultat.score_domicile : resultat.score_exterieur;
+    const score2 = recoitAller ? resultat.score_exterieur : resultat.score_domicile;
+
+    let tab1 = null, tab2 = null;
+    if (m.leg === "retour") {
+      const totalAller1 = m.score_aller_1 ?? 0, totalAller2 = m.score_aller_2 ?? 0;
+      if (totalAller1 + score1 === totalAller2 + score2) {
+        const [j1, j2] = await Promise.all([chargerDonneesClub(m.game_club_id_1), chargerDonneesClub(m.game_club_id_2)]);
+        const tab = simulerTirsAuBut(j1.joueurs, j2.joueurs);
+        tab1 = tab.scoreDom; tab2 = tab.scoreExt;
+      }
+    }
+
+    const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_qualif_europe", {
+      p_match_id: m.id, p_leg: m.leg, p_score_1: score1, p_score_2: score2,
+      p_tab_penalty_1: tab1, p_tab_penalty_2: tab2, p_stats: resultat.stats,
+    }));
+    if (rpcErr) throw rpcErr;
+  }
+  return matches.length;
+}
+
+// ---- Coupes d'Europe : phase de ligue (36 equipes, taux plein, vrai domicile/exterieur) ----
+async function simulerPhaseLigueEuropeDuJour(dateIso, onProgress) {
+  const { data: matches, error } = await withRetry(() => supabaseClient
+    .from("game_phase_ligue_europe")
+    .select("id, game_club_domicile_id, game_club_exterieur_id")
+    .eq("game_id", gameId).lte("date_match", dateIso).eq("statut", "a_jouer"));
+  if (error) throw error;
+  if (!matches || !matches.length) return 0;
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (onProgress) onProgress("europe", i + 1, matches.length);
+    const resultat = await simulerEtRecuperer(m.game_club_domicile_id, null, m.game_club_exterieur_id, null, 0.7);
+    const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_europe_ligue", {
+      p_match_id: m.id, p_score_domicile: resultat.score_domicile, p_score_exterieur: resultat.score_exterieur, p_stats: resultat.stats,
+    }));
+    if (rpcErr) throw rpcErr;
+  }
+  return matches.length;
+}
+
+// ---- Coupes d'Europe : barrage KO / 8e / quarts / demies (aller-retour) + finale (match sec, terrain NEUTRE) ----
+async function simulerPhaseFinaleEuropeDuJour(dateIso, onProgress) {
+  const { data: allerDus, error: e1 } = await withRetry(() => supabaseClient
+    .from("game_phase_finale_europe")
+    .select("id, phase, game_club_id_1, game_club_id_2")
+    .eq("game_id", gameId).lte("date_match_aller", dateIso).eq("statut", "a_jouer"));
+  if (e1) throw e1;
+
+  const { data: retoursDus, error: e2 } = await withRetry(() => supabaseClient
+    .from("game_phase_finale_europe")
+    .select("id, phase, game_club_id_1, game_club_id_2, score_aller_1, score_aller_2")
+    .eq("game_id", gameId).lte("date_match_retour", dateIso).eq("statut", "aller_joue"));
+  if (e2) throw e2;
+
+  const matches = [...(allerDus || []).map(m => ({ ...m, leg: "aller" })), ...(retoursDus || []).map(m => ({ ...m, leg: "retour" }))];
+  if (!matches.length) return 0;
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (onProgress) onProgress("europe", i + 1, matches.length);
+
+    const estFinale = m.phase === "finale";
+    const recoitAller = m.leg === "aller";
+    let resultat, score1, score2;
+
+    if (estFinale) {
+      // Terrain neutre : aucun bonus/malus domicile-exterieur pour aucun des deux clubs.
+      const [c1, c2] = await Promise.all([chargerDonneesClub(m.game_club_id_1), chargerDonneesClub(m.game_club_id_2)]);
+      resultat = simulerMatch({
+        domicile: { gameClubId: m.game_club_id_1, nom: c1.nom, joueurs: c1.joueurs, tactique: c1.tactique, coach: c1.coach, club: c1.club, groupe: c1.groupe },
+        exterieur: { gameClubId: m.game_club_id_2, nom: c2.nom, joueurs: c2.joueurs, tactique: c2.tactique, coach: c2.coach, club: c2.club, groupe: c2.groupe },
+        contexte: { enjeu: 0.9, meteo: "normale", neutre: true },
+      });
+      score1 = resultat.score_domicile; score2 = resultat.score_exterieur;
+    } else {
+      const idDom = recoitAller ? m.game_club_id_1 : m.game_club_id_2;
+      const idExt = recoitAller ? m.game_club_id_2 : m.game_club_id_1;
+      resultat = await simulerEtRecuperer(idDom, null, idExt, null, 0.8);
+      score1 = recoitAller ? resultat.score_domicile : resultat.score_exterieur;
+      score2 = recoitAller ? resultat.score_exterieur : resultat.score_domicile;
+    }
+
+    let tab1 = null, tab2 = null;
+    const estDecisif = estFinale || m.leg === "retour";
+    if (estDecisif) {
+      const totalAller1 = estFinale ? 0 : (m.score_aller_1 ?? 0);
+      const totalAller2 = estFinale ? 0 : (m.score_aller_2 ?? 0);
+      if (totalAller1 + score1 === totalAller2 + score2) {
+        const [j1, j2] = await Promise.all([chargerDonneesClub(m.game_club_id_1), chargerDonneesClub(m.game_club_id_2)]);
+        const tab = simulerTirsAuBut(j1.joueurs, j2.joueurs);
+        tab1 = tab.scoreDom; tab2 = tab.scoreExt;
+      }
+    }
+
+    const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_europe_finale", {
+      p_match_id: m.id, p_leg: m.leg, p_score_1: score1, p_score_2: score2,
+      p_tab_penalty_1: tab1, p_tab_penalty_2: tab2, p_stats: resultat.stats,
+    }));
+    if (rpcErr) throw rpcErr;
+  }
+  return matches.length;
+}
+
 async function avancerUnJour(onProgress) {
   const prochainJour = (Number(currentGame?.jour_actuel) || 0) + 1;
   const prochaineDate = computeRealDate(currentGame?.date_debut, prochainJour);
@@ -670,7 +805,10 @@ async function avancerUnJour(onProgress) {
     const nbMatchs = await simulerMatchsDuJour(prochaineDateIso, onProgress);
     const nbBarrages = await simulerBarragesDuJour(prochaineDateIso, onProgress);
     const nbCoupe = await simulerCoupeDuJour(prochaineDateIso, onProgress);
-    if (onProgress && (nbMatchs > 0 || nbBarrages > 0 || nbCoupe > 0)) onProgress("finalisation", 1, 1);
+    const nbQualifEurope = await simulerTourQualifEuropeDuJour(prochaineDateIso, onProgress);
+    const nbLigueEurope = await simulerPhaseLigueEuropeDuJour(prochaineDateIso, onProgress);
+    const nbFinaleEurope = await simulerPhaseFinaleEuropeDuJour(prochaineDateIso, onProgress);
+    if (onProgress && (nbMatchs > 0 || nbBarrages > 0 || nbCoupe > 0 || nbQualifEurope > 0 || nbLigueEurope > 0 || nbFinaleEurope > 0)) onProgress("finalisation", 1, 1);
   }
 
   // avancer_jour est transactionnel (select ... for update + tout le reste
