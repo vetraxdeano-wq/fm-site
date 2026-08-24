@@ -884,6 +884,10 @@
   .mdet-header-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mdet-header-team-name.dom { text-align: right; }
   .mdet-header-team-name.ext { text-align: left; }
+  .mdet-header-team-name.clickable { cursor: pointer; }
+  .mdet-header-team-name.clickable:hover { color: var(--gold); text-decoration: underline; }
+  .mdet-header-team-link { display: inline-flex; cursor: pointer; border-radius: 50%; transition: opacity 0.12s ease; }
+  .mdet-header-team-link:hover { opacity: 0.8; }
   .mdet-close {
     background: none; border: none; color: var(--text-dim); font-size: 18px;
     cursor: pointer; line-height: 1; padding: 4px; flex-shrink: 0;
@@ -4819,6 +4823,13 @@ window.mdetGoToPlayer = function (clubId, playerId) {
   window.location.href = `fiche.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId || "")}&player=${encodeURIComponent(playerId)}`;
 };
 
+// Ouvre la fiche du club clique dans l'en-tete de la modale de detail de
+// match (meme motif que dashboard.html).
+window.mdetGoToClub = function (clubId) {
+  if (!clubId) return;
+  window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+};
+
 function mdetPlayerRow(n, hommeDuMatch, sortantParEntrant, clubId) {
   const isMotm = hommeDuMatch && hommeDuMatch.player_id === n.player_id;
   const sortant = n.entrant ? sortantParEntrant[n.player_nom] : null;
@@ -5136,7 +5147,7 @@ async function mdetRenderCoupeMatch(rowId) {
 
   const { data: m, error } = await supabaseClient
     .from("game_coupe_nationale_tours")
-    .select("id, tour, competition_ref, saison, date_match, game_club_id_1, game_club_id_2, score_1, score_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut")
+    .select("id, tour, competition_ref, saison, date_match, game_club_id_1, game_club_id_2, score_1, score_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut, stats")
     .eq("id", rowId)
     .single();
 
@@ -5173,21 +5184,68 @@ async function mdetRenderCoupeMatch(rowId) {
     if (winnerName) winnerBanner = `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} se qualifie</div>`;
   }
 
-  content.innerHTML = `
+  const header = `
     <div class="mdet-header">
       <div class="mdet-header-teams">
-        ${logoDom}
-        <div class="mdet-header-team-name dom">${escapeHtml(nomDom)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_1))}')">${logoDom}</span>
+        <div class="mdet-header-team-name dom clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_1))}')">${escapeHtml(nomDom)}</div>
         <span class="score">${scoreText}</span>
-        <div class="mdet-header-team-name ext">${escapeHtml(nomExt)}</div>
-        ${logoExt}
+        <div class="mdet-header-team-name ext clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_2))}')">${escapeHtml(nomExt)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_id_2))}')">${logoExt}</span>
       </div>
       <button class="mdet-close" id="mdetCloseBtn">✕</button>
     </div>
     <div class="mdet-meta">${escapeHtml(comp?.nom || "Coupe nationale")} · ${escapeHtml(roundLabel)}${dateLabel ? ` · ${dateLabel}` : ""}</div>
     ${penaltyLine}
     ${winnerBanner}
-    <div class="mdet-empty" style="margin-top: 18px;">Pas de statistiques détaillées disponibles pour les matchs de coupe.</div>
+  `;
+
+  // Matchs enregistres avant l'ajout de la colonne stats (ou byes) : pas de
+  // detail moteur disponible, on garde l'ancien affichage minimal.
+  if (!m.stats) {
+    content.innerHTML = `
+      ${header}
+      <div class="mdet-empty" style="margin-top: 18px;">Pas de statistiques détaillées disponibles pour ce match.</div>
+    `;
+    document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+    return;
+  }
+
+  // A partir d'ici, meme rendu que les matchs de championnat (memes cles
+  // dans stats, produites par le meme moteur - cf simulerMatch dans
+  // moteur_match.js).
+  const stats = m.stats;
+  const motm = stats.homme_du_match;
+  const logoDomSmall = mdetLogoHtml(logos[m.game_club_id_1], nomDom, 30);
+  const logoExtSmall = mdetLogoHtml(logos[m.game_club_id_2], nomExt, 30);
+  const remplacementsDom = (stats.remplacements || []).filter(r => r.game_club_id === m.game_club_id_1);
+  const remplacementsExt = (stats.remplacements || []).filter(r => r.game_club_id === m.game_club_id_2);
+  const clubColors = await mdetFetchClubColors([m.game_club_id_1, m.game_club_id_2]);
+  const barColors = mdetPickBarColors(clubColors[m.game_club_id_1], nomDom, clubColors[m.game_club_id_2], nomExt);
+
+  content.innerHTML = `
+    ${header}
+    ${motm ? `<div class="mdet-motm-banner">⭐ Homme du match : ${escapeHtml(motm.player_nom)} (${Number(motm.note).toFixed(1)})</div>` : ""}
+
+    <div class="mdet-section-title">Statistiques</div>
+    <div class="mdet-bars">
+      ${mdetBarStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null, true, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Corners", stats.corners?.domicile, stats.corners?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Centres", stats.centres?.domicile, stats.centres?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Fautes", stats.fautes?.domicile, stats.fautes?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Arrêts gardien", stats.arrets?.domicile, stats.arrets?.exterieur, false, barColors.dom, barColors.ext)}
+    </div>
+
+    <div class="mdet-section-title">Faits de match</div>
+    ${mdetRenderEvenements(stats, m.game_club_id_1, nomDom, nomExt)}
+
+    <div class="mdet-section-title">Compositions</div>
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, m.game_club_id_1, m.game_club_id_2, stats.formation?.domicile, stats.formation?.exterieur) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
   `;
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
@@ -5237,11 +5295,11 @@ async function openMatchDetails(matchId) {
   content.innerHTML = `
     <div class="mdet-header">
       <div class="mdet-header-teams">
-        ${logoDom}
-        <div class="mdet-header-team-name dom">${escapeHtml(nomDom)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_domicile_id))}')">${logoDom}</span>
+        <div class="mdet-header-team-name dom clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_domicile_id))}')">${escapeHtml(nomDom)}</div>
         <span class="score">${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}</span>
-        <div class="mdet-header-team-name ext">${escapeHtml(nomExt)}</div>
-        ${logoExt}
+        <div class="mdet-header-team-name ext clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_exterieur_id))}')">${escapeHtml(nomExt)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.club_exterieur_id))}')">${logoExt}</span>
       </div>
       <button class="mdet-close" id="mdetCloseBtn">✕</button>
     </div>
