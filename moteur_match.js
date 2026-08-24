@@ -2549,8 +2549,164 @@ function simulerMatch({ domicile, exterieur, contexte = {}, appliquerComposition
       // ou fatigue excessive) et par qui ils ont été remplacés. Permet à
       // l'interface d'afficher "X aligné à la place de Y (trop fatigué)".
       ajustements_compo: { domicile: ajustementsCompoDom, exterieur: ajustementsCompoExt },
+      // Onze réellement sur le terrain au coup de sifflet final (titulaires
+      // jamais sortis + derniers entrants, expulsés retirés) — via la même
+      // fonction que celle qui tire déjà buteurs/passeurs/fautifs, pour rester
+      // cohérent. Sert notamment à désigner les tireurs et le gardien adverse
+      // d'une séance de tirs au but (cf. simulerSeanceTirsAuBut ci-dessous).
+      composition_finale: {
+        domicile: compositionEffective(compoDom, remplacementsFinauxDom, 90, expulsionsDom),
+        exterieur: compositionEffective(compoExt, remplacementsFinauxExt, 90, expulsionsExt),
+      },
     },
   };
+}
+
+// ============================================================
+// FAUX NOMS — pour les joueurs générés à la volée (clubs amateurs
+// piochés au 1er tour de coupe nationale, "random vs random") qui
+// n'ont pas de nom assigné côté base. Génération déterministe (seedée
+// sur l'id du joueur) : le même joueur garde le même nom tout au long
+// de la partie, sans avoir besoin d'écrire en base.
+// ============================================================
+const TAB_PRENOMS_AMATEURS = [
+  'Lucas', 'Hugo', 'Mathis', 'Nathan', 'Enzo', 'Léo', 'Louis', 'Gabriel',
+  'Rayan', 'Tom', 'Ethan', 'Théo', 'Noah', 'Adam', 'Yanis', 'Maxime',
+  'Antoine', 'Baptiste', 'Kevin', 'Jordan', 'Karim', 'Sofiane', 'Amine',
+  'Bilal', 'Moussa', 'Ibrahim', 'Cheikh', 'Diego', 'Rafael', 'Bruno',
+  'Julien', 'Romain', 'Quentin', 'Clément', 'Anthony', 'Yohan', 'Steven',
+  'Fabien', 'Cyril', 'Damien',
+];
+const TAB_NOMS_AMATEURS = [
+  'Martin', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Petit', 'Durand',
+  'Leroy', 'Moreau', 'Simon', 'Laurent', 'Lefebvre', 'Michel', 'Garcia',
+  'Roux', 'Vincent', 'Fontaine', 'Girard', 'Bonnet', 'Dupont', 'Lambert',
+  'Fournier', 'Rousseau', 'Blanc', 'Guerin', 'Muller', 'Faure', 'Andre',
+  'Mercier', 'Blanchard', 'Diallo', 'Traore', 'Keita', 'Kone', 'Ferreira',
+  'Silva', 'Costa', 'Nguyen', 'Da Silva', 'Perrin',
+];
+
+function genererNomAleatoire(seed) {
+  // Petit PRNG déterministe (xorshift-like sur un hash du seed) : même seed
+  // -> même nom à chaque appel, sans dépendance externe.
+  const s = String(seed ?? Math.random());
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const rand = () => {
+    h ^= h << 13; h ^= h >>> 17; h ^= h << 5;
+    h |= 0;
+    return ((h >>> 0) % 100000) / 100000;
+  };
+  const prenom = TAB_PRENOMS_AMATEURS[Math.floor(rand() * TAB_PRENOMS_AMATEURS.length)];
+  const nom = TAB_NOMS_AMATEURS[Math.floor(rand() * TAB_NOMS_AMATEURS.length)];
+  return `${prenom} ${nom}`;
+}
+
+// ============================================================
+// TIRS AU BUT (TAB) — séance de penaltys pour départager un match de
+// coupe nul, avec détail exploitable côté UI (qui tire, qui rate,
+// quel gardien en face), basé sur l'onze réellement sur le terrain en
+// fin de match (titulaires non sortis + derniers entrants, cf.
+// stats.composition_finale renvoyé par simulerMatch) — jamais un
+// joueur remplacé ou expulsé.
+// ============================================================
+
+/**
+ * Ordre de tir d'une équipe : gardien exclu (sauf si plus aucun joueur de
+ * champ dispo), le reste trié par "qualité penalty" (sang-froid + finition,
+ * pondéré par le profil offensif du poste) avec un peu d'aléa pour ne pas
+ * être 100% déterministe d'un match à l'autre.
+ */
+function ordreTireursTAB(onze, joueursParId) {
+  const joueursDeChamp = (onze || []).filter((s) => s.role !== 'GB' && s.player_id != null);
+  const base = joueursDeChamp.length ? joueursDeChamp : (onze || []).filter((s) => s.player_id != null);
+  return base
+    .map((slot) => {
+      const jr = joueursParId.get(slot.player_id);
+      const profil = profilRole(slot.role);
+      const sangFroid = jr ? clamp(jr.sang_froid ?? 11, 1, 20) : 11;
+      const finition = jr ? clamp(jr.finition ?? jr.technique ?? 11, 1, 20) : 11;
+      const qualite = (sangFroid * 0.55 + finition * 0.45) * clamp(profil.poidsButeur, 0.3, 2) + bruitGaussien(2.5);
+      return { slot, jr, qualite };
+    })
+    .sort((a, b) => b.qualite - a.qualite);
+}
+
+/** Probabilité de transformation d'un penalty donné (tireur vs gardien adverse). */
+function probaReussitePenalty(jr, gardienJr) {
+  const sangFroid = jr ? clamp(jr.sang_froid ?? 11, 1, 20) : 11;
+  const finition = jr ? clamp(jr.finition ?? 11, 1, 20) : 11;
+  const reflexes = gardienJr ? clamp(gardienJr.reflexes ?? 11, 1, 20) : 11;
+  const concentration = gardienJr ? clamp(gardienJr.concentration ?? 11, 1, 20) : 11;
+  const p = 0.78 + (sangFroid + finition - 22) * 0.01 - (reflexes + concentration - 22) * 0.008;
+  return clamp(p, 0.45, 0.93);
+}
+
+/**
+ * Simule une séance de tirs au but complète (5 tirs chacun puis mort subite),
+ * avec le détail tir par tir : tireur (nom/id réels, jamais un joueur
+ * remplacé ou expulsé), gardien adverse en face, réussite ou type d'échec.
+ *
+ * @param {object} p
+ * @param {object} p.domicile - { gameClubId, joueurs (roster complet, pour les attributs sang_froid/finition/reflexes/concentration), onze (composition_finale.domicile) }
+ * @param {object} p.exterieur - idem pour l'équipe extérieure
+ * @returns {{ scoreDom: number, scoreExt: number, detail: Array }}
+ */
+function simulerSeanceTirsAuBut({ domicile, exterieur }) {
+  const joueursParIdDom = new Map((domicile.joueurs || []).map((j) => [j.id, j]));
+  const joueursParIdExt = new Map((exterieur.joueurs || []).map((j) => [j.id, j]));
+
+  const gardienDom = (domicile.onze || []).find((s) => s.role === 'GB') || null;
+  const gardienExt = (exterieur.onze || []).find((s) => s.role === 'GB') || null;
+  const gardienJrDom = gardienDom ? joueursParIdDom.get(gardienDom.player_id) : null;
+  const gardienJrExt = gardienExt ? joueursParIdExt.get(gardienExt.player_id) : null;
+
+  const listeDom = ordreTireursTAB(domicile.onze, joueursParIdDom);
+  const listeExt = ordreTireursTAB(exterieur.onze, joueursParIdExt);
+
+  const tirer = (liste, index, gardienJrAdverse) => {
+    if (!liste.length) {
+      return { tireur_id: null, tireur_nom: 'Joueur non identifié', reussi: false, echec_type: 'sans_tireur' };
+    }
+    // Mort subite (index >= 5) : on reboucle sur la liste des tireurs dispos.
+    const entree = liste[index % liste.length];
+    const reussi = Math.random() < probaReussitePenalty(entree.jr, gardienJrAdverse);
+    let echecType = null;
+    if (!reussi) {
+      const r = Math.random();
+      echecType = r < 0.55 ? 'arrete' : r < 0.8 ? 'hors_cadre' : 'poteau';
+    }
+    return { tireur_id: entree.slot.player_id, tireur_nom: entree.slot.player_nom, reussi, echec_type: echecType };
+  };
+
+  let scoreDom = 0, scoreExt = 0;
+  const detail = [];
+  let round = 0;
+  const GARDE_FOU_ROUNDS = 30; // évite une boucle infinie en cas de données dégénérées
+
+  do {
+    round++;
+    const rDom = tirer(listeDom, round - 1, gardienJrExt);
+    if (rDom.reussi) scoreDom++;
+    detail.push({
+      round, phase: round <= 5 ? 'reguliere' : 'mort_subite', equipe: 'domicile',
+      tireur_id: rDom.tireur_id, tireur_nom: rDom.tireur_nom, reussi: rDom.reussi, echec_type: rDom.echec_type,
+      gardien_id: gardienExt?.player_id ?? null, gardien_nom: gardienExt?.player_nom ?? 'Gardien indisponible',
+    });
+
+    const rExt = tirer(listeExt, round - 1, gardienJrDom);
+    if (rExt.reussi) scoreExt++;
+    detail.push({
+      round, phase: round <= 5 ? 'reguliere' : 'mort_subite', equipe: 'exterieur',
+      tireur_id: rExt.tireur_id, tireur_nom: rExt.tireur_nom, reussi: rExt.reussi, echec_type: rExt.echec_type,
+      gardien_id: gardienDom?.player_id ?? null, gardien_nom: gardienDom?.player_nom ?? 'Gardien indisponible',
+    });
+  } while ((round < 5 || scoreDom === scoreExt) && round < GARDE_FOU_ROUNDS);
+
+  return { scoreDom, scoreExt, detail };
 }
 
 // Fonctionne en <script src="moteur_match.js"> (navigateur, fonctions
@@ -2599,6 +2755,10 @@ const MOTEUR_MATCH_EXPORTS = {
   compositionEffective,
   inferRolePrincipal,
   axePoste,
+  // faux noms (joueurs générés sans nom, ex. clubs amateurs de coupe) et
+  // séance de tirs au but détaillée (tireurs/gardien réels, pas remplacés)
+  genererNomAleatoire,
+  simulerSeanceTirsAuBut,
 };
 
 if (typeof module !== 'undefined' && module.exports) {
