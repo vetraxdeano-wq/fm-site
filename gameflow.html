@@ -205,20 +205,21 @@ let isHost = false;
 
 // Reessaie un appel PostgREST (select/rpc, retourne {data, error}) en cas
 // d'erreur transitoire (503 pool de connexions sature, 57014 statement
-// timeout). chargerDonneesClub declenche 10 requetes en parallele par match
-// (5 tables x domicile/exterieur) ; sur ce projet (max_connections=60,
-// compute reduit), un rattrapage de plusieurs matchs de coupe en retard peut
-// momentanement saturer le pool -> 503 sans retry actuellement disponible.
-// Backoff court (150ms, 400ms) car l'erreur est generalement resolue en
-// quelques centaines de ms (le pool se libere des que les requetes en cours
-// se terminent).
+// timeout, 55P03 lock timeout). chargerDonneesClub declenche 10 requetes en
+// parallele par match (5 tables x domicile/exterieur) ; sur ce projet
+// (max_connections=60, compute reduit), un rattrapage de plusieurs matchs de
+// coupe en retard peut momentanement saturer le pool -> 503, ou faire
+// collisionner deux ecritures RPC sur les memes lignes -> 55P03. Backoff
+// court (150ms, 400ms) car l'erreur est generalement resolue en quelques
+// centaines de ms (le pool se libere / le lock se relache des que la
+// requete en cours se termine).
 async function withRetry(fn, tentatives = 3) {
   let derniereErreur;
   for (let i = 0; i < tentatives; i++) {
     const result = await fn();
     if (!result.error) return result;
     const status = result.error.status || result.error.code;
-    const transitoire = status === 503 || status === "503" || result.error.code === "57014";
+    const transitoire = status === 503 || status === "503" || result.error.code === "57014" || result.error.code === "55P03";
     if (!transitoire || i === tentatives - 1) return result;
     derniereErreur = result.error;
     await new Promise((r) => setTimeout(r, 150 * Math.pow(2, i)));
