@@ -869,10 +869,16 @@ async function avancerUnJour(onProgress) {
     // dans la meme fonction) : un timeout annule tout, rien n'est applique
     // partiellement. On peut donc retenter sans risque de double-avancement,
     // ce qui absorbe les pics de charge passagers sur la base.
+    // IMPORTANT : on retente aussi bien 57014 (statement_timeout) que 55P03
+    // (lock_timeout, 8s au niveau du role authenticated) -- le SELECT ... FOR
+    // UPDATE sur games peut se heurter a un verrou momentanement tenu par un
+    // appel precedent, et sans retry sur 55P03 l'erreur brute remontait direct
+    // au client juste apres la simulation des matchs.
     let data, error;
-    for (let tentative = 0; tentative < 2; tentative++) {
+    for (let tentative = 0; tentative < 4; tentative++) {
       ({ data, error } = await supabaseClient.rpc("avancer_jour", { p_game_id: gameId }));
-      if (!error || error.code !== "57014") break;
+      if (!error || (error.code !== "57014" && error.code !== "55P03")) break;
+      if (tentative < 3) await new Promise((r) => setTimeout(r, 300 * Math.pow(2, tentative)));
     }
     if (error) throw error;
 
@@ -883,12 +889,13 @@ async function avancerUnJour(onProgress) {
     // une fois que tous les matchs/barrages/coupe de ce jour sont enregistres.
     if (prochaineDateIso) {
       let finError;
-      for (let tentative = 0; tentative < 2; tentative++) {
+      for (let tentative = 0; tentative < 4; tentative++) {
         ({ error: finError } = await supabaseClient.rpc("finaliser_journee", {
           p_game_id: gameId,
           p_date: prochaineDateIso,
         }));
-        if (!finError || finError.code !== "57014") break;
+        if (!finError || (finError.code !== "57014" && finError.code !== "55P03")) break;
+        if (tentative < 3) await new Promise((r) => setTimeout(r, 300 * Math.pow(2, tentative)));
       }
       if (finError) throw finError;
     }
