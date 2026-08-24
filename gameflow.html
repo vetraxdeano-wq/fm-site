@@ -840,45 +840,62 @@ async function avancerUnJour(onProgress) {
   const prochaineDate = computeRealDate(currentGame?.date_debut, prochainJour);
   const prochaineDateIso = toISODate(prochaineDate);
 
-  if (prochaineDateIso) {
-    const nbMatchs = await simulerMatchsDuJour(prochaineDateIso, onProgress);
-    const nbBarrages = await simulerBarragesDuJour(prochaineDateIso, onProgress);
-    const nbCoupe = await simulerCoupeDuJour(prochaineDateIso, onProgress);
-    const nbQualifEurope = await simulerTourQualifEuropeDuJour(prochaineDateIso, onProgress);
-    const nbLigueEurope = await simulerPhaseLigueEuropeDuJour(prochaineDateIso, onProgress);
-    const nbFinaleEurope = await simulerPhaseFinaleEuropeDuJour(prochaineDateIso, onProgress);
-    if (onProgress && (nbMatchs > 0 || nbBarrages > 0 || nbCoupe > 0 || nbQualifEurope > 0 || nbLigueEurope > 0 || nbFinaleEurope > 0)) onProgress("finalisation", 1, 1);
-  }
+  // Reserve la partie pour toute la duree du traitement du jour (matchs +
+  // avancer_jour + finaliser_journee). Empeche une deuxieme session
+  // concurrente sur la MEME partie (deuxieme onglet, page rechargee en plein
+  // "Simuler jusqu'a"...) d'ecrire en parallele sur les memes lignes
+  // (classement/calendrier via enregistrer_resultat_match, puis games via
+  // avancer_jour/finaliser_journee), ce qui provoquait des 55P03 (lock
+  // timeout) au lieu d'un message clair. Liberee dans le "finally" ci-dessous
+  // quoi qu'il arrive ; expire aussi automatiquement cote serveur au bout de
+  // 2 minutes en cas d'echec anormal (onglet ferme brutalement, etc.).
+  const { error: demarrerErr } = await supabaseClient.rpc("demarrer_simulation_jour", { p_game_id: gameId });
+  if (demarrerErr) throw demarrerErr;
 
-  // avancer_jour est transactionnel (select ... for update + tout le reste
-  // dans la meme fonction) : un timeout annule tout, rien n'est applique
-  // partiellement. On peut donc retenter sans risque de double-avancement,
-  // ce qui absorbe les pics de charge passagers sur la base.
-  let data, error;
-  for (let tentative = 0; tentative < 2; tentative++) {
-    ({ data, error } = await supabaseClient.rpc("avancer_jour", { p_game_id: gameId }));
-    if (!error || error.code !== "57014") break;
-  }
-  if (error) throw error;
-
-  // finaliser_journee applique le bonus de forme "repos" aux joueurs geres
-  // qui n'ont pas joue ce jour-la, fait progresser les coupes nationales,
-  // et gere la fin de saison / barrages / calendrier suivant. Doit etre
-  // appelee avec la date du jour qu'on vient de simuler (prochaineDateIso),
-  // une fois que tous les matchs/barrages/coupe de ce jour sont enregistres.
-  if (prochaineDateIso) {
-    let finError;
-    for (let tentative = 0; tentative < 2; tentative++) {
-      ({ error: finError } = await supabaseClient.rpc("finaliser_journee", {
-        p_game_id: gameId,
-        p_date: prochaineDateIso,
-      }));
-      if (!finError || finError.code !== "57014") break;
+  try {
+    if (prochaineDateIso) {
+      const nbMatchs = await simulerMatchsDuJour(prochaineDateIso, onProgress);
+      const nbBarrages = await simulerBarragesDuJour(prochaineDateIso, onProgress);
+      const nbCoupe = await simulerCoupeDuJour(prochaineDateIso, onProgress);
+      const nbQualifEurope = await simulerTourQualifEuropeDuJour(prochaineDateIso, onProgress);
+      const nbLigueEurope = await simulerPhaseLigueEuropeDuJour(prochaineDateIso, onProgress);
+      const nbFinaleEurope = await simulerPhaseFinaleEuropeDuJour(prochaineDateIso, onProgress);
+      if (onProgress && (nbMatchs > 0 || nbBarrages > 0 || nbCoupe > 0 || nbQualifEurope > 0 || nbLigueEurope > 0 || nbFinaleEurope > 0)) onProgress("finalisation", 1, 1);
     }
-    if (finError) throw finError;
-  }
 
-  return data;
+    // avancer_jour est transactionnel (select ... for update + tout le reste
+    // dans la meme fonction) : un timeout annule tout, rien n'est applique
+    // partiellement. On peut donc retenter sans risque de double-avancement,
+    // ce qui absorbe les pics de charge passagers sur la base.
+    let data, error;
+    for (let tentative = 0; tentative < 2; tentative++) {
+      ({ data, error } = await supabaseClient.rpc("avancer_jour", { p_game_id: gameId }));
+      if (!error || error.code !== "57014") break;
+    }
+    if (error) throw error;
+
+    // finaliser_journee applique le bonus de forme "repos" aux joueurs geres
+    // qui n'ont pas joue ce jour-la, fait progresser les coupes nationales,
+    // et gere la fin de saison / barrages / calendrier suivant. Doit etre
+    // appelee avec la date du jour qu'on vient de simuler (prochaineDateIso),
+    // une fois que tous les matchs/barrages/coupe de ce jour sont enregistres.
+    if (prochaineDateIso) {
+      let finError;
+      for (let tentative = 0; tentative < 2; tentative++) {
+        ({ error: finError } = await supabaseClient.rpc("finaliser_journee", {
+          p_game_id: gameId,
+          p_date: prochaineDateIso,
+        }));
+        if (!finError || finError.code !== "57014") break;
+      }
+      if (finError) throw finError;
+    }
+
+    return data;
+  } finally {
+    const { error: terminerErr } = await supabaseClient.rpc("terminer_simulation_jour", { p_game_id: gameId });
+    if (terminerErr) console.error("Impossible de liberer le verrou de simulation :", terminerErr);
+  }
 }
 
 async function onContinue() {
