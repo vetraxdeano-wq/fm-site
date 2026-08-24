@@ -2142,18 +2142,49 @@ async function renderPitch() {
   el.innerHTML = `<div class="pitch-caption">Chargement...</div>`;
 
   const clubIdNum = Number(gameClubId);
-  const { data: matches, error } = await supabaseClient
-    .from("calendrier")
-    .select("id, date_match, journee, club_domicile_id, club_exterieur_id, stats")
-    .eq("game_id", gameId)
-    .or(`club_domicile_id.eq.${clubIdNum},club_exterieur_id.eq.${clubIdNum}`)
-    .not("score_domicile", "is", null)
-    .order("date_match", { ascending: false })
-    .limit(1);
 
-  const m = !error && matches && matches[0];
-  const isHome = m ? m.club_domicile_id === clubIdNum : false;
-  const notes = m ? (isHome ? m.stats?.notes_joueurs?.domicile : m.stats?.notes_joueurs?.exterieur) : null;
+  // Le dernier match joue peut etre un match de championnat (calendrier) OU
+  // de coupe nationale (game_coupe_nationale_tours) : on recupere le plus
+  // recent des deux plutot que de ne regarder que le championnat (sinon un
+  // club dont le dernier match est une coupe affiche une composition perimee
+  // ou "aucune composition enregistree").
+  const [{ data: champMatches, error: champErr }, { data: coupeMatches, error: coupeErr }] = await Promise.all([
+    supabaseClient
+      .from("calendrier")
+      .select("id, date_match, journee, club_domicile_id, club_exterieur_id, stats")
+      .eq("game_id", gameId)
+      .or(`club_domicile_id.eq.${clubIdNum},club_exterieur_id.eq.${clubIdNum}`)
+      .not("score_domicile", "is", null)
+      .order("date_match", { ascending: false })
+      .limit(1),
+    supabaseClient
+      .from("game_coupe_nationale_tours")
+      .select("id, date_match, game_club_id_1, game_club_id_2, stats")
+      .eq("game_id", gameId)
+      .or(`game_club_id_1.eq.${clubIdNum},game_club_id_2.eq.${clubIdNum}`)
+      .eq("statut", "termine")
+      .not("stats", "is", null)
+      .order("date_match", { ascending: false })
+      .limit(1),
+  ]);
+
+  const champ = !champErr && champMatches && champMatches[0];
+  const coupe = !coupeErr && coupeMatches && coupeMatches[0];
+
+  // Normalise les deux sources sur le meme shape (domicile/exterieur) pour
+  // comparer les dates et reutiliser le meme rendu ensuite.
+  const champNorm = champ ? {
+    date: champ.date_match, stats: champ.stats,
+    isHome: champ.club_domicile_id === clubIdNum, oppId: champ.club_domicile_id === clubIdNum ? champ.club_exterieur_id : champ.club_domicile_id,
+  } : null;
+  const coupeNorm = coupe ? {
+    date: coupe.date_match, stats: coupe.stats,
+    isHome: coupe.game_club_id_1 === clubIdNum, oppId: coupe.game_club_id_1 === clubIdNum ? coupe.game_club_id_2 : coupe.game_club_id_1,
+  } : null;
+
+  const m = [champNorm, coupeNorm].filter(Boolean).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+
+  const notes = m ? (m.isHome ? m.stats?.notes_joueurs?.domicile : m.stats?.notes_joueurs?.exterieur) : null;
   const titulaires = (notes || []).filter(n => !n.entrant);
 
   if (!m || !titulaires.length) {
@@ -2164,10 +2195,9 @@ async function renderPitch() {
     return;
   }
 
-  const formation = isHome ? m.stats?.formation?.domicile : m.stats?.formation?.exterieur;
-  const oppId = isHome ? m.club_exterieur_id : m.club_domicile_id;
-  const { data: oppClub } = await supabaseClient.from("game_clubs").select("nom").eq("id", oppId).single();
-  const d = m.date_match ? new Date(m.date_match) : null;
+  const formation = m.isHome ? m.stats?.formation?.domicile : m.stats?.formation?.exterieur;
+  const { data: oppClub } = await supabaseClient.from("game_clubs").select("nom").eq("id", m.oppId).single();
+  const d = m.date ? new Date(m.date) : null;
   const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "";
   const captionParts = [];
   if (formation) captionParts.push(formation);
