@@ -560,12 +560,17 @@ async function simulerMatchsDuJour(dateIso, onProgress) {
 
     const resultat = await simulerEtRecuperer(m.club_domicile_id, null, m.club_exterieur_id, null, 0.3);
 
+    // tentatives=6 (au lieu de 3) : ce RPC ecrit sur des lignes potentiellement
+    // partagees (classement/groupe) et peut entrer en collision avec un autre
+    // enregistrement du meme jour -> 55P03 (lock timeout). Le backoff
+    // exponentiel (150ms..2400ms) laisse largement le temps au verrou de se
+    // liberer avant d'abandonner.
     const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match", {
       p_match_id: m.id,
       p_score_domicile: resultat.score_domicile,
       p_score_exterieur: resultat.score_exterieur,
       p_stats: resultat.stats,
-    }));
+    }), 6);
     if (rpcErr) throw rpcErr;
   }
 
@@ -605,7 +610,7 @@ async function simulerBarragesDuJour(dateIso, onProgress) {
       p_score_domicile: resultat.score_domicile,
       p_score_exterieur: resultat.score_exterieur,
       p_stats: resultat.stats,
-    }));
+    }), 6);
     if (rpcErr) throw rpcErr;
   }
 
@@ -684,7 +689,7 @@ async function simulerCoupeDuJour(dateIso, onProgress) {
       p_tab_penalty_domicile: tabDom,
       p_tab_penalty_exterieur: tabExt,
       p_stats: resultat.stats,
-    }));
+    }), 6);
     if (rpcErr) throw rpcErr;
   }
 
@@ -740,7 +745,7 @@ async function simulerTourQualifEuropeDuJour(dateIso, onProgress) {
     const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_qualif_europe", {
       p_match_id: m.id, p_leg: m.leg, p_score_1: score1, p_score_2: score2,
       p_tab_penalty_1: tab1, p_tab_penalty_2: tab2, p_stats: resultat.stats,
-    }));
+    }), 6);
     if (rpcErr) throw rpcErr;
   }
   return matches.length;
@@ -761,7 +766,7 @@ async function simulerPhaseLigueEuropeDuJour(dateIso, onProgress) {
     const resultat = await simulerEtRecuperer(m.game_club_domicile_id, null, m.game_club_exterieur_id, null, 0.7);
     const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_europe_ligue", {
       p_match_id: m.id, p_score_domicile: resultat.score_domicile, p_score_exterieur: resultat.score_exterieur, p_stats: resultat.stats,
-    }));
+    }), 6);
     if (rpcErr) throw rpcErr;
   }
   return matches.length;
@@ -824,7 +829,7 @@ async function simulerPhaseFinaleEuropeDuJour(dateIso, onProgress) {
     const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_europe_finale", {
       p_match_id: m.id, p_leg: m.leg, p_score_1: score1, p_score_2: score2,
       p_tab_penalty_1: tab1, p_tab_penalty_2: tab2, p_stats: resultat.stats,
-    }));
+    }), 6);
     if (rpcErr) throw rpcErr;
   }
   return matches.length;
