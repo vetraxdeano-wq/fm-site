@@ -487,6 +487,12 @@ async function chargerDonneesClub(gameClubId) {
     tactiqueRows = tactiqueGeneree;
   }
 
+  // Filet de sécurité : un joueur sans nom (notamment un effectif amateur
+  // généré à la volée pour un club "random" de coupe nationale) reçoit un
+  // faux nom stable (seedé sur son id, donc identique à chaque relecture)
+  // au lieu de tomber sur "?" partout (compo, stats, tirs au but...).
+  joueurs = joueurs.map((j) => (j.nom ? j : { ...j, nom: genererNomAleatoire(j.id) }));
+
   let tactique = (tactiqueRows && tactiqueRows[0]) || null;
   if (!tactique || !tactique.compositions || tactique.compositions.length === 0) {
     const { data: compoDefaut, error: compoErr } = await withRetry(() => supabaseClient
@@ -617,32 +623,19 @@ async function simulerBarragesDuJour(dateIso, onProgress) {
   return aTraiter.length;
 }
 
-// Tirs au but (match de coupe nul) : legerement pondere par la force moyenne
-// de l'effectif (note_actuel/ca), tres alea sinon. 5 tirs chacun puis mort
-// subite. Le moteur (simulerMatch) ne gere pas les tirs au but (propre au
-// championnat, jamais de match sec) : geres ici, cote client, comme le reste
-// de l'orchestration de la coupe.
-function simulerTirsAuBut(joueursDom, joueursExt) {
-  const force = (joueurs) => {
-    const notes = (joueurs || []).map(j => j.niveau_actuel ?? j.ca ?? 100);
-    if (!notes.length) return 60;
-    return notes.reduce((a, b) => a + b, 0) / notes.length;
-  };
-  const fDom = force(joueursDom);
-  const fExt = force(joueursExt);
-  const pDom = Math.min(0.9, Math.max(0.6, 0.78 + (fDom - fExt) / 400));
-  const pExt = Math.min(0.9, Math.max(0.6, 0.78 + (fExt - fDom) / 400));
-
-  let scoreDom = 0, scoreExt = 0;
-  for (let i = 0; i < 5; i++) {
-    if (Math.random() < pDom) scoreDom++;
-    if (Math.random() < pExt) scoreExt++;
-  }
-  while (scoreDom === scoreExt) {
-    if (Math.random() < pDom) scoreDom++;
-    if (Math.random() < pExt) scoreExt++;
-  }
-  return { scoreDom, scoreExt };
+// Tirs au but (match de coupe nul) : delegue a simulerSeanceTirsAuBut
+// (moteur_match.js), qui designe de vrais tireurs/gardien (onze reellement
+// sur le terrain en fin de match, jamais un joueur remplace ou expulse) et
+// renvoie le detail tir par tir. Le moteur (simulerMatch) ne gere pas les
+// tirs au but lui-meme (propre a la coupe, jamais de match sec en
+// championnat) : geres ici, cote client, comme le reste de l'orchestration
+// de la coupe. `resultat` est celui renvoye par simulerMatch (score nul) :
+// on y lit stats.composition_finale pour recuperer l'onze de chaque equipe.
+function simulerTirsAuBut(resultat, gameClubIdDom, joueursDom, gameClubIdExt, joueursExt) {
+  return simulerSeanceTirsAuBut({
+    domicile: { gameClubId: gameClubIdDom, joueurs: joueursDom, onze: resultat.stats.composition_finale.domicile },
+    exterieur: { gameClubId: gameClubIdExt, joueurs: joueursExt, onze: resultat.stats.composition_finale.exterieur },
+  });
 }
 
 // Simule et enregistre les matchs de coupe nationale programmes a une date
@@ -677,9 +670,13 @@ async function simulerCoupeDuJour(dateIso, onProgress) {
 
     let tabDom = null, tabExt = null;
     if (resultat.score_domicile === resultat.score_exterieur) {
-      const tab = simulerTirsAuBut(dom.joueurs, ext.joueurs);
+      const tab = simulerTirsAuBut(resultat, m.game_club_id_1, dom.joueurs, m.game_club_id_2, ext.joueurs);
       tabDom = tab.scoreDom;
       tabExt = tab.scoreExt;
+      // Detail tir par tir (tireur, gardien adverse, reussi/type d'echec) :
+      // embarque dans p_stats (deja un jsonb generique transmis tel quel),
+      // exploitable par une fiche match sans toucher a la signature de l'RPC.
+      resultat.stats.seance_tab = tab.detail;
     }
 
     const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_match_coupe", {
@@ -737,8 +734,13 @@ async function simulerTourQualifEuropeDuJour(dateIso, onProgress) {
       const totalAller1 = m.score_aller_1 ?? 0, totalAller2 = m.score_aller_2 ?? 0;
       if (totalAller1 + score1 === totalAller2 + score2) {
         const [j1, j2] = await Promise.all([chargerDonneesClub(m.game_club_id_1), chargerDonneesClub(m.game_club_id_2)]);
-        const tab = simulerTirsAuBut(j1.joueurs, j2.joueurs);
-        tab1 = tab.scoreDom; tab2 = tab.scoreExt;
+        // idDom/idExt : le club qui recevait ce match retour (cf. calcul de
+        // score1/score2 ci-dessus) — l'onze final de `resultat` correspond a
+        // domicile=idDom / exterieur=idExt, pas forcement club_id_1/2.
+        const tab = simulerTirsAuBut(resultat, idDom, idDom === m.game_club_id_1 ? j1.joueurs : j2.joueurs, idExt, idExt === m.game_club_id_1 ? j1.joueurs : j2.joueurs);
+        tab1 = idDom === m.game_club_id_1 ? tab.scoreDom : tab.scoreExt;
+        tab2 = idDom === m.game_club_id_1 ? tab.scoreExt : tab.scoreDom;
+        resultat.stats.seance_tab = tab.detail;
       }
     }
 
