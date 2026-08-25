@@ -1002,6 +1002,25 @@
     color: var(--gold); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
     border-radius: 8px; padding: 6px 12px; margin-bottom: 10px;
   }
+  .mdet-tab-seance { display: flex; flex-direction: column; margin-bottom: 4px; }
+  .mdet-tab-phase {
+    font-size: 10.5px; font-weight: 700; color: var(--gold); text-transform: uppercase;
+    letter-spacing: 0.03em; margin: 12px 0 4px; text-align: center;
+  }
+  .mdet-tab-phase:first-child { margin-top: 0; }
+  .mdet-tab-round {
+    display: grid; grid-template-columns: 1fr 22px 1fr; align-items: center; gap: 8px;
+    padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .mdet-tab-round:last-child { border-bottom: none; }
+  .mdet-tab-round-num { text-align: center; font-size: 10.5px; color: var(--text-dim); font-weight: 700; }
+  .mdet-tab-kick { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .mdet-tab-kick:nth-child(1) { justify-content: flex-end; text-align: right; flex-direction: row-reverse; }
+  .mdet-tab-kick:nth-child(3) { justify-content: flex-start; text-align: left; }
+  .mdet-tab-kick.rate .mdet-tab-nom { color: var(--text-dim); text-decoration: line-through; }
+  .mdet-tab-icon { flex-shrink: 0; font-size: 12px; }
+  .mdet-tab-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdet-tab-echec { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
   @media (max-width: 640px) {
     .mdet-roster-grid { grid-template-columns: 1fr; gap: 14px 0; }
     .mdet-header-teams { font-size: 13px; gap: 8px; }
@@ -5142,6 +5161,48 @@ function mdetBarStat(label, valDom, valExt, isPercent, domColor, extColor) {
 // (possession, tirs, compositions...), seulement le score et le vainqueur.
 // On affiche donc un en-tete identique (logos, score, tab) mais sans les
 // sections statistiques/compositions.
+const MDET_TAB_ECHEC_LABELS = { arrete: "arrêté", hors_cadre: "hors cadre", poteau: "poteau", sans_tireur: "tireur manquant" };
+
+// Rendu de la séance de tirs au but (stats.seance_tab, produite par
+// simulerSeanceTirsAuBut dans moteur_match.js) : une ligne par tour, tireur
+// domicile a gauche / exterieur a droite, avec le motif d'echec le cas
+// echeant. La phase (reguliere / mort_subite) est affichee en separateur
+// des qu'elle change.
+function mdetRenderSeanceTab(seanceTab) {
+  if (!seanceTab || !seanceTab.length) return "";
+  const rounds = [...new Set(seanceTab.map(t => t.round))].sort((a, b) => a - b);
+  let lastPhase = null;
+  const kickHtml = (tir) => {
+    if (!tir) return `<div class="mdet-tab-kick"></div>`;
+    const icon = tir.reussi ? "⚽" : "❌";
+    const echec = !tir.reussi && tir.echec_type
+      ? `<span class="mdet-tab-echec">(${escapeHtml(MDET_TAB_ECHEC_LABELS[tir.echec_type] || tir.echec_type)})</span>` : "";
+    return `<div class="mdet-tab-kick ${tir.reussi ? "reussi" : "rate"}">
+      <span class="mdet-tab-icon">${icon}</span>
+      <span class="mdet-tab-nom">${escapeHtml(tir.tireur_nom || "?")}</span>
+      ${echec}
+    </div>`;
+  };
+  const rows = rounds.map(round => {
+    const tirs = seanceTab.filter(t => t.round === round);
+    const tirDom = tirs.find(t => t.equipe === "domicile");
+    const tirExt = tirs.find(t => t.equipe === "exterieur");
+    const phase = tirs[0]?.phase;
+    let phaseHeader = "";
+    if (phase !== lastPhase) {
+      phaseHeader = `<div class="mdet-tab-phase">${phase === "mort_subite" ? "Mort subite" : "Tirs au but"}</div>`;
+      lastPhase = phase;
+    }
+    return `${phaseHeader}
+      <div class="mdet-tab-round">
+        ${kickHtml(tirDom)}
+        <div class="mdet-tab-round-num">${round}</div>
+        ${kickHtml(tirExt)}
+      </div>`;
+  }).join("");
+  return `<div class="mdet-tab-seance">${rows}</div>`;
+}
+
 async function mdetRenderCoupeMatch(rowId) {
   const content = document.getElementById("mdetContent");
 
@@ -5226,6 +5287,11 @@ async function mdetRenderCoupeMatch(rowId) {
   content.innerHTML = `
     ${header}
     ${motm ? `<div class="mdet-motm-banner">⭐ Homme du match : ${escapeHtml(motm.player_nom)} (${Number(motm.note).toFixed(1)})</div>` : ""}
+
+    ${stats.seance_tab && stats.seance_tab.length ? `
+    <div class="mdet-section-title">Séance de tirs au but</div>
+    ${mdetRenderSeanceTab(stats.seance_tab)}
+    ` : ""}
 
     <div class="mdet-section-title">Statistiques</div>
     <div class="mdet-bars">
