@@ -590,7 +590,7 @@ async function simulerMatchsDuJour(dateIso, onProgress) {
 async function simulerBarragesDuJour(dateIso, onProgress) {
   const { data: barrages, error } = await withRetry(() => supabaseClient
     .from("game_barrages_promotion")
-    .select("id, game_club_sup_id, game_club_inf_id, date_match_aller, date_match_retour, score_aller_sup, score_retour_sup, statut")
+    .select("id, game_club_sup_id, game_club_inf_id, date_match_aller, date_match_retour, score_aller_sup, score_aller_inf, score_retour_sup, statut")
     .eq("game_id", gameId)
     .neq("statut", "termine"));
   if (error) throw error;
@@ -606,16 +606,60 @@ async function simulerBarragesDuJour(dateIso, onProgress) {
     if (onProgress) onProgress("barrage", i + 1, aTraiter.length);
 
     const manche = (b.date_match_aller === dateIso && b.score_aller_sup == null) ? "aller" : "retour";
-    const resultat = manche === "aller"
-      ? await simulerEtRecuperer(b.game_club_sup_id, null, b.game_club_inf_id, null, 0.7)
-      : await simulerEtRecuperer(b.game_club_inf_id, null, b.game_club_sup_id, null, 0.7);
+
+    if (manche === "aller") {
+      const resultat = await simulerEtRecuperer(b.game_club_sup_id, null, b.game_club_inf_id, null, 0.7);
+      const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_barrage", {
+        p_barrage_id: b.id,
+        p_manche: "aller",
+        p_score_domicile: resultat.score_domicile,
+        p_score_exterieur: resultat.score_exterieur,
+        p_stats: resultat.stats,
+      }), 6);
+      if (rpcErr) throw rpcErr;
+      continue;
+    }
+
+    // Match retour : domicile = club "inf" (cf convention documentee plus
+    // haut). On charge les clubs nous-memes (plutot que via
+    // simulerEtRecuperer) pour garder les onze sous la main : necessaires
+    // si egalite au cumul et tirs au but a jouer juste apres.
+    const [dom, ext] = await Promise.all([
+      chargerDonneesClub(b.game_club_inf_id),
+      chargerDonneesClub(b.game_club_sup_id),
+    ]);
+    const resultat = simulerMatch({
+      domicile: { gameClubId: b.game_club_inf_id, nom: dom.nom, joueurs: dom.joueurs, tactique: dom.tactique, coach: dom.coach, club: dom.club, groupe: dom.groupe },
+      exterieur: { gameClubId: b.game_club_sup_id, nom: ext.nom, joueurs: ext.joueurs, tactique: ext.tactique, coach: ext.coach, club: ext.club, groupe: ext.groupe },
+      contexte: { enjeu: 0.7, meteo: "normale" },
+    });
+
+    // Cumul sur les deux manches (score_aller_sup/inf deja enregistres) :
+    // egalite -> tirs au but avec de vrais tireurs/gardien (meme moteur que
+    // la coupe, cf simulerTirsAuBut), stockes dans stats.seance_tab et
+    // transmis a enregistrer_resultat_barrage. Remplace le tirage au sort
+    // (random() < 0.5) qu'avancer_jour utilisait jusqu'ici en repli : ce
+    // repli reste en place cote SQL pour les tres rares cas ou ce RPC
+    // echouerait avant d'ecrire les scores de tirs au but, mais ne devrait
+    // plus jamais se declencher en pratique.
+    const aggSup = (b.score_aller_sup || 0) + resultat.score_exterieur;
+    const aggInf = (b.score_aller_inf || 0) + resultat.score_domicile;
+    let tabPenaltySup = null, tabPenaltyInf = null;
+    if (aggSup === aggInf) {
+      const tab = simulerTirsAuBut(resultat, b.game_club_inf_id, dom.joueurs, b.game_club_sup_id, ext.joueurs);
+      tabPenaltyInf = tab.scoreDom;
+      tabPenaltySup = tab.scoreExt;
+      resultat.stats.seance_tab = tab.detail;
+    }
 
     const { error: rpcErr } = await withRetry(() => supabaseClient.rpc("enregistrer_resultat_barrage", {
       p_barrage_id: b.id,
-      p_manche: manche,
+      p_manche: "retour",
       p_score_domicile: resultat.score_domicile,
       p_score_exterieur: resultat.score_exterieur,
       p_stats: resultat.stats,
+      p_tab_penalty_sup: tabPenaltySup,
+      p_tab_penalty_inf: tabPenaltyInf,
     }), 6);
     if (rpcErr) throw rpcErr;
   }
