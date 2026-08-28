@@ -198,7 +198,7 @@
   .fm-modal-backdrop.hidden { display: none !important; }
   .fm-modal-panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    width: min(94vw, 1150px); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+    width: min(94vw, 1320px); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
   }
   .fm-modal-header {
     display: flex; justify-content: space-between; align-items: center; padding: 14px 18px;
@@ -211,13 +211,21 @@
   .fm-modal-close:hover { background: rgba(255,255,255,0.2); }
   .fm-modal-body { padding: 20px; overflow: auto; flex: 1; min-height: 0; }
 
-  .fm-bracket { display: flex; gap: 24px; min-width: max-content; }
-  .fm-bracket-col { display: flex; flex-direction: column; justify-content: space-around; gap: 14px; min-width: 190px; }
+  .fm-bracket-titles { display: flex; min-width: max-content; margin-bottom: 10px; }
   .fm-bracket-col-title {
     font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
-    color: var(--gold); text-align: center; margin-bottom: 4px;
+    color: var(--gold); text-align: center; flex: 0 0 auto;
   }
-  .fm-bracket-match { background: #14171d; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .fm-bracket-wrap { position: relative; display: flex; min-width: max-content; }
+  .fm-bracket-svg { position: absolute; top: 0; left: 0; z-index: 0; overflow: visible; }
+  .fm-bracket-link { fill: none; stroke: var(--border); stroke-width: 1.5; }
+  .fm-bracket-link.mine { stroke: var(--gold); stroke-width: 2.25; }
+  .fm-bracket-col-body { position: relative; z-index: 1; flex: 0 0 auto; }
+  .fm-bracket-match {
+    position: absolute; left: 0; width: 100%; box-sizing: border-box;
+    background: #14171d; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+  }
+  .fm-bracket-match.mine { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(251,191,36,0.35); }
   .fm-bracket-match .bside { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11.5px; cursor: pointer; }
   .fm-bracket-match .bside:hover { color: var(--gold); }
   .fm-bracket-match .bside img { width: 14px; height: 14px; object-fit: contain; border-radius: 3px; flex-shrink: 0; }
@@ -1057,8 +1065,94 @@ document.getElementById("fmBracketModal").addEventListener("click", (e) => {
 });
 
 function openBracketModal(realRows, nbTours, nameById, logoById) {
-  const rounds = [...new Set(realRows.map(r => r.tour))].sort((a, b) => a - b);
   const body = document.getElementById("fmBracketBody");
+
+  if (!realRows.length) {
+    body.innerHTML = `<div class="fm-empty">Le tirage n'a pas encore eu lieu.</div>`;
+    document.getElementById("fmBracketModal").classList.remove("hidden");
+    return;
+  }
+
+  const CARD_H = 52, CARD_VGAP = 16, COL_W = 204, COL_GAP = 68;
+
+  const tours = [...new Set(realRows.map(r => r.tour))].sort((a, b) => a - b);
+  const rowsByTour = {};
+  tours.forEach(t => { rowsByTour[t] = realRows.filter(r => r.tour === t); });
+
+  // Retrouve, pour un club et un tour donnes, le match reel le plus recent
+  // (a un tour strictement anterieur) ou ce club apparait deja - gagnant ou
+  // simple participant. Permet de retomber sur ses pieds meme quand un ou
+  // plusieurs tours ont ete "sautes" via une qualification d'office (bye).
+  function findSource(clubId, beforeTour) {
+    for (let i = tours.length - 1; i >= 0; i--) {
+      const t = tours[i];
+      if (t >= beforeTour) continue;
+      const match = rowsByTour[t].find(r => r.game_club_id_1 === clubId || r.game_club_id_2 === clubId);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  // Pour chaque match, ses deux matches "source" (dont le vainqueur alimente
+  // l'une de ses deux places).
+  realRows.forEach(r => {
+    r._src1 = findSource(r.game_club_id_1, r.tour);
+    r._src2 = findSource(r.game_club_id_2, r.tour);
+  });
+
+  // Ordre visuel de chaque tour, calcule en partant de la finale pour
+  // regrouper cote a cote les matches qui s'affrontent ensuite au tour
+  // suivant (comme un vrai tableau a elimination directe).
+  const orderByTour = {};
+  for (let i = tours.length - 1; i >= 0; i--) {
+    const t = tours[i];
+    if (i === tours.length - 1) {
+      orderByTour[t] = [...rowsByTour[t]].sort((a, b) => a.id - b.id);
+      continue;
+    }
+    const parentOrder = orderByTour[tours[i + 1]];
+    const placed = new Set();
+    const order = [];
+    parentOrder.forEach(p => {
+      [p._src1, p._src2].forEach(src => {
+        if (src && src.tour === t && !placed.has(src.id)) { order.push(src); placed.add(src.id); }
+      });
+    });
+    rowsByTour[t].forEach(r => { if (!placed.has(r.id)) { order.push(r); placed.add(r.id); } });
+    orderByTour[t] = order;
+  }
+
+  // Position verticale (centre, en px) de chaque match : premier tour espace
+  // regulierement, tours suivants centres sur la moyenne de leurs sources.
+  const centerY = {};
+  const colIndexByTour = {};
+  tours.forEach((t, c) => { colIndexByTour[t] = c; });
+
+  tours.forEach((t, c) => {
+    const order = orderByTour[t];
+    if (c === 0) {
+      order.forEach((r, i) => { centerY[r.id] = i * (CARD_H + CARD_VGAP) + CARD_H / 2; });
+      return;
+    }
+    let fallbackCursor = 0;
+    const raw = order.map(r => {
+      const ys = [r._src1, r._src2].filter(s => s && centerY[s.id] !== undefined).map(s => centerY[s.id]);
+      let y;
+      if (ys.length) { y = ys.reduce((a, b) => a + b, 0) / ys.length; }
+      else { y = fallbackCursor; fallbackCursor += (CARD_H + CARD_VGAP); }
+      return { r, y };
+    });
+    raw.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < raw.length; i++) {
+      const minY = raw[i - 1].y + CARD_H + CARD_VGAP;
+      if (raw[i].y < minY) raw[i].y = minY;
+    }
+    raw.forEach(({ r, y }) => { centerY[r.id] = y; });
+  });
+
+  const colHeight = Math.max(...Object.values(centerY)) + CARD_H / 2 + 8;
+  const totalWidth = tours.length * COL_W + (tours.length - 1) * COL_GAP;
+
   const bsideHtml = (clubId, score, isWin) => `
     <div class="bside ${isWin ? "win" : ""}" data-club-id="${clubId}">
       ${logoById[clubId] ? `<img src="${escapeHtml(logoById[clubId])}" alt="">` : ""}
@@ -1066,24 +1160,46 @@ function openBracketModal(realRows, nbTours, nameById, logoById) {
       <span class="bscore">${score}</span>
     </div>
   `;
+
+  const isMineRow = r => !!(myClubId && (r.game_club_id_1 === myClubId || r.game_club_id_2 === myClubId));
+
+  const titlesHtml = tours.map(t => `<div class="fm-bracket-col-title" style="width:${COL_W}px;">${escapeHtml(coupeRoundLabelPage(t, nbTours))}</div>`).join("");
+
+  const colsHtml = tours.map(t => {
+    const matchesHtml = orderByTour[t].map(r => {
+      const played = isRowPlayed(r);
+      const homeWin = played && r.game_club_vainqueur_id === r.game_club_id_1;
+      const awayWin = played && r.game_club_vainqueur_id === r.game_club_id_2;
+      const s1 = played ? (r.score_1 ?? "-") : "-";
+      const s2 = played ? (r.score_2 ?? "-") : "-";
+      const top = centerY[r.id] - CARD_H / 2;
+      return `<div class="fm-bracket-match ${isMineRow(r) ? "mine" : ""}" style="top:${top}px; height:${CARD_H}px;">${bsideHtml(r.game_club_id_1, s1, homeWin)}${bsideHtml(r.game_club_id_2, s2, awayWin)}</div>`;
+    }).join("");
+    return `<div class="fm-bracket-col-body" style="width:${COL_W}px; height:${colHeight}px;">${matchesHtml}</div>`;
+  }).join("");
+
+  let linesHtml = "";
+  realRows.forEach(r => {
+    [r._src1, r._src2].forEach(src => {
+      if (!src || centerY[src.id] === undefined || centerY[r.id] === undefined) return;
+      const x1 = colIndexByTour[src.tour] * (COL_W + COL_GAP) + COL_W;
+      const y1 = centerY[src.id];
+      const x2 = colIndexByTour[r.tour] * (COL_W + COL_GAP);
+      const y2 = centerY[r.id];
+      const midX = (x1 + x2) / 2;
+      const mine = myClubId && (
+        src.game_club_vainqueur_id === myClubId ||
+        (!isRowPlayed(src) && isMineRow(src))
+      );
+      linesHtml += `<path d="M${x1},${y1} H${midX} V${y2} H${x2}" class="fm-bracket-link ${mine ? "mine" : ""}" />`;
+    });
+  });
+
   body.innerHTML = `
-    <div class="fm-bracket">
-      ${rounds.map(t => {
-        const matches = realRows.filter(r => r.tour === t);
-        return `
-          <div class="fm-bracket-col">
-            <div class="fm-bracket-col-title">${escapeHtml(coupeRoundLabelPage(t, nbTours))}</div>
-            ${matches.map(r => {
-              const played = isRowPlayed(r);
-              const homeWin = played && r.game_club_vainqueur_id === r.game_club_id_1;
-              const awayWin = played && r.game_club_vainqueur_id === r.game_club_id_2;
-              const s1 = played ? (r.score_1 ?? "-") : "-";
-              const s2 = played ? (r.score_2 ?? "-") : "-";
-              return `<div class="fm-bracket-match">${bsideHtml(r.game_club_id_1, s1, homeWin)}${bsideHtml(r.game_club_id_2, s2, awayWin)}</div>`;
-            }).join("")}
-          </div>
-        `;
-      }).join("")}
+    <div class="fm-bracket-titles" style="gap:${COL_GAP}px;">${titlesHtml}</div>
+    <div class="fm-bracket-wrap" style="gap:${COL_GAP}px; height:${colHeight}px;">
+      <svg class="fm-bracket-svg" width="${totalWidth}" height="${colHeight}">${linesHtml}</svg>
+      ${colsHtml}
     </div>
   `;
   body.querySelectorAll(".bside[data-club-id]").forEach(el => {
