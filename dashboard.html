@@ -515,6 +515,8 @@
   .fm-comp-match-comp.champ { color: var(--gold); background: rgba(251,191,36,0.1); border: 1px solid #7a5c0f; }
   .fm-comp-match-comp.coupe { color: #60a5fa; background: rgba(59,130,246,0.12); border: 1px solid #1e40af; }
   .fm-comp-card-tag.coupe { background: rgba(59,130,246,0.12); color: #60a5fa; border-color: #1e40af; }
+  .fm-comp-match-comp.europe { color: #a78bfa; background: rgba(167,139,250,0.12); border: 1px solid #5b3fa0; }
+  .fm-comp-card-tag.europe { background: rgba(167,139,250,0.12); color: #a78bfa; border-color: #5b3fa0; }
   .fm-comp-coupe-parcours {
     flex: 1; min-height: 0; overflow-y: auto; margin-top: 14px; padding-top: 12px;
     border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px;
@@ -10940,6 +10942,263 @@ function bindCoupeCardEvents(rightEl, coupeInfo, viewedClubId) {
   });
 }
 
+// ===================== Coupe d'Europe (compétitions + calendrier) =====================
+// NB : au 28/08/2026, le moteur de generation des coupes d'Europe n'a pas
+// encore ete construit — les tables ci-dessous existent (schema pret) mais
+// sont vides. Ce qui suit est donc le contrat attendu par l'affichage, pret
+// a fonctionner des que ces tables seront alimentees :
+//  - game_qualifies_europe.phase_entree doit valoir l'une des cles de
+//    EUROPE_ENTRY_LABELS ("tour_1", "tour_2", "tour_3", "barrages" ou
+//    "phase_ligue" si le club entre directement en phase de ligue).
+//  - game_tours_qualificatifs_europe.tour va de 1 (tour preliminaire) a 4
+//    (barrages d'acces a la phase de ligue), aller-retour (date_match_aller
+//    /retour, score_aller/retour_1/2 relatifs a game_club_id_1/2).
+//  - game_phase_ligue_europe : un match simple par journee (comme le
+//    championnat), game_club_domicile_id/exterieur_id deja fixes.
+//  - game_phase_finale_europe.phase doit valoir l'une des cles de
+//    EUROPE_PHASE_LABELS ("barrage", "huitiemes", "quarts", "demies",
+//    "finale"). Toutes ces phases sont aller-retour sauf la finale, a match
+//    unique sur terrain neutre (date_match_retour reste NULL dans ce cas).
+const EUROPE_TOUR_LABELS = { 1: "Tour préliminaire", 2: "1er tour qualificatif", 3: "2e tour qualificatif", 4: "Barrages" };
+const EUROPE_TOUR_SHORT = { 1: "Prél.", 2: "T1 Q.", 3: "T2 Q.", 4: "Barr." };
+const EUROPE_PHASE_LABELS = { barrage: "Barrages", huitiemes: "8e de finale", quarts: "Quart de finale", demies: "Demi-finale", finale: "Finale" };
+const EUROPE_PHASE_SHORT = { barrage: "Barr.", huitiemes: "1/8", quarts: "1/4", demies: "1/2", finale: "Finale" };
+const EUROPE_ENTRY_LABELS = { tour_1: "Tour préliminaire", tour_2: "1er tour qualificatif", tour_3: "2e tour qualificatif", barrages: "Barrages", phase_ligue: "Phase de ligue" };
+const EUROPE_PHASE_FINALE_ORDER = { barrage: 0, huitiemes: 1, quarts: 2, demies: 3, finale: 4 };
+
+// Recupere le parcours du club dans la coupe d'Europe a laquelle il est
+// qualifie cette saison (tours qualificatifs + phase de ligue + phase
+// finale a elimination directe), fondus en une liste unique de matchs
+// triee chronologiquement — memes champs qu'un match de championnat/coupe
+// nationale (cf. getClubMatches / getClubCoupeInfo) pour s'inserer dans le
+// meme calendrier. Retourne null si le club n'est qualifie pour aucune
+// coupe d'Europe cette saison.
+async function getClubEuropeInfo(clubId, clubNation) {
+  const clubIdNum = Number(clubId);
+  const saison = currentGame?.saison;
+
+  let qualifRow = null;
+  {
+    let q = supabaseClient
+      .from("game_qualifies_europe")
+      .select("coupe_europe_ref, phase_entree")
+      .eq("game_id", gameId)
+      .eq("game_club_id", clubIdNum);
+    if (saison != null) q = q.eq("saison", saison);
+    const { data } = await q;
+    qualifRow = (data && data[0]) || null;
+  }
+  if (!qualifRow) return null;
+
+  const { data: comp } = await supabaseClient
+    .from("competitions")
+    .select("id, nom, tier")
+    .eq("id", qualifRow.coupe_europe_ref)
+    .maybeSingle();
+  if (!comp) return null;
+
+  let qualifsQuery = supabaseClient
+    .from("game_tours_qualificatifs_europe")
+    .select("id, tour, game_club_id_1, game_club_id_2, date_match_aller, date_match_retour, score_aller_1, score_aller_2, score_retour_1, score_retour_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut")
+    .eq("game_id", gameId).eq("coupe_europe_ref", comp.id)
+    .or(`game_club_id_1.eq.${clubIdNum},game_club_id_2.eq.${clubIdNum}`)
+    .order("tour", { ascending: true });
+  if (saison != null) qualifsQuery = qualifsQuery.eq("saison", saison);
+  const { data: qualifRows } = await qualifsQuery;
+
+  let ligueQuery = supabaseClient
+    .from("game_phase_ligue_europe")
+    .select("id, journee, game_club_domicile_id, game_club_exterieur_id, date_match, score_domicile, score_exterieur, statut")
+    .eq("game_id", gameId).eq("coupe_europe_ref", comp.id)
+    .or(`game_club_domicile_id.eq.${clubIdNum},game_club_exterieur_id.eq.${clubIdNum}`)
+    .order("journee", { ascending: true });
+  if (saison != null) ligueQuery = ligueQuery.eq("saison", saison);
+  const { data: ligueRows } = await ligueQuery;
+
+  let finaleQuery = supabaseClient
+    .from("game_phase_finale_europe")
+    .select("id, phase, game_club_id_1, game_club_id_2, date_match_aller, date_match_retour, score_aller_1, score_aller_2, score_retour_1, score_retour_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut")
+    .eq("game_id", gameId).eq("coupe_europe_ref", comp.id)
+    .or(`game_club_id_1.eq.${clubIdNum},game_club_id_2.eq.${clubIdNum}`);
+  if (saison != null) finaleQuery = finaleQuery.eq("saison", saison);
+  const { data: finaleRowsRaw } = await finaleQuery;
+  const finaleRows = (finaleRowsRaw || []).slice().sort((a, b) => (EUROPE_PHASE_FINALE_ORDER[a.phase] ?? 99) - (EUROPE_PHASE_FINALE_ORDER[b.phase] ?? 99));
+
+  const oppIds = new Set();
+  (qualifRows || []).forEach(r => oppIds.add(r.game_club_id_1 === clubIdNum ? r.game_club_id_2 : r.game_club_id_1));
+  (ligueRows || []).forEach(r => oppIds.add(r.game_club_domicile_id === clubIdNum ? r.game_club_exterieur_id : r.game_club_domicile_id));
+  finaleRows.forEach(r => oppIds.add(r.game_club_id_1 === clubIdNum ? r.game_club_id_2 : r.game_club_id_1));
+  const oppMap = {}, oppLogoMap = {};
+  if (oppIds.size) {
+    const { data: oppClubs } = await supabaseClient.from("game_clubs").select("id, nom, clubs(logo_url)").in("id", [...oppIds]);
+    (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; oppLogoMap[c.id] = c.clubs?.logo_url || null; });
+  }
+
+  const matches = [];
+
+  // Tours a elimination directe aller-retour (qualifs et phase finale
+  // partagent la meme forme de donnees) : deux lignes de calendrier par
+  // tie, sauf la finale qui n'a qu'un aller (match unique, terrain neutre).
+  const pushTwoLegged = (r, kind, roundLabel, roundShort, isFinale) => {
+    const isSide1 = r.game_club_id_1 === clubIdNum;
+    const oppId = isSide1 ? r.game_club_id_2 : r.game_club_id_1;
+    const hasRetour = !!r.date_match_retour;
+    const base = {
+      compType: "europe", compSubType: kind === "quali" ? "quali" : "ko", compLabel: comp.nom,
+      oppId, oppName: oppMap[oppId] || "?", oppLogo: oppLogoMap[oppId] || null, isFinale: !!isFinale,
+    };
+    if (r.date_match_aller) {
+      matches.push({
+        ...base, id: `eur-${kind}-${r.id}-a`, date_match: r.date_match_aller,
+        roundLabel: hasRetour ? `${roundLabel} (aller)` : roundLabel,
+        roundShort: hasRetour ? `${roundShort} A` : roundShort,
+        isHome: isSide1,
+        played: r.score_aller_1 != null && r.score_aller_2 != null,
+        score_domicile: isSide1 ? r.score_aller_1 : r.score_aller_2,
+        score_exterieur: isSide1 ? r.score_aller_2 : r.score_aller_1,
+        myPen: hasRetour ? null : (isSide1 ? r.tab_penalty_1 : r.tab_penalty_2),
+        oppPen: hasRetour ? null : (isSide1 ? r.tab_penalty_2 : r.tab_penalty_1),
+        tieWinnerId: hasRetour ? null : (r.game_club_vainqueur_id ?? null),
+      });
+    }
+    if (hasRetour) {
+      matches.push({
+        ...base, id: `eur-${kind}-${r.id}-r`, date_match: r.date_match_retour,
+        roundLabel: `${roundLabel} (retour)`, roundShort: `${roundShort} R`,
+        isHome: !isSide1,
+        played: r.score_retour_1 != null && r.score_retour_2 != null,
+        score_domicile: isSide1 ? r.score_retour_1 : r.score_retour_2,
+        score_exterieur: isSide1 ? r.score_retour_2 : r.score_retour_1,
+        myPen: isSide1 ? r.tab_penalty_1 : r.tab_penalty_2,
+        oppPen: isSide1 ? r.tab_penalty_2 : r.tab_penalty_1,
+        tieWinnerId: r.game_club_vainqueur_id ?? null,
+      });
+    }
+  };
+
+  (qualifRows || []).forEach(r => {
+    pushTwoLegged(r, "quali", EUROPE_TOUR_LABELS[r.tour] || `Tour qualificatif ${r.tour}`, EUROPE_TOUR_SHORT[r.tour] || `Q${r.tour}`, false);
+  });
+
+  (ligueRows || []).forEach(r => {
+    const isHome = r.game_club_domicile_id === clubIdNum;
+    const oppId = isHome ? r.game_club_exterieur_id : r.game_club_domicile_id;
+    matches.push({
+      compType: "europe", compSubType: "ligue", compLabel: comp.nom,
+      id: `eur-ligue-${r.id}`, date_match: r.date_match,
+      roundLabel: `Phase de ligue — Journée ${r.journee}`, roundShort: `J${r.journee}`,
+      isHome, oppId, oppName: oppMap[oppId] || "?", oppLogo: oppLogoMap[oppId] || null,
+      played: r.score_domicile != null && r.score_exterieur != null,
+      score_domicile: r.score_domicile, score_exterieur: r.score_exterieur,
+      myPen: null, oppPen: null, tieWinnerId: null, isFinale: false,
+    });
+  });
+
+  finaleRows.forEach(r => {
+    pushTwoLegged(r, "finale", EUROPE_PHASE_LABELS[r.phase] || r.phase, EUROPE_PHASE_SHORT[r.phase] || r.phase, r.phase === "finale");
+  });
+
+  matches.sort((a, b) => new Date(a.date_match) - new Date(b.date_match));
+
+  const entryLabel = EUROPE_ENTRY_LABELS[qualifRow.phase_entree] || qualifRow.phase_entree || null;
+
+  return { comp, matches, entryLabel };
+}
+
+// Construit la carte "coupe d'Europe" du pane de droite, meme gabarit que
+// la carte coupe nationale (cf. renderCoupeCardHtml) : statut courant +
+// parcours match par match (tours qualificatifs, phase de ligue, phase
+// finale). Retourne une chaine vide si le club n'est pas qualifie cette
+// saison.
+function renderEuropeCardHtml(europeInfo, gameId, clubId) {
+  if (!europeInfo) return "";
+  const { comp, matches, entryLabel } = europeInfo;
+  const clubIdNum = Number(clubId);
+  const lastAny = matches[matches.length - 1] || null;
+  const lastPlayed = matches.slice().reverse().find(m => m.played) || null;
+
+  let statusValue, currentRoundValue;
+  if (!lastAny) {
+    statusValue = "Pas entré en lice";
+    currentRoundValue = entryLabel || "—";
+  } else if (!lastPlayed) {
+    statusValue = "À venir";
+    currentRoundValue = lastAny.roundShort;
+  } else if (lastPlayed.tieWinnerId != null) {
+    statusValue = lastPlayed.tieWinnerId === clubIdNum
+      ? (lastPlayed.isFinale ? "🏆 Vainqueur" : "Qualifié(e)")
+      : "Éliminé(e)";
+    currentRoundValue = lastPlayed.roundShort;
+  } else if (lastPlayed.compSubType === "ligue") {
+    statusValue = "Phase de ligue";
+    currentRoundValue = lastPlayed.roundShort;
+  } else {
+    statusValue = "Tour en cours";
+    currentRoundValue = lastPlayed.roundShort;
+  }
+
+  const parcoursHtml = matches.length ? matches.map(m => {
+    let resHtml;
+    if (!m.played) {
+      resHtml = `<span class="res next">à venir</span>`;
+    } else {
+      const myScore = m.isHome ? m.score_domicile : m.score_exterieur;
+      const oppScore = m.isHome ? m.score_exterieur : m.score_domicile;
+      const cls = myScore > oppScore ? "win" : myScore < oppScore ? "lose" : "";
+      let scoreText = `${myScore}-${oppScore}`;
+      if (m.myPen != null) scoreText += ` (tab ${m.myPen}-${m.oppPen})`;
+      resHtml = `<span class="res ${cls}">${scoreText}</span>`;
+    }
+    return `
+      <div class="fm-comp-coupe-row">
+        <span class="rnd">${escapeHtml(m.roundShort)}</span>
+        <span class="opp" data-club-id="${m.oppId}">${mdetLogoHtml(m.oppLogo, m.oppName, 16)}<span class="opp-name">${escapeHtml(m.oppName)}</span></span>
+        ${resHtml}
+      </div>
+    `;
+  }).join("") : `<div class="fm-comp-empty-inline">Pas encore entré en lice dans la compétition.</div>`;
+
+  return `
+    <div class="fm-comp-card fm-comp-card-coupe" id="fmCompCard-${comp.id}">
+      <div class="fm-comp-card-head">
+        <div>
+          <div class="fm-comp-card-title">${escapeHtml(comp.nom)}</div>
+          <div class="fm-comp-card-sub">${entryLabel ? `Entrée en lice : ${escapeHtml(entryLabel)}` : ""}</div>
+        </div>
+        <span class="fm-comp-card-tag europe">Europe</span>
+      </div>
+      <div class="fm-comp-card-stats" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="fm-comp-stat"><div class="label">Statut</div><div class="value">${statusValue}</div></div>
+        <div class="fm-comp-stat"><div class="label">Tour</div><div class="value">${currentRoundValue}</div></div>
+      </div>
+      <div class="fm-comp-coupe-parcours">${parcoursHtml}</div>
+      <div class="fm-comp-card-footer">
+        <span>Parcours et prochain match en Coupe d'Europe</span>
+        <span>→</span>
+      </div>
+    </div>
+  `;
+}
+
+// Branche les clics de la carte coupe d'Europe : meme comportement que
+// bindCoupeCardEvents (carte entiere -> fiche competition, ligne de
+// parcours -> fiche adversaire).
+function bindEuropeCardEvents(rightEl, europeInfo, viewedClubId) {
+  if (!europeInfo) return;
+  const cardEl = document.getElementById(`fmCompCard-${europeInfo.comp.id}`);
+  if (!cardEl) return;
+  cardEl.addEventListener("click", (e) => {
+    if (e.target.closest(".fm-comp-coupe-row .opp")) return;
+    window.location.href = `competition.html?game=${encodeURIComponent(gameId)}&competition=${encodeURIComponent(europeInfo.comp.id)}&club=${encodeURIComponent(viewedClubId)}`;
+  });
+  cardEl.querySelectorAll(".fm-comp-coupe-row .opp").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const clubId = el.getAttribute("data-club-id");
+      if (clubId) window.location.href = `club.html?game=${encodeURIComponent(gameId)}&club=${encodeURIComponent(clubId)}`;
+    });
+  });
+}
 async function getClubMatches(clubId) {
   const { data: matches, error } = await supabaseClient
     .from("calendrier")
@@ -10978,7 +11237,10 @@ async function getClubMatches(clubId) {
 // joue, classement de l'adversaire pour un match a venir. `opts.isNext`
 // marque la ligne comme le prochain match (mise en avant + ancre de scroll).
 function renderMatchRow(m, standingsMap, opts = {}) {
-  const isCoupe = m.compType === "coupe";
+  // Coupe nationale ET coupe d'Europe n'ont pas de notion de classement
+  // d'adversaire (pas de rang de division a afficher pour un match a
+  // venir) et affichent un badge de tour plutot qu'un numero de journee.
+  const hasRoundBadge = m.compType === "coupe" || m.compType === "europe";
   const d = m.date_match ? new Date(m.date_match) : null;
   const dayLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "-";
   const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "") : "";
@@ -10989,14 +11251,19 @@ function renderMatchRow(m, standingsMap, opts = {}) {
     rowClass += " played";
     const myScore = m.isHome ? m.score_domicile : m.score_exterieur;
     const oppScore = m.isHome ? m.score_exterieur : m.score_domicile;
-    const outcome = isCoupe
+    // La coupe nationale est a elimination directe sur un match unique : on
+    // se fie a l'issue officielle du tour (isWinner, potentiellement decidee
+    // aux tirs au but) plutot qu'au score brut. Championnat et coupes
+    // d'Europe (calendrier match par match, y compris les allers de tours
+    // aller-retour pas encore decisifs) se lisent directement au score.
+    const outcome = m.compType === "coupe"
       ? (m.isWinner ? "victoire" : "defaite")
       : (myScore > oppScore ? "victoire" : myScore < oppScore ? "defaite" : "nul");
     let scoreText = `${myScore}-${oppScore}`;
-    if (isCoupe && m.myPen != null) scoreText += ` (tab ${m.myPen}-${m.oppPen})`;
+    if (hasRoundBadge && m.myPen != null) scoreText += ` (tab ${m.myPen}-${m.oppPen})`;
     const detailsBtn = `<button class="mdet-btn" data-match-id="${m.id}" type="button">Détails</button>`;
     resultHtml = `<div class="fm-comp-match-score ${outcome}">${scoreText}</div>${detailsBtn}`;
-  } else if (isCoupe) {
+  } else if (hasRoundBadge) {
     resultHtml = `<div class="fm-comp-match-rank">à venir</div>`;
   } else {
     const oppRank = standingsMap[m.oppId] ? `${standingsMap[m.oppId]}e` : "—";
@@ -11007,10 +11274,12 @@ function renderMatchRow(m, standingsMap, opts = {}) {
   const oppLogoUrl = opts.logos ? opts.logos[m.oppId] : null;
   const oppLogoHtml = mdetLogoHtml(oppLogoUrl, m.oppName, 18);
 
-  const compBadge = isCoupe
+  const compBadge = m.compType === "coupe"
     ? `<span class="fm-comp-match-comp coupe">Coupe</span>`
+    : m.compType === "europe"
+    ? `<span class="fm-comp-match-comp europe">Europe</span>`
     : `<span class="fm-comp-match-comp champ">Champ.</span>`;
-  const roundBadge = isCoupe ? escapeHtml(m.roundShort) : `J${m.journee ?? "-"}`;
+  const roundBadge = hasRoundBadge ? escapeHtml(m.roundShort) : `J${m.journee ?? "-"}`;
 
   return `
     <div class="${rowClass}" ${opts.isNext ? 'data-next="true"' : ""}>
@@ -11594,6 +11863,139 @@ async function mdetRenderCoupeMatch(rowId) {
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
 
+// Fiche detail d'une manche (aller ou retour) d'un tour a elimination
+// directe europeen — tours qualificatifs (game_tours_qualificatifs_europe)
+// et phase finale (game_phase_finale_europe) partagent la meme forme de
+// donnees, d'ou une fonction commune parametree par la table. NB : ces
+// tables n'ont pas (encore) de colonne `stats` comme game_coupe_nationale_
+// tours : affichage minimal (score + eventuels tirs au but) en attendant
+// que le moteur de simulation europeen produise un detail par match.
+async function mdetRenderEuropeKoMatch(rowId, leg, table) {
+  const content = document.getElementById("mdetContent");
+  const isQuali = table === "game_tours_qualificatifs_europe";
+  const selectCols = "id, saison, coupe_europe_ref, " + (isQuali ? "tour" : "phase") +
+    ", game_club_id_1, game_club_id_2, date_match_aller, date_match_retour, score_aller_1, score_aller_2, score_retour_1, score_retour_2, tab_penalty_1, tab_penalty_2, game_club_vainqueur_id, statut";
+
+  const { data: m, error } = await supabaseClient.from(table).select(selectCols).eq("id", rowId).single();
+  if (error || !m) {
+    content.innerHTML = `<div class="mdet-header"><div class="mdet-header-teams">Match introuvable</div><button class="mdet-close" id="mdetCloseBtn">✕</button></div>`;
+    document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+    return;
+  }
+
+  const { data: comp } = await supabaseClient.from("competitions").select("nom").eq("id", m.coupe_europe_ref).maybeSingle();
+  const { data: clubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", [m.game_club_id_1, m.game_club_id_2]);
+  const nomClub = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
+
+  const hasRetour = !!m.date_match_retour;
+  const isRetour = leg === "r";
+  // Sur le retour, domicile/exterieur s'inversent par rapport a l'aller
+  // (meme convention que pushTwoLegged cote carte competitions).
+  const homeId = isRetour ? m.game_club_id_2 : m.game_club_id_1;
+  const awayId = isRetour ? m.game_club_id_1 : m.game_club_id_2;
+  const nomDom = nomClub[homeId] || "?";
+  const nomExt = nomClub[awayId] || "?";
+  const scoreDom = isRetour ? m.score_retour_2 : m.score_aller_1;
+  const scoreExt = isRetour ? m.score_retour_1 : m.score_aller_2;
+
+  const d = isRetour ? (m.date_match_retour ? new Date(m.date_match_retour) : null) : (m.date_match_aller ? new Date(m.date_match_aller) : null);
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
+
+  const roundLabel = isQuali
+    ? (EUROPE_TOUR_LABELS[m.tour] || `Tour qualificatif ${m.tour}`)
+    : (EUROPE_PHASE_LABELS[m.phase] || m.phase);
+  const legSuffix = hasRetour ? (isRetour ? " (retour)" : " (aller)") : "";
+
+  const logos = await mdetFetchClubLogos([homeId, awayId]);
+  const logoDom = mdetLogoHtml(logos[homeId], nomDom, 64);
+  const logoExt = mdetLogoHtml(logos[awayId], nomExt, 64);
+
+  const scoreText = `${scoreDom ?? "-"} - ${scoreExt ?? "-"}`;
+
+  // La seance de tirs au but (si elle a eu lieu) ne peut concerner que la
+  // manche decisive : le retour d'une confrontation aller-retour, ou
+  // l'unique match d'un tour a match sec (finale).
+  const isDecisiveLeg = !hasRetour || isRetour;
+  const penaltyLine = isDecisiveLeg && m.tab_penalty_1 != null
+    ? `<div class="mdet-meta">Tirs au but : ${m.tab_penalty_1} - ${m.tab_penalty_2}</div>` : "";
+
+  let winnerBanner = "";
+  if (isDecisiveLeg && m.statut === "termine" && m.game_club_vainqueur_id != null) {
+    const winnerName = m.game_club_vainqueur_id === m.game_club_id_1 ? nomClub[m.game_club_id_1]
+      : m.game_club_vainqueur_id === m.game_club_id_2 ? nomClub[m.game_club_id_2] : null;
+    if (winnerName) {
+      winnerBanner = table === "game_phase_finale_europe" && m.phase === "finale"
+        ? `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} remporte la compétition</div>`
+        : `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} se qualifie</div>`;
+    }
+  }
+
+  content.innerHTML = `
+    <div class="mdet-header">
+      <div class="mdet-header-teams">
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(homeId))}')">${logoDom}</span>
+        <div class="mdet-header-team-name dom clickable" onclick="window.mdetGoToClub('${escapeHtml(String(homeId))}')">${escapeHtml(nomDom)}</div>
+        <span class="score">${scoreText}</span>
+        <div class="mdet-header-team-name ext clickable" onclick="window.mdetGoToClub('${escapeHtml(String(awayId))}')">${escapeHtml(nomExt)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(awayId))}')">${logoExt}</span>
+      </div>
+      <button class="mdet-close" id="mdetCloseBtn">✕</button>
+    </div>
+    <div class="mdet-meta">${escapeHtml(comp?.nom || "Coupe d'Europe")} · ${escapeHtml(roundLabel)}${legSuffix}${dateLabel ? ` · ${dateLabel}` : ""}</div>
+    ${penaltyLine}
+    ${winnerBanner}
+    <div class="mdet-empty" style="margin-top: 18px;">Pas de statistiques détaillées disponibles pour ce match.</div>
+  `;
+  document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+}
+
+// Fiche detail d'un match de phase de ligue europeenne (match simple,
+// meme table shape qu'un match de championnat mais sans colonne `stats`
+// pour l'instant).
+async function mdetRenderEuropeLigueMatch(rowId) {
+  const content = document.getElementById("mdetContent");
+  const { data: m, error } = await supabaseClient
+    .from("game_phase_ligue_europe")
+    .select("id, coupe_europe_ref, journee, game_club_domicile_id, game_club_exterieur_id, date_match, score_domicile, score_exterieur, statut")
+    .eq("id", rowId)
+    .single();
+
+  if (error || !m) {
+    content.innerHTML = `<div class="mdet-header"><div class="mdet-header-teams">Match introuvable</div><button class="mdet-close" id="mdetCloseBtn">✕</button></div>`;
+    document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+    return;
+  }
+
+  const { data: comp } = await supabaseClient.from("competitions").select("nom").eq("id", m.coupe_europe_ref).maybeSingle();
+  const { data: clubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", [m.game_club_domicile_id, m.game_club_exterieur_id]);
+  const nomClub = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
+  const nomDom = nomClub[m.game_club_domicile_id] || "?";
+  const nomExt = nomClub[m.game_club_exterieur_id] || "?";
+  const d = m.date_match ? new Date(m.date_match) : null;
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
+
+  const logos = await mdetFetchClubLogos([m.game_club_domicile_id, m.game_club_exterieur_id]);
+  const logoDom = mdetLogoHtml(logos[m.game_club_domicile_id], nomDom, 64);
+  const logoExt = mdetLogoHtml(logos[m.game_club_exterieur_id], nomExt, 64);
+  const scoreText = `${m.score_domicile ?? "-"} - ${m.score_exterieur ?? "-"}`;
+
+  content.innerHTML = `
+    <div class="mdet-header">
+      <div class="mdet-header-teams">
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_domicile_id))}')">${logoDom}</span>
+        <div class="mdet-header-team-name dom clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_domicile_id))}')">${escapeHtml(nomDom)}</div>
+        <span class="score">${scoreText}</span>
+        <div class="mdet-header-team-name ext clickable" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_exterieur_id))}')">${escapeHtml(nomExt)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(m.game_club_exterieur_id))}')">${logoExt}</span>
+      </div>
+      <button class="mdet-close" id="mdetCloseBtn">✕</button>
+    </div>
+    <div class="mdet-meta">${escapeHtml(comp?.nom || "Coupe d'Europe")} · Phase de ligue · Journée ${m.journee}${dateLabel ? ` · ${dateLabel}` : ""}</div>
+    <div class="mdet-empty" style="margin-top: 18px;">Pas de statistiques détaillées disponibles pour ce match.</div>
+  `;
+  document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+}
+
 async function openMatchDetails(matchId) {
   const overlay = document.getElementById("mdetOverlay");
   const content = document.getElementById("mdetContent");
@@ -11602,6 +12004,17 @@ async function openMatchDetails(matchId) {
 
   if (String(matchId).startsWith("coupe-")) {
     await mdetRenderCoupeMatch(String(matchId).slice("coupe-".length));
+    return;
+  }
+
+  const koMatch = String(matchId).match(/^eur-(quali|finale)-(.+)-(a|r)$/);
+  if (koMatch) {
+    const [, kind, rowId, leg] = koMatch;
+    await mdetRenderEuropeKoMatch(rowId, leg, kind === "quali" ? "game_tours_qualificatifs_europe" : "game_phase_finale_europe");
+    return;
+  }
+  if (String(matchId).startsWith("eur-ligue-")) {
+    await mdetRenderEuropeLigueMatch(String(matchId).slice("eur-ligue-".length));
     return;
   }
 
@@ -11858,14 +12271,15 @@ async function renderCompetitionsView(gameClubId) {
   standingsList.forEach(r => { standingsMap[r.id] = r.rank; });
 
   const coupeInfo = await getClubCoupeInfo(gameClubId, myClubNation);
+  const europeInfo = await getClubEuropeInfo(gameClubId, myClubNation);
 
   // --- Calendrier : matchs joues (avec resultat) + matchs a venir, tries
-  // chronologiquement (championnat + coupe nationale fondus dans une seule
-  // liste, chaque ligne precise sa competition). Le prochain match est
-  // toujours mis en avant ; la liste est ouverte avec ce match ancre en
-  // haut de la zone visible (les resultats passes restent accessibles en
-  // remontant le scroll). ---
-  const matches = [...(await getClubMatches(gameClubId)), ...(coupeInfo?.matches || [])]
+  // chronologiquement (championnat + coupe nationale + coupe d'Europe
+  // fondus dans une seule liste, chaque ligne precise sa competition). Le
+  // prochain match est toujours mis en avant ; la liste est ouverte avec ce
+  // match ancre en haut de la zone visible (les resultats passes restent
+  // accessibles en remontant le scroll). ---
+  const matches = [...(await getClubMatches(gameClubId)), ...(coupeInfo?.matches || []), ...(europeInfo?.matches || [])]
     .sort((a, b) => new Date(a.date_match) - new Date(b.date_match));
 
   if (matches.length === 0) {
@@ -11895,8 +12309,9 @@ async function renderCompetitionsView(gameClubId) {
     .maybeSingle();
 
   if (compError || !comp) {
-    rightEl.innerHTML = `<div class="fm-comp-empty">Compétition introuvable pour cette division.</div>` + renderCoupeCardHtml(coupeInfo, gameId, gameClubId);
+    rightEl.innerHTML = `<div class="fm-comp-empty">Compétition introuvable pour cette division.</div>` + renderCoupeCardHtml(coupeInfo, gameId, gameClubId) + renderEuropeCardHtml(europeInfo, gameId, gameClubId);
     bindCoupeCardEvents(rightEl, coupeInfo, gameClubId);
+    bindEuropeCardEvents(rightEl, europeInfo, gameClubId);
     return;
   }
 
@@ -11972,7 +12387,7 @@ async function renderCompetitionsView(gameClubId) {
         <span>→</span>
       </div>
     </div>
-  ` + renderCoupeCardHtml(coupeInfo, gameId, gameClubId);
+  ` + renderCoupeCardHtml(coupeInfo, gameId, gameClubId) + renderEuropeCardHtml(europeInfo, gameId, gameClubId);
 
   document.getElementById(`fmCompCard-${comp.id}`).addEventListener("click", (e) => {
     if (e.target.closest(".fm-comp-mini-table .fm-club-link")) return;
@@ -11986,6 +12401,7 @@ async function renderCompetitionsView(gameClubId) {
     });
   });
   bindCoupeCardEvents(rightEl, coupeInfo, gameClubId);
+  bindEuropeCardEvents(rightEl, europeInfo, gameClubId);
 }
 
 async function renderStandings(club) {
