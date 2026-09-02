@@ -11214,7 +11214,7 @@ async function getClubBarrageInfo(clubId, saison) {
   const clubIdNum = Number(clubId);
   const { data: rows } = await supabaseClient
     .from("game_barrages_promotion")
-    .select("id, date_match_aller, date_match_retour, score_aller_sup, score_aller_inf, score_retour_sup, score_retour_inf, game_club_sup_id, game_club_inf_id, statut")
+    .select("id, date_match_aller, date_match_retour, score_aller_sup, score_aller_inf, score_retour_sup, score_retour_inf, tab_penalty_sup, tab_penalty_inf, game_club_sup_id, game_club_inf_id, statut")
     .eq("game_id", gameId)
     .eq("saison", saison)
     .or(`game_club_sup_id.eq.${clubIdNum},game_club_inf_id.eq.${clubIdNum}`);
@@ -11258,6 +11258,11 @@ async function getClubBarrageInfo(clubId, saison) {
         played: r.score_retour_sup != null && r.score_retour_inf != null,
         score_domicile: r.score_retour_inf,
         score_exterieur: r.score_retour_sup,
+        // Tirs au but : uniquement possibles sur la manche retour (manche
+        // decisive). isSup joue le role de "isSide1" dans le calcul
+        // myPen/oppPen (meme logique que coupe nationale/Europe).
+        myPen: isSup ? r.tab_penalty_sup : r.tab_penalty_inf,
+        oppPen: isSup ? r.tab_penalty_inf : r.tab_penalty_sup,
       });
     }
   });
@@ -12078,7 +12083,7 @@ async function mdetRenderBarrageMatch(rowId, leg) {
 
   const { data: m, error } = await supabaseClient
     .from("game_barrages_promotion")
-    .select("id, date_match_aller, date_match_retour, score_aller_sup, score_aller_inf, score_retour_sup, score_retour_inf, tab_penalty_sup, tab_penalty_inf, game_club_sup_id, game_club_inf_id, game_club_vainqueur_id, statut, stats_aller, stats_retour")
+    .select("id, competition_sup_ref, competition_inf_ref, date_match_aller, date_match_retour, score_aller_sup, score_aller_inf, score_retour_sup, score_retour_inf, tab_penalty_sup, tab_penalty_inf, game_club_sup_id, game_club_inf_id, game_club_vainqueur_id, statut, stats_aller, stats_retour")
     .eq("id", rowId)
     .single();
 
@@ -12118,9 +12123,21 @@ async function mdetRenderBarrageMatch(rowId, leg) {
 
   let winnerBanner = "";
   if (isRetour && m.statut === "termine" && m.game_club_vainqueur_id != null) {
-    const winnerName = m.game_club_vainqueur_id === m.game_club_sup_id ? nomClub[m.game_club_sup_id]
-      : m.game_club_vainqueur_id === m.game_club_inf_id ? nomClub[m.game_club_inf_id] : null;
-    if (winnerName) winnerBanner = `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} l'emporte au barrage</div>`;
+    const supWins = m.game_club_vainqueur_id === m.game_club_sup_id;
+    const winnerName = supWins ? nomClub[m.game_club_sup_id] : nomClub[m.game_club_inf_id];
+    const loserName = supWins ? nomClub[m.game_club_inf_id] : nomClub[m.game_club_sup_id];
+    if (winnerName) {
+      const { data: comps } = await supabaseClient
+        .from("competitions")
+        .select("id, division")
+        .in("id", [m.competition_sup_ref, m.competition_inf_ref]);
+      const divMap = Object.fromEntries((comps || []).map(c => [c.id, c.division]));
+      const divSup = divMap[m.competition_sup_ref] || "division supérieure";
+      const divInf = divMap[m.competition_inf_ref] || "division inférieure";
+      winnerBanner = supWins
+        ? `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} se maintient en ${escapeHtml(divSup)} — ${escapeHtml(loserName)} reste en ${escapeHtml(divInf)}</div>`
+        : `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} monte en ${escapeHtml(divSup)} — ${escapeHtml(loserName)} descend en ${escapeHtml(divInf)}</div>`;
+    }
   }
 
   const header = `
