@@ -895,7 +895,21 @@ async function avancerUnJour(onProgress) {
   // timeout) au lieu d'un message clair. Liberee dans le "finally" ci-dessous
   // quoi qu'il arrive ; expire aussi automatiquement cote serveur au bout de
   // 2 minutes en cas d'echec anormal (onglet ferme brutalement, etc.).
-  const { error: demarrerErr } = await supabaseClient.rpc("demarrer_simulation_jour", { p_game_id: gameId });
+  // Retente demarrer_simulation_jour en cas d'echec transitoire :
+  // - P0001 = verrou deja pris par une simulation precedente (onglet ferme
+  //   brutalement, double-clic...) ; le serveur dit lui-meme "reessaie dans
+  //   quelques secondes", donc on retente avec un backoff plus long.
+  // - 57014/55P03 = timeout/lock passager, comme pour avancer_jour plus bas.
+  let demarrerErr;
+  for (let tentative = 0; tentative < 5; tentative++) {
+    ({ error: demarrerErr } = await supabaseClient.rpc("demarrer_simulation_jour", { p_game_id: gameId }));
+    if (!demarrerErr) break;
+    const retryable = demarrerErr.code === "P0001" || demarrerErr.code === "57014" || demarrerErr.code === "55P03";
+    if (!retryable || tentative === 4) break;
+    const delai = demarrerErr.code === "P0001" ? 2000 * (tentative + 1) : 300 * Math.pow(2, tentative);
+    if (onProgress) onProgress("finalisation", 0, 1);
+    await new Promise((r) => setTimeout(r, delai));
+  }
   if (demarrerErr) throw demarrerErr;
 
   try {
