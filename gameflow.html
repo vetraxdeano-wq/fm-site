@@ -157,6 +157,12 @@
       <button id="simulateBtn" disabled>Simuler jusqu'à cette date</button>
       <div class="simulate-progress" id="simulateProgress"></div>
     </div>
+    <div id="unlockPanel" style="display:none; margin-top:10px;">
+      <div style="color:#c0392b; font-size:0.9em; margin-bottom:6px;">
+        Le verrou de simulation semble bloqué (session précédente non terminée proprement).
+      </div>
+      <button id="unlockBtn">Débloquer la simulation</button>
+    </div>
   </div>
 
   <div class="card">
@@ -281,6 +287,30 @@ async function init() {
   await loadState();
   document.getElementById("continueBtn").addEventListener("click", onContinue);
   document.getElementById("simulateBtn").addEventListener("click", onSimulerJusque);
+  document.getElementById("unlockBtn").addEventListener("click", onDebloquerSimulation);
+}
+
+// Force la liberation du verrou de simulation quand il reste bloque suite a
+// une session precedente qui n'a pas pu passer par le "finally" de
+// avancerUnJour (onglet ferme, ordi eteint, etc.). terminer_simulation_jour
+// se contente de lever le verrou sans toucher aux donnees de la partie, donc
+// c'est sans risque meme si aucune simulation n'est reellement en cours.
+async function onDebloquerSimulation() {
+  const unlockBtn = document.getElementById("unlockBtn");
+  unlockBtn.disabled = true;
+  unlockBtn.textContent = "Déblocage...";
+  try {
+    const { error } = await supabaseClient.rpc("terminer_simulation_jour", { p_game_id: gameId });
+    if (error) throw error;
+    document.getElementById("unlockPanel").style.display = "none";
+    toast("Verrou débloqué, tu peux réessayer.");
+  } catch (e) {
+    console.error(e);
+    toast("Erreur lors du déblocage : " + e.message, true);
+  } finally {
+    unlockBtn.disabled = false;
+    unlockBtn.textContent = "Débloquer la simulation";
+  }
 }
 
 async function loadState() {
@@ -985,6 +1015,7 @@ async function onContinue() {
   } catch (e) {
     console.error(e);
     toast("Erreur : " + e.message, true);
+    if (e.code === "P0001") document.getElementById("unlockPanel").style.display = "block";
   } finally {
     btn.textContent = "Continuer";
     btn.disabled = !isHost || currentGame?.statut === "lobby" || currentGame?.statut === "terminee";
@@ -1054,6 +1085,7 @@ async function onSimulerJusque() {
     console.error(e);
     progressEl.textContent = "";
     toast("Erreur pendant la simulation : " + e.message, true);
+    if (e.code === "P0001") document.getElementById("unlockPanel").style.display = "block";
   } finally {
     simInput.disabled = false;
     continueBtn.disabled = !isHost || currentGame?.statut === "lobby" || currentGame?.statut === "terminee";
