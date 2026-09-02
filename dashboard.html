@@ -517,6 +517,7 @@
   .fm-comp-card-tag.coupe { background: rgba(59,130,246,0.12); color: #60a5fa; border-color: #1e40af; }
   .fm-comp-match-comp.europe { color: #a78bfa; background: rgba(167,139,250,0.12); border: 1px solid #5b3fa0; }
   .fm-comp-card-tag.europe { background: rgba(167,139,250,0.12); color: #a78bfa; border-color: #5b3fa0; }
+  .fm-comp-match-comp.barrage { color: #f87171; background: rgba(248,113,113,0.12); border: 1px solid #7a1f1f; }
   .fm-comp-coupe-parcours {
     flex: 1; min-height: 0; overflow-y: auto; margin-top: 14px; padding-top: 12px;
     border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px;
@@ -11199,6 +11200,70 @@ function bindEuropeCardEvents(rightEl, europeInfo, viewedClubId) {
     });
   });
 }
+// ===================== Barrage promotion/relégation (calendrier) =====================
+// Le barrage aller-retour entre le 16e (ou equivalent) de D1 et le 3e de D2
+// vit dans une table separee (game_barrages_promotion, cf. preparer_fin_saison
+// cote SQL) et n'etait jusqu'ici jamais lu par le client : ni calendrier ni
+// carte dediee ne le montraient, meme quand il etait correctement programme
+// en base. On l'integre au calendrier unifie comme la coupe nationale et la
+// coupe d'Europe. Convention aller/retour identique a
+// enregistrer_resultat_barrage (SQL) : aller -> domicile = club "sup" (D1),
+// retour -> domicile = club "inf" (D2).
+async function getClubBarrageInfo(clubId, saison) {
+  if (saison == null) return [];
+  const clubIdNum = Number(clubId);
+  const { data: rows } = await supabaseClient
+    .from("game_barrages_promotion")
+    .select("id, date_match_aller, date_match_retour, score_aller_sup, score_aller_inf, score_retour_sup, score_retour_inf, game_club_sup_id, game_club_inf_id, statut")
+    .eq("game_id", gameId)
+    .eq("saison", saison)
+    .or(`game_club_sup_id.eq.${clubIdNum},game_club_inf_id.eq.${clubIdNum}`);
+
+  if (!rows || rows.length === 0) return [];
+
+  const oppIds = rows.map(r => r.game_club_sup_id === clubIdNum ? r.game_club_inf_id : r.game_club_sup_id);
+  const { data: oppClubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", oppIds);
+  const oppMap = {};
+  (oppClubs || []).forEach(c => { oppMap[c.id] = c.nom; });
+
+  const out = [];
+  rows.forEach(r => {
+    const isSup = r.game_club_sup_id === clubIdNum;
+    const oppId = isSup ? r.game_club_inf_id : r.game_club_sup_id;
+    const oppName = oppMap[oppId] || "?";
+
+    if (r.date_match_aller) {
+      out.push({
+        id: `barrage-aller-${r.id}`,
+        date_match: r.date_match_aller,
+        journee: null,
+        compType: "barrage",
+        roundShort: "Barrage (A)",
+        isHome: isSup,
+        oppId, oppName,
+        played: r.score_aller_sup != null && r.score_aller_inf != null,
+        score_domicile: r.score_aller_sup,
+        score_exterieur: r.score_aller_inf,
+      });
+    }
+    if (r.date_match_retour) {
+      out.push({
+        id: `barrage-retour-${r.id}`,
+        date_match: r.date_match_retour,
+        journee: null,
+        compType: "barrage",
+        roundShort: "Barrage (R)",
+        isHome: !isSup,
+        oppId, oppName,
+        played: r.score_retour_sup != null && r.score_retour_inf != null,
+        score_domicile: r.score_retour_inf,
+        score_exterieur: r.score_retour_sup,
+      });
+    }
+  });
+  return out;
+}
+
 async function getClubMatches(clubId) {
   const { data: matches, error } = await supabaseClient
     .from("calendrier")
@@ -11240,7 +11305,7 @@ function renderMatchRow(m, standingsMap, opts = {}) {
   // Coupe nationale ET coupe d'Europe n'ont pas de notion de classement
   // d'adversaire (pas de rang de division a afficher pour un match a
   // venir) et affichent un badge de tour plutot qu'un numero de journee.
-  const hasRoundBadge = m.compType === "coupe" || m.compType === "europe";
+  const hasRoundBadge = m.compType === "coupe" || m.compType === "europe" || m.compType === "barrage";
   const d = m.date_match ? new Date(m.date_match) : null;
   const dayLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "-";
   const weekday = d ? d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "") : "";
@@ -11278,6 +11343,8 @@ function renderMatchRow(m, standingsMap, opts = {}) {
     ? `<span class="fm-comp-match-comp coupe">Coupe</span>`
     : m.compType === "europe"
     ? `<span class="fm-comp-match-comp europe">Europe</span>`
+    : m.compType === "barrage"
+    ? `<span class="fm-comp-match-comp barrage">Barrage</span>`
     : `<span class="fm-comp-match-comp champ">Champ.</span>`;
   const roundBadge = hasRoundBadge ? escapeHtml(m.roundShort) : `J${m.journee ?? "-"}`;
 
@@ -12272,14 +12339,16 @@ async function renderCompetitionsView(gameClubId) {
 
   const coupeInfo = await getClubCoupeInfo(gameClubId, myClubNation);
   const europeInfo = await getClubEuropeInfo(gameClubId, myClubNation);
+  const barrageMatches = await getClubBarrageInfo(gameClubId, currentGame?.saison);
 
   // --- Calendrier : matchs joues (avec resultat) + matchs a venir, tries
-  // chronologiquement (championnat + coupe nationale + coupe d'Europe
-  // fondus dans une seule liste, chaque ligne precise sa competition). Le
-  // prochain match est toujours mis en avant ; la liste est ouverte avec ce
-  // match ancre en haut de la zone visible (les resultats passes restent
-  // accessibles en remontant le scroll). ---
-  const matches = [...(await getClubMatches(gameClubId)), ...(coupeInfo?.matches || []), ...(europeInfo?.matches || [])]
+  // chronologiquement (championnat + coupe nationale + coupe d'Europe +
+  // barrage de promotion/relegation fondus dans une seule liste, chaque
+  // ligne precise sa competition). Le prochain match est toujours mis en
+  // avant ; la liste est ouverte avec ce match ancre en haut de la zone
+  // visible (les resultats passes restent accessibles en remontant le
+  // scroll). ---
+  const matches = [...(await getClubMatches(gameClubId)), ...(coupeInfo?.matches || []), ...(europeInfo?.matches || []), ...barrageMatches]
     .sort((a, b) => new Date(a.date_match) - new Date(b.date_match));
 
   if (matches.length === 0) {
