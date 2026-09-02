@@ -5790,6 +5790,131 @@ async function mdetRenderEuropeLigueMatch(rowId) {
   document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
 }
 
+// Fiche detail d'une manche (aller ou retour) d'un barrage de promotion/
+// relegation (game_barrages_promotion). Meme moteur / meme forme de stats
+// que les autres types de match (colonnes stats_aller / stats_retour,
+// remplies par enregistrer_resultat_barrage cote SQL avec le meme payload
+// que simulerMatch dans moteur_match.js) : on reutilise donc le rendu
+// complet (barres de stats, faits de match, compositions) comme pour la
+// coupe nationale, plutot que l'affichage minimal des tables Europe (qui
+// n'ont pas encore de colonne stats). Convention domicile/exterieur
+// identique a enregistrer_resultat_barrage : aller -> domicile = club
+// "sup" (D1), retour -> domicile = club "inf" (D2).
+async function mdetRenderBarrageMatch(rowId, leg) {
+  const content = document.getElementById("mdetContent");
+
+  const { data: m, error } = await supabaseClient
+    .from("game_barrages_promotion")
+    .select("id, date_match_aller, date_match_retour, score_aller_sup, score_aller_inf, score_retour_sup, score_retour_inf, tab_penalty_sup, tab_penalty_inf, game_club_sup_id, game_club_inf_id, game_club_vainqueur_id, statut, stats_aller, stats_retour")
+    .eq("id", rowId)
+    .single();
+
+  if (error || !m) {
+    content.innerHTML = `<div class="mdet-header"><div class="mdet-header-teams">Match introuvable</div><button class="mdet-close" id="mdetCloseBtn">✕</button></div>`;
+    document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+    return;
+  }
+
+  const isRetour = leg === "retour";
+  const homeId = isRetour ? m.game_club_inf_id : m.game_club_sup_id;
+  const awayId = isRetour ? m.game_club_sup_id : m.game_club_inf_id;
+  const scoreDom = isRetour ? m.score_retour_inf : m.score_aller_sup;
+  const scoreExt = isRetour ? m.score_retour_sup : m.score_aller_inf;
+  const stats = isRetour ? m.stats_retour : m.stats_aller;
+  const dateMatch = isRetour ? m.date_match_retour : m.date_match_aller;
+
+  const { data: clubs } = await supabaseClient.from("game_clubs").select("id, nom").in("id", [homeId, awayId]);
+  const nomClub = Object.fromEntries((clubs || []).map(c => [c.id, c.nom]));
+  const nomDom = nomClub[homeId] || "?";
+  const nomExt = nomClub[awayId] || "?";
+  const d = dateMatch ? new Date(dateMatch) : null;
+  const dateLabel = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) : "";
+
+  const logos = await mdetFetchClubLogos([homeId, awayId]);
+  const logoDom = mdetLogoHtml(logos[homeId], nomDom, 64);
+  const logoExt = mdetLogoHtml(logos[awayId], nomExt, 64);
+  const scoreText = `${scoreDom ?? "-"} - ${scoreExt ?? "-"}`;
+
+  const hasRetour = !!m.date_match_retour;
+  const legSuffix = hasRetour ? (isRetour ? " (retour)" : " (aller)") : "";
+
+  // Une seance de tirs au but (le cas echeant) ne peut concerner que la
+  // manche decisive : le retour.
+  const penaltyLine = isRetour && m.tab_penalty_sup != null
+    ? `<div class="mdet-meta">Tirs au but : ${m.tab_penalty_inf} - ${m.tab_penalty_sup}</div>` : "";
+
+  let winnerBanner = "";
+  if (isRetour && m.statut === "termine" && m.game_club_vainqueur_id != null) {
+    const winnerName = m.game_club_vainqueur_id === m.game_club_sup_id ? nomClub[m.game_club_sup_id]
+      : m.game_club_vainqueur_id === m.game_club_inf_id ? nomClub[m.game_club_inf_id] : null;
+    if (winnerName) winnerBanner = `<div class="mdet-motm-banner">🏆 ${escapeHtml(winnerName)} l'emporte au barrage</div>`;
+  }
+
+  const header = `
+    <div class="mdet-header">
+      <div class="mdet-header-teams">
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(homeId))}')">${logoDom}</span>
+        <div class="mdet-header-team-name dom clickable" onclick="window.mdetGoToClub('${escapeHtml(String(homeId))}')">${escapeHtml(nomDom)}</div>
+        <span class="score">${scoreText}</span>
+        <div class="mdet-header-team-name ext clickable" onclick="window.mdetGoToClub('${escapeHtml(String(awayId))}')">${escapeHtml(nomExt)}</div>
+        <span class="mdet-header-team-link" onclick="window.mdetGoToClub('${escapeHtml(String(awayId))}')">${logoExt}</span>
+      </div>
+      <button class="mdet-close" id="mdetCloseBtn">✕</button>
+    </div>
+    <div class="mdet-meta">Barrage promotion/relégation${legSuffix}${dateLabel ? ` · ${dateLabel}` : ""}</div>
+    ${penaltyLine}
+    ${winnerBanner}
+  `;
+
+  if (!stats) {
+    content.innerHTML = `
+      ${header}
+      <div class="mdet-empty" style="margin-top: 18px;">Pas de statistiques détaillées disponibles pour ce match.</div>
+    `;
+    document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+    return;
+  }
+
+  const motm = stats.homme_du_match;
+  const logoDomSmall = mdetLogoHtml(logos[homeId], nomDom, 30);
+  const logoExtSmall = mdetLogoHtml(logos[awayId], nomExt, 30);
+  const remplacementsDom = (stats.remplacements || []).filter(r => r.game_club_id === homeId);
+  const remplacementsExt = (stats.remplacements || []).filter(r => r.game_club_id === awayId);
+  const clubColors = await mdetFetchClubColors([homeId, awayId]);
+  const barColors = mdetPickBarColors(clubColors[homeId], nomDom, clubColors[awayId], nomExt);
+
+  content.innerHTML = `
+    ${header}
+    ${motm ? `<div class="mdet-motm-banner">⭐ Homme du match : ${escapeHtml(motm.player_nom)} (${Number(motm.note).toFixed(1)})</div>` : ""}
+
+    ${stats.seance_tab && stats.seance_tab.length ? `
+    <div class="mdet-section-title">Séance de tirs au but</div>
+    ${mdetRenderSeanceTab(stats.seance_tab)}
+    ` : ""}
+
+    <div class="mdet-section-title">Statistiques</div>
+    <div class="mdet-bars">
+      ${mdetBarStat("Possession", stats.possession?.domicile != null ? stats.possession.domicile + "%" : null, stats.possession?.exterieur != null ? stats.possession.exterieur + "%" : null, true, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Tirs", stats.tirs?.domicile, stats.tirs?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Tirs cadrés", stats.tirs_cadres?.domicile, stats.tirs_cadres?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Occasions franches", stats.occasions_franches?.domicile, stats.occasions_franches?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Corners", stats.corners?.domicile, stats.corners?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Hors-jeu", stats.hors_jeu?.domicile, stats.hors_jeu?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Passes réussies", stats.passes_reussies?.domicile, stats.passes_reussies?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Centres", stats.centres?.domicile, stats.centres?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Fautes", stats.fautes?.domicile, stats.fautes?.exterieur, false, barColors.dom, barColors.ext)}
+      ${mdetBarStat("Arrêts gardien", stats.arrets?.domicile, stats.arrets?.exterieur, false, barColors.dom, barColors.ext)}
+    </div>
+
+    <div class="mdet-section-title">Faits de match</div>
+    ${mdetRenderEvenements(stats, homeId, nomDom, nomExt)}
+
+    <div class="mdet-section-title">Compositions</div>
+    ${mdetRenderNotes(stats.notes_joueurs, motm, logoDomSmall, logoExtSmall, nomDom, nomExt, remplacementsDom, remplacementsExt, homeId, awayId, stats.formation?.domicile, stats.formation?.exterieur) || `<div class="mdet-empty">Pas de détail disponible pour ce match.</div>`}
+  `;
+  document.getElementById("mdetCloseBtn").addEventListener("click", closeMatchDetails);
+}
+
 async function openMatchDetails(matchId) {
   const overlay = document.getElementById("mdetOverlay");
   const content = document.getElementById("mdetContent");
@@ -5809,6 +5934,13 @@ async function openMatchDetails(matchId) {
   }
   if (String(matchId).startsWith("eur-ligue-")) {
     await mdetRenderEuropeLigueMatch(String(matchId).slice("eur-ligue-".length));
+    return;
+  }
+
+  const barrageMatch = String(matchId).match(/^barrage-(aller|retour)-(.+)$/);
+  if (barrageMatch) {
+    const [, leg, rowId] = barrageMatch;
+    await mdetRenderBarrageMatch(rowId, leg);
     return;
   }
 
